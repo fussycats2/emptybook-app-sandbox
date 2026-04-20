@@ -17,18 +17,98 @@
 
 ## 빠른 시작
 
+### 0. 사전 준비
+
+| 도구    | 권장 버전 | 확인 명령어     |
+| ------- | --------- | --------------- |
+| Node.js | 18.18+ 또는 20+ | `node -v` |
+| npm     | 9+        | `npm -v`        |
+| Git     | 최신      | `git --version` |
+
+> Node.js가 없으면 [nodejs.org](https://nodejs.org) 또는 `nvm install 20 && nvm use 20` 으로 설치하세요.
+
+### 1. 저장소 클론
+
+```bash
+# HTTPS
+git clone <REPO_URL> emptybook-app
+cd emptybook-app
+
+# 또는 SSH
+git clone git@github.com:<OWNER>/<REPO>.git emptybook-app
+cd emptybook-app
+```
+
+### 2. 의존성 설치
+
 ```bash
 npm install
-cp .env.local.example .env.local   # 비워둬도 mock 데이터로 실행됩니다
+```
+
+> 빌드 캐시까지 깨끗이 다시 받고 싶다면 `rm -rf node_modules .next && npm install`.
+
+### 3. 환경변수 설정
+
+```bash
+cp .env.local.example .env.local
+```
+
+`.env.local` 파일은 다음 키를 포함합니다.
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+- **비워둔 채로도 실행 가능** — `lib/repo.ts`가 자동으로 in-memory mock 데이터로 폴백합니다. (등록/주문이 즉시 반영되지만 서버 재시작 시 초기화)
+- **실데이터를 쓰려면** Supabase 프로젝트의 `Project Settings → API` 에서 값을 복사해 채워주세요. 자세한 세팅은 아래 [Supabase 세팅](#supabase-세팅) 섹션 참고.
+
+### 4. 개발 서버 실행
+
+```bash
 npm run dev
 ```
 
-브라우저에서 `http://localhost:3000` 접속.
+브라우저에서 [http://localhost:3000](http://localhost:3000) 접속.
 
-와이어프레임 미리보기는 별도 포트로 띄울 수 있습니다.
+> 3000 포트가 점유되어 있으면 다음 중 하나로 해결하세요.
+>
+> ```bash
+> # macOS / Linux: 3000 점유 프로세스 종료
+> lsof -ti :3000 | xargs kill -9
+>
+> # 또는 다른 포트로 실행
+> npx next dev -p 3001
+> ```
+
+### 5. 프로덕션 빌드 / 실행
 
 ```bash
-npm run wireframe                    # http://127.0.0.1:4173/...
+npm run build      # .next/ 정적 빌드 산출
+npm run start      # 3000 포트로 프로덕션 서버 실행
+```
+
+### 6. (선택) 와이어프레임 미리보기
+
+원본 HTML 와이어프레임을 별도 포트로 띄울 수 있습니다.
+
+```bash
+npm run wireframe  # http://127.0.0.1:4173/...
+```
+
+### 자주 쓰는 명령어 요약
+
+```bash
+git clone <REPO_URL> emptybook-app && cd emptybook-app
+npm install
+cp .env.local.example .env.local
+npm run dev          # http://localhost:3000
+
+npm run build        # 프로덕션 빌드
+npm run start        # 프로덕션 실행 (3000)
+npm run lint         # ESLint
+npm run wireframe    # 와이어프레임 HTML 미리보기 (4173)
 ```
 
 ## 화면 → 라우트 매핑 (와이어프레임 20화면)
@@ -173,10 +253,20 @@ mock store(`lib/mockData.ts`)는 `globalThis`에 보관되는 in-memory store이
 
 ## Supabase 세팅
 
-1. Supabase 프로젝트 생성 후 `.env.local`에 URL/Anon Key 입력.
-2. 아래 마이그레이션을 SQL Editor에 붙여넣어 실행.
+> 이 단계는 **선택**입니다. Supabase 없이도 mock 데이터로 모든 화면이 동작합니다.
 
-   ```bash
+1. [supabase.com](https://supabase.com) 에서 프로젝트 생성.
+2. `Project Settings → API` 에서 다음 값을 복사하여 `.env.local`에 입력.
+
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
+   SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...   # 서버 측 작업용 (선택)
+   ```
+
+3. `SQL Editor` 에서 다음 파일의 내용을 그대로 붙여넣어 실행.
+
+   ```
    supabase/migrations/0001_init.sql
    ```
 
@@ -189,7 +279,13 @@ mock store(`lib/mockData.ts`)는 `globalThis`에 보관되는 in-memory store이
    - `messages`/`chat_rooms`/`notifications` Realtime publication 등록
    - `book-images` Storage 버킷 생성 + 업로드/삭제 정책
 
-3. (선택) 카카오/네이버/Apple OAuth는 Supabase Auth Providers에서 활성화.
+4. (선택) 카카오/네이버/Apple OAuth는 `Authentication → Providers` 에서 활성화.
+
+5. 개발 서버를 재시작하면 자동으로 Supabase 모드로 전환됩니다.
+
+   ```bash
+   npm run dev
+   ```
 
 ## 개발 로드맵 (기획서 §5 기준 진행 상황)
 
@@ -203,11 +299,12 @@ mock store(`lib/mockData.ts`)는 `globalThis`에 보관되는 in-memory store이
 - [ ] Supabase 실제 채팅 Realtime 구독 hook 도입
 - [ ] 결제 PG 연동 (현재는 Mock UI)
 
-## 주요 명령어
+## 트러블슈팅
 
-```bash
-npm run dev          # 개발 서버 (3000)
-npm run build        # 프로덕션 빌드
-npm run start        # 프로덕션 실행
-npm run wireframe    # 와이어프레임 HTML 미리보기 (4173)
-```
+| 증상 | 해결 |
+| ---- | ---- |
+| `EADDRINUSE :3000` | `lsof -ti :3000 \| xargs kill -9` 또는 `npx next dev -p 3001` |
+| `Module not found` 에러 | `rm -rf node_modules .next && npm install` |
+| Supabase 환경변수 인식 안 됨 | `.env.local` 파일명/위치 확인 후 dev 서버 **재시작** (env 변경은 핫리로드 안 됨) |
+| 등록한 책이 다음 실행 시 사라짐 | mock 모드는 in-memory store라 정상 동작입니다. 영속 저장이 필요하면 Supabase 연결. |
+| `git clone` 후 한글 파일명 깨짐 (macOS) | `git config --global core.precomposeunicode true` |
