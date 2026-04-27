@@ -1,5 +1,8 @@
 "use client";
 
+// 확인/취소 두 버튼을 가진 모달 다이얼로그
+// destructive=true 일 때는 위험한 작업(삭제 등)임을 강조하기 위해 빨간 톤으로 색을 바꾼다
+
 import {
   Dialog,
   DialogActions,

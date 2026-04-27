@@ -1,5 +1,8 @@
 "use client";
 
+// 스플래시/온보딩 화면 ("/") — 최초 진입 시 앱 소개 + 시작 진입점 제공
+// TODO: 카카오/네이버/Apple OAuth 미연결. 현재 로그인 페이지로 이동만 함
+
 import { Box, Button, Stack, Typography } from "@mui/material";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
@@ -20,6 +23,7 @@ export default function SplashPage() {
         overflow: "hidden",
       }}
     >
+      {/* 우상단 + 좌하단 모서리 라이트닝 효과를 라디얼 그라데이션 두 개로 만든 레이어 */}
       <Box
         sx={{
           position: "absolute",

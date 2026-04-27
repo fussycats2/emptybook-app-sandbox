@@ -1,5 +1,9 @@
 "use client";
 
+// 화면 아래에서 올라오는 시트(BottomSheet) 컴포넌트
+// - 검색 필터, 옵션 선택, 신고/삭제 메뉴 등에 사용
+// - MUI의 Drawer를 anchor="bottom" 으로 사용하고 모바일 카드 폭(420)에 맞게 보정
+
 import { Box, Drawer, Typography } from "@mui/material";
 import { palette } from "@/lib/theme";
 
@@ -43,6 +47,7 @@ export default function BottomSheet({
         },
       }}
     >
+      {/* 시트 상단의 작은 손잡이(grabber) — 드래그할 수 있다는 시각적 힌트 */}
       <Box sx={{ display: "grid", placeItems: "center", pt: 1, pb: 0.5 }}>
         <Box
           sx={{

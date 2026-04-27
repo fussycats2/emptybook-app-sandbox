@@ -1,5 +1,9 @@
 "use client";
 
+// 거래 내역 페이지 (/mypage/orders)
+// - 상단 탭(구매/판매) + 상태 필터 칩
+// - 상태별 액션 버튼 노출 ("거래완료" → 후기, "배송중" → 거래 확정 등)
+
 import { Box, Button, Chip, Stack, Typography } from "@mui/material";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -9,7 +13,7 @@ import BookImage from "@/components/ui/BookImage";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import StatusBadge, { type SaleStatus } from "@/components/ui/StatusBadge";
-import { listOrders } from "@/lib/repo";
+import { listOrders, type OrderRow } from "@/lib/repo";
 import { palette } from "@/lib/theme";
 
 const TABS = [
@@ -18,10 +22,11 @@ const TABS = [
 ] as const;
 const STATUSES = ["전체", "거래중", "배송중", "거래완료", "취소"];
 
-const STATUS_TO_BADGE: Record<string, SaleStatus> = {
+// 주문 내역의 한글 상태(서버) → 카드 우상단에 띄울 배지 색상(UI)으로 매핑
+const STATUS_TO_BADGE: Record<OrderRow["status"], SaleStatus> = {
   배송중: "selling",
   거래완료: "sold",
-  취소: "sold",
+  취소: "canceled",
   거래중: "reserved",
 };
 
@@ -29,7 +34,7 @@ export default function OrdersPage() {
   const router = useRouter();
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("buy");
   const [status, setStatus] = useState("전체");
-  const [orders, setOrders] = useState<any[] | null>(null);
+  const [orders, setOrders] = useState<OrderRow[] | null>(null);
 
   useEffect(() => {
     listOrders()
@@ -37,8 +42,11 @@ export default function OrdersPage() {
       .catch(() => setOrders([]));
   }, []);
 
+  // 1) 탭(구매/판매)으로 side 필터 → 2) 상태 필터(전체 외) 적용
   const list =
-    orders?.filter((o) => status === "전체" || o.status === status) ?? null;
+    orders
+      ?.filter((o) => (tab === "buy" ? o.side === "buy" : o.side === "sell"))
+      .filter((o) => status === "전체" || o.status === status) ?? null;
 
   return (
     <>
@@ -47,9 +55,6 @@ export default function OrdersPage() {
         sx={{
           background: palette.surface,
           borderBottom: `1px solid ${palette.line}`,
-          position: "sticky",
-          top: 0,
-          zIndex: 5,
           flexShrink: 0,
         }}
       >
@@ -174,7 +179,8 @@ export default function OrdersPage() {
                     후기 작성
                   </Button>
                 )}
-                {item.status === "배송중" && (
+                {/* 거래 확정은 구매자(받았어요) 액션이라 판매 탭에선 숨긴다 */}
+                {item.status === "배송중" && tab === "buy" && (
                   <Button
                     sx={{ flex: 1.5 }}
                     size="small"

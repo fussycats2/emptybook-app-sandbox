@@ -1,5 +1,8 @@
 "use client";
 
+// 데스크톱에서는 좌측 브랜드 패널 + 우측 420px 모바일 카드, 모바일에서는 풀스크린
+// 모든 페이지를 감싸는 최외곽 프레임 컴포넌트
+
 import { Box, Stack, Typography } from "@mui/material";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import { palette, shadow } from "@/lib/theme";
@@ -12,10 +15,11 @@ export default function PhoneFrame({
   return (
     <Box
       sx={{
-        height: "100dvh",
+        height: "100dvh", // dvh: 동적 뷰포트 높이 (모바일 주소창 높이 변화 대응)
         width: "100vw",
         overflow: "hidden",
         background: {
+          // xs(모바일): 단색 배경 / md(데스크톱): 그린 그라데이션
           xs: palette.bg,
           md: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
         },
@@ -24,6 +28,7 @@ export default function PhoneFrame({
         justifyContent: "center",
       }}
     >
+      {/* 데스크톱(md) 이상에서만 보이는 좌측 브랜드 소개 패널 — 모바일에서는 숨김 */}
       <Box
         sx={{
           display: { xs: "none", md: "flex" },
@@ -70,10 +75,12 @@ export default function PhoneFrame({
         </Stack>
       </Box>
 
+      {/* 실제 앱이 들어가는 모바일 카드 영역 — 페이지 콘텐츠는 children 으로 주입 */}
       <Box
         sx={{
           width: { xs: "100vw", md: 420 },
           maxWidth: "100vw",
+          // 데스크톱에선 화면 높이에 맞춰 최대 860px 까지만, 좌우/상하 여유 확보
           height: { xs: "100dvh", md: "min(860px, calc(100dvh - 32px))" },
           background: palette.bg,
           borderRadius: { xs: 0, md: "28px" },
@@ -91,6 +98,7 @@ export default function PhoneFrame({
   );
 }
 
+// 좌측 패널의 숫자 통계 한 칸 (등록된 책/활성 사용자/거래 등)
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <Box>

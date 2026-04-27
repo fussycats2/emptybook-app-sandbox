@@ -1,5 +1,8 @@
 "use client";
 
+// 와이어프레임 스타일의 X자 자리표시 박스
+// (디자인 시안 단계에서 "이미지 들어올 자리"를 표시할 때 사용)
+
 import { Box } from "@mui/material";
 import { palette } from "@/lib/theme";
 

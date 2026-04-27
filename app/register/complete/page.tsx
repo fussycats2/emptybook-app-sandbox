@@ -1,5 +1,8 @@
 "use client";
 
+// 도서 등록 완료 페이지 (/register/complete?id=xxx)
+// 등록한 책 요약 카드 + "거래를 잘하는 팁" + 홈/등록한 책으로 이동 버튼
+
 import { Box, Button, Stack, Typography } from "@mui/material";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import IosShareRoundedIcon from "@mui/icons-material/IosShareRounded";
@@ -17,6 +20,7 @@ const TIPS = [
   { icon: "💸", title: "비슷한 책 평균가 참고", desc: "비슷한 책의 시세를 한 번 더 살펴보세요." },
 ];
 
+// 실제 화면 본체. useSearchParams 를 쓰기 위해 Suspense 안에서만 동작
 function CompleteInner() {
   const router = useRouter();
   const params = useSearchParams();
@@ -24,6 +28,7 @@ function CompleteInner() {
   const id = params.get("id") ?? undefined;
   const [book, setBook] = useState<BookDetail | null>(null);
 
+  // URL 의 id 로 방금 등록한 책 정보 다시 불러오기
   useEffect(() => {
     if (!id) return;
     fetchBook(id).then(setBook);

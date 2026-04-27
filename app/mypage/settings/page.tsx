@@ -1,5 +1,10 @@
 "use client";
 
+// 설정 페이지 (/mypage/settings)
+// 계정/알림/개인정보/기타 섹션과 로그아웃·탈퇴 버튼
+// TODO: 알림/개인정보 토글은 클라이언트 상태만 갱신. profiles/notifications 테이블 저장 미연동
+// TODO: 이메일 변경, 비밀번호 변경, 본인 인증, 계정 탈퇴 모두 토스트 placeholder 상태
+
 import {
   Box,
   Button,
@@ -15,25 +20,32 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { palette } from "@/lib/theme";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
 const ACCOUNT = [
-  { label: "이메일 변경", value: "hong@email.com" },
+  { label: "이메일 변경", value: "" },
   { label: "비밀번호 변경" },
   { label: "연동 계정", value: "Kakao" },
   { label: "본인 인증", value: "완료" },
 ];
-const ETC = [
+const ETC: { label: string; value?: string; info?: boolean }[] = [
   { label: "이용 약관" },
   { label: "개인정보 처리방침" },
   { label: "오픈소스 라이선스" },
-  { label: "앱 버전", value: "1.2.3" },
+  { label: "앱 버전", value: "1.2.3", info: true },
 ];
 
 export default function SettingsPage() {
   const router = useRouter();
   const toast = useToast();
+  const { user, signOut } = useAuth();
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // ACCOUNT 데이터의 "이메일 변경" 행에만 현재 로그인 이메일을 채워 넣어 표시
+  const accountRows = ACCOUNT.map((a) =>
+    a.label === "이메일 변경" ? { ...a, value: user?.email ?? "" } : a
+  );
 
   const [push, setPush] = useState({
     "푸시 알림": true,
@@ -52,7 +64,7 @@ export default function SettingsPage() {
       <AppHeader title="설정" left="back" />
       <ScrollBody>
         <Group title="계정">
-          {ACCOUNT.map((a, i) => (
+          {accountRows.map((a, i) => (
             <Row
               key={a.label}
               label={a.label}
@@ -94,7 +106,9 @@ export default function SettingsPage() {
               label={a.label}
               value={a.value}
               first={i === 0}
-              onClick={() => toast?.show("준비 중인 기능이에요")}
+              onClick={
+                a.info ? undefined : () => toast?.show("준비 중인 기능이에요")
+              }
             />
           ))}
         </Group>
@@ -118,10 +132,12 @@ export default function SettingsPage() {
       <ConfirmDialog
         open={confirmLogout}
         onCancel={() => setConfirmLogout(false)}
-        onConfirm={() => {
+        onConfirm={async () => {
           setConfirmLogout(false);
+          await signOut();
           toast?.show("로그아웃되었어요");
-          router.push("/");
+          router.replace("/login");
+          router.refresh();
         }}
         title="로그아웃 할까요?"
         confirmLabel="로그아웃"
@@ -143,6 +159,7 @@ export default function SettingsPage() {
   );
 }
 
+// 한 섹션 묶음 — 제목 + 회색 배경 카드 안에 Row/Toggle 들을 모아 표시
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Box sx={{ p: 2 }}>
@@ -171,6 +188,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+// 텍스트 라벨 + 우측 값 + (선택) 상세이동 화살표 — 클릭 가능 여부는 onClick 유무로 판단
 function Row({
   label,
   value,
@@ -182,6 +200,7 @@ function Row({
   first?: boolean;
   onClick?: () => void;
 }) {
+  const interactive = !!onClick;
   return (
     <Stack
       direction="row"
@@ -190,23 +209,26 @@ function Row({
       sx={{
         p: 1.5,
         borderTop: first ? "none" : `1px solid ${palette.line}`,
-        cursor: onClick ? "pointer" : "default",
-        "&:hover": { background: palette.lineSoft },
+        cursor: interactive ? "pointer" : "default",
+        "&:hover": interactive ? { background: palette.lineSoft } : {},
       }}
     >
       <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 600 }}>
         {label}
       </Typography>
       {value && (
-        <Typography sx={{ fontSize: 12.5, color: palette.inkSubtle, mr: 1 }}>
+        <Typography sx={{ fontSize: 12.5, color: palette.inkSubtle, mr: interactive ? 1 : 0 }}>
           {value}
         </Typography>
       )}
-      <KeyboardArrowRightRoundedIcon sx={{ color: palette.inkSubtle }} />
+      {interactive && (
+        <KeyboardArrowRightRoundedIcon sx={{ color: palette.inkSubtle }} />
+      )}
     </Stack>
   );
 }
 
+// 좌측 라벨 + 우측 스위치 — 알림/개인정보 ON/OFF 행에 사용
 function Toggle({
   label,
   checked,

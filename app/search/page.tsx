@@ -1,5 +1,10 @@
 "use client";
 
+// 검색 페이지 (/search) — 두 가지 모드를 한 화면에서 처리
+//   1) 검색 입력/필터가 비어있을 때: 최근 검색어 + 인기 검색어 + 카테고리 추천
+//   2) 입력이나 필터가 있을 때: 결과 리스트 + 정렬 칩
+// useSearchParams 사용 → Suspense 경계 필요 → 외부에서 한 번 감쌈
+
 import {
   Box,
   Chip,
@@ -28,6 +33,7 @@ import FilterSheet, { type FilterValue } from "@/components/search/FilterSheet";
 
 const { POPULAR_SEARCHES, RECENT_SEARCHES, CATEGORIES } = meta;
 
+// 결과 정렬 옵션 — 칩 형태로 노출하고 sort state 와 연동
 const SORTS = [
   { key: "recent", label: "최신순" },
   { key: "low", label: "가격↓" },
@@ -56,8 +62,15 @@ function SearchInner() {
   const [results, setResults] = useState<BookSummary[] | null>(null);
   const [recent, setRecent] = useState<string[]>(RECENT_SEARCHES);
 
-  const isResultMode = q.trim().length > 0 || !!filter.category;
+  // 결과 모드 진입 조건: 검색어가 있거나, 카테고리/상태/무료나눔 필터가 활성화된 경우
+  const isResultMode =
+    q.trim().length > 0 ||
+    !!filter.category ||
+    filter.states.length > 0 ||
+    !!filter.freeOnly;
 
+  // 검색어/카테고리 바뀔 때마다 서버에 다시 질의
+  // 결과 모드가 아니면 빈 배열로 두고, 결과 모드 진입 시 null(=로딩) 상태로 만든 후 호출
   useEffect(() => {
     if (!isResultMode) {
       setResults([]);
@@ -69,16 +82,55 @@ function SearchInner() {
       .catch(() => setResults([]));
   }, [q, filter.category, isResultMode]);
 
-  const sorted = useMemo(() => {
+  // 서버 응답을 받아 클라이언트에서 추가 필터(가격/상태/무료) 적용
+  // 서버는 키워드/카테고리만 처리하고, 나머지는 클라이언트에서 가벼운 후처리로 끝낸다
+  const filtered = useMemo(() => {
     if (!results) return null;
-    const arr = [...results];
+    return results.filter((b) => {
+      if (filter.freeOnly && !b.free) return false;
+      if (filter.states.length > 0) {
+        // 서버/UI 가 어떤 표기를 줘도 받을 수 있게 다양한 라벨을 enum 으로 매핑
+        const label = b.state;
+        const mapped =
+          label === "A+급"
+            ? "A_PLUS"
+            : label === "A급"
+            ? "A"
+            : label === "B급"
+            ? "B"
+            : label === "C급"
+            ? "C"
+            : label === "최상"
+            ? "A_PLUS"
+            : label === "상"
+            ? "A"
+            : label === "중"
+            ? "B"
+            : label === "하"
+            ? "C"
+            : "";
+        if (!filter.states.includes(mapped)) return false;
+      }
+      const p = price(b);
+      if (!b.free && (p < filter.priceRange[0] || p > filter.priceRange[1])) {
+        return false;
+      }
+      return true;
+    });
+  }, [results, filter.freeOnly, filter.states, filter.priceRange]);
+
+  // 정렬 — 원본 배열을 보존하기 위해 복사본([...filtered])을 만들어 sort
+  const sorted = useMemo(() => {
+    if (!filtered) return null;
+    const arr = [...filtered];
     if (sort === "low") arr.sort((a, b) => price(a) - price(b));
     if (sort === "high") arr.sort((a, b) => price(b) - price(a));
     if (sort === "popular")
       arr.sort((a, b) => (b.likes ?? 0) - (a.likes ?? 0));
     return arr;
-  }, [results, sort]);
+  }, [filtered, sort]);
 
+  // 검색 실행: 최근 검색어 맨 앞에 끼워 넣고, 동일어 중복 제거 후 8개로 유지
   const submit = (term: string) => {
     if (!term.trim()) return;
     setQ(term);
@@ -107,9 +159,6 @@ function SearchInner() {
           background: palette.surface,
           borderBottom: `1px solid ${palette.line}`,
           flexShrink: 0,
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
         }}
       >
         <Stack direction="row" alignItems="center" sx={{ px: 1, py: 1.25 }} gap={1}>
@@ -328,6 +377,7 @@ function Section({
   );
 }
 
+// 표시용 가격 문자열("6,000원")에서 숫자만 뽑아 정렬용으로 변환
 function price(b: BookSummary) {
   const num = parseInt(String(b.price).replace(/[^0-9]/g, ""), 10);
   return isNaN(num) ? 0 : num;

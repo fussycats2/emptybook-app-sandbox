@@ -1,5 +1,10 @@
 "use client";
 
+// 도서 상세 페이지 (/books/[id])
+// - 캐러셀 + 판매자 카드 + 가격/상태 + 도서 정보 + 코멘트 + 관련 도서
+// - 푸터: 찜 + 채팅 + 구매하기/신청하기 버튼
+// - 본인 책이거나 거래완료 상태면 구매 버튼 비활성화
+
 import {
   Box,
   Button,
@@ -13,7 +18,11 @@ import IosShareRoundedIcon from "@mui/icons-material/IosShareRounded";
 import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
+import FavoriteBorderRoundedIcon from "@mui/icons-material/FavoriteBorderRounded";
 import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
+import EditRoundedIcon from "@mui/icons-material/EditRounded";
+import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
@@ -22,22 +31,45 @@ import StatusBadge from "@/components/ui/StatusBadge";
 import MannerTemperature from "@/components/ui/MannerTemperature";
 import LikeButton from "@/components/ui/LikeButton";
 import BookImage from "@/components/ui/BookImage";
-import { fetchBook, listRecentBooks, type BookDetail } from "@/lib/repo";
+import BottomSheet from "@/components/ui/BottomSheet";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import {
+  cancelBook,
+  deleteBook,
+  fetchBook,
+  listRecentBooks,
+  type BookDetail,
+} from "@/lib/repo";
 import type { BookSummary } from "@/components/ui/BookCard";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
 export default function BookDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const router = useRouter();
   const toast = useToast();
+  const { user } = useAuth();
   const [book, setBook] = useState<BookDetail | null>(null);
   const [related, setRelated] = useState<BookSummary[]>([]);
   const [scrolled, setScrolled] = useState(false);
+  // 찜 카운트는 별도 state — LikeButton 토글 시 즉시 화면에 반영하기 위함
+  // (book.likes 는 로드 시점 스냅샷이라 toggle 후 stale)
+  const [likeCount, setLikeCount] = useState<number>(0);
+  // 본인 책일 때 MoreVert 메뉴(시트) + 취소/삭제 확인 다이얼로그 상태
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirm, setConfirm] = useState<null | "cancel" | "delete">(null);
+  const [busy, setBusy] = useState(false);
 
+  // 단일 도서 + 관련 도서 8개를 동시에 조회
+  // 관련 도서 목록에서는 현재 보고 있는 책 자기 자신은 제외
   useEffect(() => {
     let mounted = true;
-    fetchBook(id).then((b) => mounted && setBook(b));
+    fetchBook(id).then((b) => {
+      if (!mounted) return;
+      setBook(b);
+      setLikeCount(b?.likes ?? 0);
+    });
     listRecentBooks(8).then((list) => {
       if (!mounted) return;
       setRelated(list.filter((x) => x.id !== id));
@@ -62,13 +94,62 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
     );
   }
 
+  // 표시할 상태값과 푸터 버튼 비활성 조건 계산
+  // 우선순위: 1) Supabase 모드 → auth.uid === sellerId, 2) mock 모드 → seller==="나"
   const status = book.status ?? (book.free ? "free" : "selling");
-  const isMine = book.seller === "나";
+  const isMine = book.sellerId
+    ? !!user && book.sellerId === user.id
+    : book.seller === "나";
   const isSold = status === "sold";
   const ctaDisabled = isMine || isSold;
 
+  // "판매 취소" — books.status → HIDDEN. 매물 목록/검색에서 사라지지만 데이터는 보존
+  const handleCancel = async () => {
+    if (busy) return;
+    setBusy(true);
+    const ok = await cancelBook(book.id);
+    setBusy(false);
+    setConfirm(null);
+    setMenuOpen(false);
+    if (ok) {
+      toast?.show("판매를 취소했어요");
+      router.replace("/mypage/selling");
+      router.refresh();
+    } else {
+      toast?.show("취소에 실패했어요");
+    }
+  };
+
+  // "삭제" — 영구 삭제. 거래 이력이 있어 RESTRICT 로 막히면 cancelBook 으로 폴백
+  const handleDelete = async () => {
+    if (busy) return;
+    setBusy(true);
+    const deleted = await deleteBook(book.id);
+    if (!deleted) {
+      const hidden = await cancelBook(book.id);
+      setBusy(false);
+      setConfirm(null);
+      setMenuOpen(false);
+      if (hidden) {
+        toast?.show("거래 이력이 있어 숨김 처리했어요");
+        router.replace("/mypage/selling");
+        router.refresh();
+      } else {
+        toast?.show("삭제에 실패했어요");
+      }
+      return;
+    }
+    setBusy(false);
+    setConfirm(null);
+    setMenuOpen(false);
+    toast?.show("삭제했어요");
+    router.replace("/mypage/selling");
+    router.refresh();
+  };
+
   return (
     <>
+      {/* 상단 헤더: 처음에는 투명 + 흰 아이콘, 스크롤되면 흰 배경 + 어두운 아이콘으로 전환 */}
       <Box
         sx={{
           position: "absolute",
@@ -97,10 +178,14 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           sx={{
             flex: 1,
             fontWeight: 700,
-            color: scrolled ? palette.ink : "transparent",
+            color: palette.ink,
             fontSize: 16,
-            transition: "color 200ms",
+            opacity: scrolled ? 1 : 0,
+            transition: "opacity 200ms",
             ml: 0.5,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
           {book.title}
@@ -111,16 +196,23 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
         >
           <IosShareRoundedIcon fontSize="small" />
         </IconButton>
-        <IconButton sx={{ color: scrolled ? palette.ink : "#fff" }}>
+        <IconButton
+          onClick={() => {
+            if (isMine) setMenuOpen(true);
+            else toast?.show("준비중이에요");
+          }}
+          sx={{ color: scrolled ? palette.ink : "#fff" }}
+        >
           <MoreVertRoundedIcon />
         </IconButton>
       </Box>
 
+      {/* 200px 스크롤되면 헤더 스타일을 전환하는 트리거 */}
       <ScrollBody
         sx={{ background: palette.surface }}
         onScroll={(e: any) => setScrolled(e.target.scrollTop > 200)}
       >
-        <ImageCarousel seed={book.id} count={4} height={380} />
+        <ImageCarousel seed={book.id} count={4} height={380} coverUrl={book.coverUrl} />
 
         <Box sx={{ p: 2 }}>
           <Stack
@@ -134,16 +226,19 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
             }}
           >
             <BookImage seed={book.seller} width={44} height={44} radius={999} />
-            <Box sx={{ flex: 1 }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
                 {book.seller || "책방마니아"}
               </Typography>
-              <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle }}>
-                <LocationOnRoundedIcon
-                  sx={{ fontSize: 13, verticalAlign: -2, mr: 0.25 }}
-                />
-                {book.loc ?? "마포구"}
-              </Typography>
+              <Stack
+                direction="row"
+                alignItems="center"
+                gap={0.25}
+                sx={{ color: palette.inkSubtle, fontSize: 11.5, mt: 0.25 }}
+              >
+                <LocationOnRoundedIcon sx={{ fontSize: 13 }} />
+                <span>{book.loc ?? "마포구"}</span>
+              </Stack>
             </Box>
             <MannerTemperature value={38.6} size="sm" />
           </Stack>
@@ -212,11 +307,15 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           >
             <Stack direction="row" gap={0.4} alignItems="center">
               <VisibilityRoundedIcon sx={{ fontSize: 14 }} />
-              {(book.likes ?? 0) * 5 + 32}
+              조회 {32 + (book.likes ?? 0) * 5}
+            </Stack>
+            <Stack direction="row" gap={0.4} alignItems="center">
+              <FavoriteBorderRoundedIcon sx={{ fontSize: 14 }} />
+              찜 {likeCount}
             </Stack>
             <Stack direction="row" gap={0.4} alignItems="center">
               <ChatBubbleOutlineRoundedIcon sx={{ fontSize: 14 }} />
-              {book.chats ?? 1}
+              채팅 {book.chats ?? 0}
             </Stack>
           </Stack>
         </Box>
@@ -317,7 +416,13 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
               placeItems: "center",
             }}
           >
-            <LikeButton size="small" />
+            <LikeButton
+              bookId={book.id}
+              size="small"
+              onChange={(_, count) => {
+                if (count != null) setLikeCount(count);
+              }}
+            />
           </Box>
           <Box sx={{ borderLeft: `1px solid ${palette.line}`, height: 32 }} />
           <Box sx={{ flex: 1 }}>
@@ -348,10 +453,101 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           </Button>
         </Stack>
       </FixedFooter>
+
+      {/* 본인 책 관리 시트: 수정(미구현) / 판매 취소 / 삭제 */}
+      <BottomSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title="이 게시글 관리"
+      >
+        <Stack divider={<Divider />}>
+          <SheetRow
+            icon={<EditRoundedIcon />}
+            label="게시글 수정"
+            sub="준비중"
+            disabled
+            onClick={() => toast?.show("준비중이에요")}
+          />
+          <SheetRow
+            icon={<VisibilityOffRoundedIcon />}
+            label="판매 취소"
+            sub="목록에서 숨겨요. 데이터는 남아요."
+            onClick={() => setConfirm("cancel")}
+          />
+          <SheetRow
+            icon={<DeleteOutlineRoundedIcon />}
+            label="삭제"
+            sub="되돌릴 수 없어요"
+            destructive
+            onClick={() => setConfirm("delete")}
+          />
+        </Stack>
+      </BottomSheet>
+
+      <ConfirmDialog
+        open={confirm === "cancel"}
+        title="판매를 취소할까요?"
+        description="목록과 검색에서 더 이상 보이지 않아요. 다시 올리려면 새로 등록해야 해요."
+        confirmLabel={busy ? "처리중…" : "판매 취소"}
+        onCancel={() => setConfirm(null)}
+        onConfirm={handleCancel}
+      />
+      <ConfirmDialog
+        open={confirm === "delete"}
+        destructive
+        title="이 게시글을 삭제할까요?"
+        description="삭제하면 되돌릴 수 없어요. 거래 이력이 있으면 자동으로 숨김 처리돼요."
+        confirmLabel={busy ? "처리중…" : "삭제"}
+        onCancel={() => setConfirm(null)}
+        onConfirm={handleDelete}
+      />
     </>
   );
 }
 
+// 본인 책 관리 시트의 한 줄 — 아이콘 + 라벨 + 보조 설명
+function SheetRow({
+  icon,
+  label,
+  sub,
+  destructive,
+  disabled,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  sub?: string;
+  destructive?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      gap={1.5}
+      onClick={disabled ? undefined : onClick}
+      sx={{
+        py: 1.5,
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+        color: destructive ? palette.accent : palette.ink,
+      }}
+    >
+      <Box sx={{ display: "grid", placeItems: "center", width: 24 }}>{icon}</Box>
+      <Box sx={{ flex: 1 }}>
+        <Typography sx={{ fontSize: 14.5, fontWeight: 700 }}>{label}</Typography>
+        {sub && (
+          <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle, mt: 0.25 }}>
+            {sub}
+          </Typography>
+        )}
+      </Box>
+    </Stack>
+  );
+}
+
+// "도서 정보" 섹션의 라벨/값 한 줄을 그리는 헬퍼
 function InfoRow({ label, value }: { label: string; value?: string }) {
   return (
     <Stack direction="row" sx={{ py: 0.5 }}>

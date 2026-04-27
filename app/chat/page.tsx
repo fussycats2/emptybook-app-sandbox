@@ -1,5 +1,9 @@
 "use client";
 
+// 채팅 목록 페이지 (/chat)
+// 전체/구매/판매 탭 + 대화방 검색 + 채팅방 카드 리스트
+// TODO: Realtime 구독으로 새 메시지 도착 시 미리보기/뱃지 자동 갱신 필요
+
 import {
   Box,
   IconButton,
@@ -18,9 +22,9 @@ import BottomTabNav from "@/components/ui/BottomTabNav";
 import { ScrollBody } from "@/components/ui/Section";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
-import StatusBadge, { type SaleStatus } from "@/components/ui/StatusBadge";
+import StatusBadge from "@/components/ui/StatusBadge";
 import BookImage from "@/components/ui/BookImage";
-import { listChats } from "@/lib/repo";
+import { listChats, type ChatRow } from "@/lib/repo";
 import { palette } from "@/lib/theme";
 
 const TABS = [
@@ -32,7 +36,7 @@ const TABS = [
 export default function ChatListPage() {
   const router = useRouter();
   const [active, setActive] = useState<(typeof TABS)[number]["key"]>("all");
-  const [chats, setChats] = useState<any[] | null>(null);
+  const [chats, setChats] = useState<ChatRow[] | null>(null);
   const [q, setQ] = useState("");
 
   useEffect(() => {
@@ -41,6 +45,8 @@ export default function ChatListPage() {
       .catch(() => setChats([]));
   }, []);
 
+  // 탭(전체/구매/판매) + 검색어로 동시 필터링
+  // user/book/msg 셋을 합친 문자열에 검색어가 포함되는지로 단순 매칭
   const filtered =
     chats?.filter((c) => {
       if (active === "buy" && !c.buying) return false;
@@ -167,7 +173,7 @@ export default function ChatListPage() {
                 <Typography sx={{ fontSize: 14.5, fontWeight: 800 }}>
                   {c.user}
                 </Typography>
-                {c.status && <StatusBadge status={c.status as SaleStatus} size="sm" />}
+                {c.status && <StatusBadge status={c.status} size="sm" />}
                 <Box sx={{ flex: 1 }} />
                 <Typography sx={{ fontSize: 11, color: palette.inkSubtle }}>
                   {c.time}

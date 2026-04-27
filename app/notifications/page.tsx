@@ -1,5 +1,10 @@
 "use client";
 
+// 알림 페이지 (/notifications)
+// - 종류별(전체/거래/채팅/시스템) 필터 + "안 읽음만" 토글
+// - "모두 읽음" 누르면 클라이언트 상태에서 읽음 처리 (서버 갱신은 미구현)
+// TODO: 클릭 시 notifications.read_at 을 UPDATE 하는 서버 호출 필요
+
 import {
   Box,
   Chip,
@@ -28,6 +33,7 @@ const TYPES = [
   { key: "system", label: "시스템" },
 ];
 
+// 알림 type → 좌측 원형 아이콘(아이콘 + 배경색 + 전경색) 매핑
 const ICONS: Record<string, { icon: React.ReactNode; bg: string; fg: string }> = {
   trade: {
     icon: <LocalShippingRoundedIcon />,
@@ -48,6 +54,7 @@ export default function NotificationsPage() {
     listNotifications().then(setItems).catch(() => setItems([]));
   }, []);
 
+  // 종류 필터 + 안읽음 필터 동시 적용
   const list = (items ?? []).filter((n) => {
     if (type !== "all" && n.type !== type) return false;
     if (unreadOnly && !n.unread) return false;
@@ -149,6 +156,7 @@ export default function NotificationsPage() {
                 background: n.unread ? palette.surface : "transparent",
                 cursor: "pointer",
               }}
+              // 클릭한 알림만 unread=false 로 갱신 (서버 반영은 추후 추가 예정)
               onClick={() =>
                 setItems((arr) =>
                   (arr ?? []).map((x) =>

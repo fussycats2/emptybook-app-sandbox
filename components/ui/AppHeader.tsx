@@ -1,23 +1,28 @@
 "use client";
 
+// 화면 상단의 공용 헤더 (뒤로가기/닫기 + 제목 + 우측 액션 슬롯)
+// 거의 모든 페이지에서 사용되어 일관된 네비게이션 UX를 제공한다
+
 import { Box, IconButton, Typography } from "@mui/material";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import CloseIcon from "@mui/icons-material/Close";
 import { useRouter } from "next/navigation";
 import { palette } from "@/lib/theme";
 
+// 좌측 버튼 종류: 뒤로가기 / 닫기(X) / 없음
 export type HeaderLeft = "back" | "close" | "none";
 
 interface Props {
-  title?: React.ReactNode;
+  title?: React.ReactNode; // 제목 (텍스트 또는 JSX)
   left?: HeaderLeft;
-  right?: React.ReactNode;
-  onLeftClick?: () => void;
-  centered?: boolean;
-  transparent?: boolean;
-  bordered?: boolean;
+  right?: React.ReactNode; // 우측 슬롯(공유, 메뉴 버튼 등 자유롭게)
+  onLeftClick?: () => void; // 좌측 버튼 커스텀 동작 (없으면 router.back())
+  centered?: boolean; // 제목 중앙정렬 여부
+  transparent?: boolean; // 배경 투명 여부 (이미지 위에 헤더 띄울 때)
+  bordered?: boolean; // 하단 구분선 표시
 }
 
+// 페이지별 좌측 버튼/우측 액션을 props 로 주입받는 식으로 사용한다
 export default function AppHeader({
   title,
   left = "back",
@@ -29,6 +34,7 @@ export default function AppHeader({
 }: Props) {
   const router = useRouter();
 
+  // 좌측 버튼 클릭 처리: 커스텀 핸들러가 있으면 그것 우선, 없으면 브라우저 뒤로가기
   const handleLeft = () => {
     if (onLeftClick) onLeftClick();
     else router.back();
@@ -45,9 +51,7 @@ export default function AppHeader({
         gap: 1,
         flexShrink: 0,
         background: transparent ? "transparent" : palette.surface,
-        position: "sticky",
-        top: 0,
-        zIndex: 10,
+        zIndex: 2,
       }}
     >
       <Box sx={{ width: 44, display: "flex", justifyContent: "center" }}>

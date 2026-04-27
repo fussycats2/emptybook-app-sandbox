@@ -1,5 +1,11 @@
 "use client";
 
+// 회원가입 페이지 (/signup) — 3단계 위저드(stepper) 구조
+//   step 0: 계정 정보(이름/이메일/비밀번호/휴대폰)
+//   step 1: 선호 장르 선택
+//   step 2: 약관 동의 → "가입 완료" 버튼으로 Supabase signUp 호출
+// TODO: Supabase Auth "Confirm email" 정책이 켜져 있으면 가입 직후 세션이 없음 → /login 으로 안내
+
 import {
   Box,
   Button,
@@ -20,6 +26,8 @@ import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
+import { supabaseBrowser } from "@/lib/supabase/client";
+import { isSupabaseConfigured } from "@/lib/repo";
 
 const GENRES = ["소설", "에세이", "자기계발", "경제/경영", "역사", "과학", "아동", "만화"];
 const TERMS = [
@@ -41,15 +49,19 @@ export default function SignupPage() {
   const [phone, setPhone] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [agreed, setAgreed] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
 
+  // 장르/약관 다중 선택 토글 헬퍼들
   const togglePick = (g: string) =>
     setPicked((p) => (p.includes(g) ? p.filter((x) => x !== g) : [...p, g]));
   const toggleAgree = (k: string) =>
     setAgreed((a) => (a.includes(k) ? a.filter((x) => x !== k) : [...a, k]));
+  // 필수 약관에 모두 체크됐는지 검사 (선택 약관은 제외)
   const allRequired = TERMS.filter((t) => t.required).every((t) =>
     agreed.includes(t.key)
   );
 
+  // 현재 단계의 입력이 유효한지 — "다음" 버튼 활성화 조건
   const stepValid = useMemo(() => {
     if (step === 0)
       return (
@@ -63,12 +75,56 @@ export default function SignupPage() {
     return allRequired;
   }, [step, name, email, pw, pw2, phone, picked, allRequired]);
 
+  // 마지막 단계에서 호출되는 실제 가입 처리 함수
+  const submitSignup = async () => {
+    // mock 모드는 그냥 통과
+    if (!isSupabaseConfigured) {
+      toast?.show("데모 모드: 가입을 환영해요!");
+      router.push("/home");
+      return;
+    }
+    setSubmitting(true);
+    const supabase = supabaseBrowser();
+    // Supabase Auth 에 사용자 생성 (options.data 는 raw_user_meta_data 로 저장)
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: pw,
+      options: { data: { name, phone } },
+    });
+    if (error) {
+      setSubmitting(false);
+      toast?.show(error.message || "가입에 실패했어요");
+      return;
+    }
+    // 가입 성공 시 profiles 테이블의 추가 정보(이름/전화/선호 장르) 업데이트
+    // - profiles.id 는 auth.users.id 와 같으므로 그대로 매칭
+    if (data.user) {
+      await supabase
+        .from("profiles")
+        .update({
+          display_name: name,
+          phone,
+          preferred_genres: picked,
+        })
+        .eq("id", data.user.id);
+    }
+    setSubmitting(false);
+    // 이메일 인증이 켜져 있으면 session 이 비어있다 → 인증 메일 안내 후 로그인 페이지로
+    if (!data.session) {
+      toast?.show("가입 메일을 확인해 인증을 마쳐주세요");
+      router.push("/login");
+      return;
+    }
+    // 자동 로그인된 경우 바로 홈으로
+    toast?.show("가입을 환영해요!");
+    router.replace("/home");
+    router.refresh();
+  };
+
+  // 푸터 "다음/가입 완료" 버튼 핸들러 — 마지막 단계면 가입 제출
   const goNext = () => {
     if (step < 2) setStep(step + 1);
-    else {
-      toast?.show("가입을 환영해요!");
-      router.push("/home");
-    }
+    else submitSignup();
   };
 
   return (
@@ -279,17 +335,18 @@ export default function SignupPage() {
         <Button
           variant="contained"
           fullWidth
-          disabled={!stepValid}
+          disabled={!stepValid || submitting}
           onClick={goNext}
           startIcon={step === 2 ? <CheckRoundedIcon /> : undefined}
         >
-          {step === 2 ? "가입 완료" : "다음"}
+          {step === 2 ? (submitting ? "가입 중…" : "가입 완료") : "다음"}
         </Button>
       </FixedFooter>
     </>
   );
 }
 
+// 가입 폼 안에서 라벨 + 입력 + 힌트/에러 텍스트를 묶는 작은 헬퍼
 function Field({
   label,
   hint,

@@ -1,5 +1,11 @@
 "use client";
 
+// 도서 등록 페이지 (/register)
+// - 사진(최대 10장) / 도서 검색 / 가격 / 상태 / 거래 방식 / 지역 / 설명 입력
+// - 도서 검색: /api/books/search 로 네이버 API 호출 → 결과 선택 시 폼 자동 채움
+// - 등록 성공 시 /register/complete?id=... 로 이동
+// TODO: 사진은 현재 클라이언트 상태만 보유. Storage 업로드 + book_images insert 연결 필요
+
 import {
   Box,
   Button,
@@ -23,6 +29,7 @@ import BookImage from "@/components/ui/BookImage";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { createBook } from "@/lib/repo";
+import type { BookSearchItem } from "@/app/api/books/search/route";
 
 const STATES = [
   { key: "최상", label: "최상", desc: "거의 새책" },
@@ -44,12 +51,58 @@ export default function RegisterPage() {
   const [trade, setTrade] = useState("DIRECT");
   const [free, setFree] = useState(false);
   const [price, setPrice] = useState("6000");
-  const [bookFound, setBookFound] = useState(false);
   const [title, setTitle] = useState("");
   const [region, setRegion] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // 도서 검색 결과 + 선택된 항목
+  // - results 가 채워지면 검색결과 리스트를 표시 (다수 매칭 시)
+  // - selected 가 있으면 매칭된 도서 카드 표시 (단일 결과 / 사용자 선택 후)
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState<BookSearchItem[] | null>(null);
+  const [selected, setSelected] = useState<BookSearchItem | null>(null);
 
+  // 검색 실행 — 결과 1건이면 자동 선택, 다건이면 리스트 표시
+  const handleSearch = async () => {
+    const q = title.trim();
+    if (!q) {
+      toast?.show("검색어를 입력해주세요", "warning");
+      return;
+    }
+    if (searching) return;
+    setSearching(true);
+    setResults(null);
+    setSelected(null);
+    try {
+      const res = await fetch(`/api/books/search?q=${encodeURIComponent(q)}`);
+      const data = (await res.json()) as { items?: BookSearchItem[] };
+      const items = data.items ?? [];
+      if (items.length === 0) {
+        toast?.show("검색 결과가 없어요");
+      } else if (items.length === 1) {
+        // 1건 매칭(주로 ISBN 검색): 바로 선택 + 제목도 정확한 값으로 교체
+        setSelected(items[0]);
+        setTitle(items[0].title);
+        toast?.show("도서 정보를 가져왔어요");
+      } else {
+        setResults(items);
+      }
+    } catch {
+      toast?.show("검색에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // 검색 결과 중 한 건 선택 — 폼에 반영
+  const handlePick = (item: BookSearchItem) => {
+    setSelected(item);
+    setTitle(item.title);
+    setResults(null);
+    toast?.show("도서 정보를 가져왔어요");
+  };
+
+  // 폼 검증 후 createBook 호출 → 성공 시 완료 페이지로 이동
   const submit = async () => {
     if (submitting) return;
     if (!title.trim()) {
@@ -58,12 +111,15 @@ export default function RegisterPage() {
     }
     setSubmitting(true);
     try {
+      // 무료나눔이면 가격 0, 아니면 입력값을 숫자로 변환 (입력이 비어있으면 0)
       const priceNumber = free ? 0 : parseInt(price || "0", 10) || 0;
       const { id } = await createBook({
         title: title.trim(),
-        author: bookFound ? "한강" : undefined,
-        publisher: bookFound ? "창비" : undefined,
-        isbn: bookFound ? "9788936434267" : undefined,
+        // 검색으로 선택한 도서가 있으면 그 정보를, 없으면 빈 값으로 등록
+        author: selected?.author || undefined,
+        publisher: selected?.publisher || undefined,
+        isbn: selected?.isbn || undefined,
+        coverUrl: selected?.image || undefined,
         category: "소설",
         state,
         priceNumber,
@@ -105,14 +161,33 @@ export default function RegisterPage() {
         <Box sx={{ p: 2 }}>
           <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
             사진{" "}
-            <span style={{ color: palette.inkSubtle }}>{photos.length}/10</span>
+            <Box
+              component="span"
+              sx={{
+                color: photos.length >= 10 ? palette.accent : palette.inkSubtle,
+                fontWeight: 600,
+                ml: 0.25,
+              }}
+            >
+              {photos.length}
+              <Box component="span" sx={{ color: palette.inkSubtle }}>
+                /10
+              </Box>
+            </Box>
           </Typography>
           <Box
             className="no-scrollbar"
             sx={{ display: "flex", gap: 1, overflowX: "auto", pb: 0.5 }}
           >
+            {/* 사진 추가 박스 — 10장 한도 검사 후 placeholder 한 칸 추가 */}
             <Box
-              onClick={() => setPhotos((p) => [...p, p.length])}
+              onClick={() => {
+                if (photos.length >= 10) {
+                  toast?.show("사진은 최대 10장까지 등록할 수 있어요", "warning");
+                  return;
+                }
+                setPhotos((p) => [...p, p.length]);
+              }}
               sx={{
                 flexShrink: 0,
                 width: 92,
@@ -124,12 +199,13 @@ export default function RegisterPage() {
                 placeItems: "center",
                 cursor: "pointer",
                 color: palette.inkMute,
+                opacity: photos.length >= 10 ? 0.5 : 1,
               }}
             >
               <Stack alignItems="center" gap={0.25}>
                 <AddPhotoAlternateRoundedIcon />
                 <Typography sx={{ fontSize: 11, fontWeight: 700 }}>
-                  {photos.length} / 10
+                  사진 추가
                 </Typography>
               </Stack>
             </Box>
@@ -193,27 +269,34 @@ export default function RegisterPage() {
             fullWidth
             placeholder="ISBN 또는 책 제목으로 검색"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              // 사용자가 제목을 직접 수정하면 이전 선택은 더 이상 일치하지 않으므로 해제
+              if (selected) setSelected(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSearch();
+              }
+            }}
             startAdornment={
               <SearchRoundedIcon sx={{ color: palette.inkSubtle, mr: 1 }} />
             }
             endAdornment={
               <Button
                 size="small"
-                onClick={() => {
-                  if (!title.trim()) {
-                    toast?.show("검색어를 입력해주세요", "warning");
-                    return;
-                  }
-                  setBookFound(true);
-                }}
+                onClick={handleSearch}
+                disabled={searching}
                 sx={{ minWidth: 60 }}
               >
-                검색
+                {searching ? "검색 중…" : "검색"}
               </Button>
             }
           />
-          {bookFound && (
+
+          {/* 단일 결과(또는 사용자 선택 후): 매칭 카드 표시 */}
+          {selected && (
             <Box
               sx={{
                 mt: 1.5,
@@ -226,29 +309,126 @@ export default function RegisterPage() {
                 alignItems: "center",
               }}
             >
-              <BookImage seed="reg-found" width={56} height={72} radius={8} />
-              <Box sx={{ flex: 1 }}>
-                <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>
-                  채식주의자
-                </Typography>
-                <Typography sx={{ fontSize: 11.5, color: palette.inkMute }}>
-                  한강 · 창비 · 9788936434267
+              <BookImage
+                seed={selected.isbn || selected.title}
+                src={selected.image || undefined}
+                width={56}
+                height={72}
+                radius={8}
+              />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    fontSize: 13.5,
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {selected.title}
                 </Typography>
                 <Typography
-                  sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25 }}
+                  sx={{
+                    fontSize: 11.5,
+                    color: palette.inkMute,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
                 >
-                  정가 13,000원
+                  {[selected.author, selected.publisher, selected.isbn]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </Typography>
+                {selected.price > 0 && (
+                  <Typography
+                    sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25 }}
+                  >
+                    정가 {selected.price.toLocaleString()}원
+                  </Typography>
+                )}
               </Box>
-              <Button
+              <IconButton
                 size="small"
-                variant="outlined"
-                sx={{ background: "#fff" }}
-                onClick={() => toast?.show("도서 정보를 가져왔어요")}
+                onClick={() => setSelected(null)}
+                aria-label="선택 해제"
               >
-                이 책 맞아요
-              </Button>
+                <CloseRoundedIcon sx={{ fontSize: 18 }} />
+              </IconButton>
             </Box>
+          )}
+
+          {/* 다수 결과: 클릭해서 선택할 수 있는 리스트 */}
+          {results && results.length > 0 && (
+            <Stack
+              gap={0.75}
+              sx={{
+                mt: 1.5,
+                maxHeight: 320,
+                overflowY: "auto",
+                border: `1px solid ${palette.line}`,
+                borderRadius: 3,
+                p: 1,
+              }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  color: palette.inkSubtle,
+                  fontWeight: 700,
+                  px: 0.5,
+                }}
+              >
+                검색 결과 {results.length}건 — 한 권을 선택해주세요
+              </Typography>
+              {results.map((it) => (
+                <Stack
+                  key={it.isbn || `${it.title}-${it.author}`}
+                  direction="row"
+                  gap={1}
+                  onClick={() => handlePick(it)}
+                  sx={{
+                    p: 1,
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    "&:hover": { background: palette.lineSoft },
+                  }}
+                >
+                  <BookImage
+                    seed={it.isbn || it.title}
+                    src={it.image || undefined}
+                    width={44}
+                    height={56}
+                    radius={6}
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {it.title}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: 11,
+                        color: palette.inkSubtle,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {[it.author, it.publisher].filter(Boolean).join(" · ")}
+                    </Typography>
+                  </Box>
+                </Stack>
+              ))}
+            </Stack>
           )}
         </Box>
 
@@ -402,8 +582,18 @@ export default function RegisterPage() {
             minRows={5}
             placeholder="책 상태, 거래 시 참고사항 등을 자유롭게 적어주세요."
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => setDescription(e.target.value.slice(0, 500))}
           />
+          <Typography
+            sx={{
+              textAlign: "right",
+              fontSize: 11,
+              color: palette.inkSubtle,
+              mt: 0.5,
+            }}
+          >
+            {description.length}/500
+          </Typography>
         </Box>
       </ScrollBody>
       <FixedFooter>

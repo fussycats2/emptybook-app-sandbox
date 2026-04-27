@@ -1,5 +1,8 @@
 "use client";
 
+// 결제 완료 페이지 (/checkout/[id]/complete?orderId=xxx)
+// 주문 요약 카드 + 채팅/주문내역 이동 버튼
+
 import { Box, Button, IconButton, Stack, Typography } from "@mui/material";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import IosShareRoundedIcon from "@mui/icons-material/IosShareRounded";
@@ -18,6 +21,7 @@ function CompleteInner({ bookId }: { bookId: string }) {
   const [order, setOrder] = useState<OrderRow | null>(null);
   const [book, setBook] = useState<BookDetail | null>(null);
 
+  // 주문 정보(가격/일자) + 책 정보(제목/표지)를 동시에 조회해 주문번호와 함께 표시
   useEffect(() => {
     if (orderId) fetchOrder(orderId).then(setOrder);
     fetchBook(bookId).then(setBook);
@@ -25,11 +29,12 @@ function CompleteInner({ bookId }: { bookId: string }) {
 
   const orderNo = orderId ?? "ORD-PENDING";
   const amount = order?.price ?? book?.price ?? "-";
+  const isFree = !!book?.free;
 
-  const info = [
+  const info: { l: string; v: string; copy?: boolean }[] = [
     { l: "주문번호", v: orderNo, copy: true },
-    { l: "결제금액", v: amount },
-    { l: "결제수단", v: "카카오페이" },
+    { l: isFree ? "나눔 금액" : "결제금액", v: isFree ? "무료나눔" : amount },
+    ...(isFree ? [] : [{ l: "결제수단", v: "카카오페이" }]),
     { l: "배송지", v: "서울 마포구 합정동" },
   ];
 

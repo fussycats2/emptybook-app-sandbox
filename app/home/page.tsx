@@ -1,5 +1,8 @@
 "use client";
 
+// 홈 화면 (/home) — 앱의 메인 피드
+// 구성: 위치/검색바 → 이벤트 배너 → 카테고리 가로 스크롤 → 최근 등록 책 목록 → 인기 판매자
+
 import {
   Box,
   IconButton,
@@ -23,6 +26,7 @@ import { SectionLabel, ScrollBody } from "@/components/ui/Section";
 import Fab from "@/components/ui/Fab";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import { useToast } from "@/components/ui/ToastProvider";
 import { palette } from "@/lib/theme";
 import { listRecentBooks, meta } from "@/lib/repo";
 
@@ -32,8 +36,11 @@ import MannerTemperature from "@/components/ui/MannerTemperature";
 
 export default function HomePage() {
   const router = useRouter();
+  const toast = useToast();
   const [books, setBooks] = useState<BookSummary[] | null>(null);
 
+  // 최근 등록 책 10개를 비동기로 조회
+  // mounted 플래그: 컴포넌트가 사라진 뒤에 setBooks 가 호출되는 걸 막기 위함
   useEffect(() => {
     let mounted = true;
     listRecentBooks(10)
@@ -54,13 +61,10 @@ export default function HomePage() {
           pt: 1.5,
           pb: 1.5,
           flexShrink: 0,
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
         }}
       >
         <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.25}>
-          <LocationChip />
+          <LocationChip onClick={() => toast?.show("동네 변경은 준비 중이에요")} />
           <Stack direction="row">
             <IconButton onClick={() => router.push("/search")}>
               <SearchRoundedIcon />
@@ -72,6 +76,7 @@ export default function HomePage() {
             </IconButton>
           </Stack>
         </Stack>
+        {/* 입력은 받지 않고(readOnly), 클릭만으로 검색 페이지로 이동시키는 패턴 */}
         <OutlinedInput
           fullWidth
           placeholder="찾고 있는 책이 있나요?"
@@ -196,6 +201,7 @@ export default function HomePage() {
         </SectionLabel>
 
         <Box sx={{ background: palette.surface }}>
+          {/* 로딩(books === null) → 스켈레톤, 빈 결과 → EmptyState, 데이터 있음 → 카드 목록 */}
           {!books && <ListSkeleton count={4} />}
           {books && books.length === 0 && (
             <EmptyState
@@ -221,20 +227,28 @@ export default function HomePage() {
               key={u.name}
               sx={{
                 flexShrink: 0,
-                width: 140,
+                width: 160,
                 background: palette.surface,
                 border: `1px solid ${palette.line}`,
                 borderRadius: 3,
                 p: 1.5,
                 display: "flex",
                 flexDirection: "column",
-                gap: 1,
+                gap: 1.25,
               }}
             >
               <Stack direction="row" gap={1} alignItems="center">
                 <BookImage seed={u.name} width={36} height={36} radius={999} />
-                <Box>
-                  <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    sx={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
                     {u.name}
                   </Typography>
                   <Typography sx={{ fontSize: 10.5, color: palette.inkSubtle }}>

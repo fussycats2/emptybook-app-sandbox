@@ -1,5 +1,12 @@
 "use client";
 
+// 채팅 상세 페이지 (/chat/[id])
+// - 상단: 상대 프로필 헤더 + 거래 도서 미니 카드(거래액션 버튼)
+// - 본문: 시스템/내/상대 메시지 말풍선
+// - 하단: 메시지 입력창 + 전송 버튼
+// TODO: 메시지/방 상태 모두 클라이언트 상태(useState)에 머물러 있음.
+//       useRealtimeChat 훅으로 messages 테이블을 구독하고, 전송도 INSERT 로 교체 필요
+
 import {
   Box,
   Button,
@@ -20,8 +27,9 @@ import BottomSheet from "@/components/ui/BottomSheet";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import { fetchBook, type BookDetail } from "@/lib/repo";
+import { fetchBook, fetchChat, type BookDetail, type ChatRow } from "@/lib/repo";
 
+// 화면에 그릴 메시지 형태 — system 은 "거래 시작됨" 같은 안내 말풍선용
 interface Msg {
   id: number;
   mine: boolean;
@@ -31,6 +39,7 @@ interface Msg {
   type?: "text" | "system";
 }
 
+// 첫 진입 시 보여줄 더미 대화. Realtime 연동 후에는 빈 배열로 시작 → 서버에서 받아옴
 const INIT_MSGS: Msg[] = [
   { id: 0, mine: false, type: "system", text: "거래가 시작되었어요", time: "" },
   {
@@ -74,9 +83,20 @@ export default function ChatDetailPage({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const [chat, setChat] = useState<ChatRow | null>(null);
   const [book, setBook] = useState<BookDetail | null>(null);
   useEffect(() => {
-    fetchBook(params.id).then(setBook);
+    let mounted = true;
+    fetchChat(params.id).then(async (c) => {
+      if (!mounted) return;
+      setChat(c);
+      const bookId = c?.bookId ?? params.id;
+      const b = await fetchBook(bookId);
+      if (mounted) setBook(b);
+    });
+    return () => {
+      mounted = false;
+    };
   }, [params.id]);
   const [msgs, setMsgs] = useState<Msg[]>(INIT_MSGS);
   const [draft, setDraft] = useState("");
@@ -84,6 +104,8 @@ export default function ChatDetailPage({
   const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmComplete, setConfirmComplete] = useState(false);
 
+  // 메시지 전송 — 빈 문자열은 무시하고, 보낸 직후 입력창 비우기
+  // TODO: 실제로는 messages 테이블 INSERT 후 Realtime 으로 양쪽에 반영되어야 함
   const send = () => {
     const text = draft.trim();
     if (!text) return;
@@ -103,6 +125,7 @@ export default function ChatDetailPage({
     setDraft("");
   };
 
+  // 거래 액션 BottomSheet 에서 항목을 골랐을 때의 처리 (예약/완료/취소)
   const onAction = (key: string) => {
     setActionsOpen(false);
     if (key === "reserve") {
@@ -137,11 +160,13 @@ export default function ChatDetailPage({
         <IconButton onClick={() => router.back()}>
           <ArrowBackIosNewRoundedIcon fontSize="small" />
         </IconButton>
-        <BookImage seed="seller" width={36} height={36} radius={999} />
+        <BookImage seed={chat?.user ?? book?.seller ?? "seller"} width={36} height={36} radius={999} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontSize: 14, fontWeight: 800 }}>책방마니아</Typography>
+          <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
+            {chat?.user ?? book?.seller ?? "판매자"}
+          </Typography>
           <Typography sx={{ fontSize: 11, color: palette.inkSubtle }}>
-            마포구 · 매너온도 38.6℃
+            {book?.region ?? book?.loc ?? "마포구"} · 매너온도 38.6℃
           </Typography>
         </Box>
         <IconButton onClick={() => toast?.show("준비 중이에요")}>
@@ -230,6 +255,7 @@ export default function ChatDetailPage({
               gap={0.75}
               alignItems="flex-end"
               justifyContent="flex-end"
+              sx={{ pl: 6 }}
             >
               <Box sx={{ fontSize: 10.5, color: palette.inkSubtle }}>
                 {m.read ? "읽음 · " : ""}
@@ -255,8 +281,14 @@ export default function ChatDetailPage({
               direction="row"
               gap={0.75}
               alignItems="flex-end"
+              sx={{ pr: 6 }}
             >
-              <BookImage seed="seller" width={28} height={28} radius={999} />
+              <BookImage
+                seed={chat?.user ?? book?.seller ?? "seller"}
+                width={28}
+                height={28}
+                radius={999}
+              />
               <Box>
                 <Box
                   sx={{

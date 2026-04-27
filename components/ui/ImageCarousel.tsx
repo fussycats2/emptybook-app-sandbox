@@ -1,5 +1,9 @@
 "use client";
 
+// 도서 상세 화면 상단의 이미지 캐러셀(좌우 스와이프)
+// CSS scroll-snap 으로 자연스러운 페이지 단위 스크롤을 구현하고
+// scrollLeft 값을 보고 현재 인덱스를 계산해 인디케이터에 표시
+
 import { Box } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import BookImage from "./BookImage";
@@ -9,19 +13,27 @@ interface Props {
   count?: number;
   seed?: string | number;
   height?: number | string;
+  coverUrl?: string; // 외부 표지 URL — 있으면 첫 슬라이드를 이 이미지로 채운다
 }
 
-export default function ImageCarousel({ count = 4, seed, height = 380 }: Props) {
+export default function ImageCarousel({
+  count = 4,
+  seed,
+  height = 380,
+  coverUrl,
+}: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // 스크롤이 멈출 때 어느 페이지에 가까운지 반올림으로 계산
     const onScroll = () => {
       const i = Math.round(el.scrollLeft / el.clientWidth);
       setIdx(i);
     };
+    // passive: true → 스크롤 성능 향상 (preventDefault 안 쓰겠다는 약속)
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
@@ -47,6 +59,9 @@ export default function ImageCarousel({ count = 4, seed, height = 380 }: Props) 
           >
             <BookImage
               seed={`${seed}-${i}`}
+              // 첫 슬라이드만 표지로 채우고 나머지는 placeholder
+              // (사용자 실물 사진 업로드는 추후 구현 — 그땐 i 별로 다른 src 매핑)
+              src={i === 0 ? coverUrl : undefined}
               height={height}
               radius={0}
             />

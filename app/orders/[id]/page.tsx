@@ -1,5 +1,11 @@
 "use client";
 
+// 거래 확정 페이지 (/orders/[id])
+// - 운송장 정보 + 배송 단계 트래커 + 수령 인증 사진 슬롯
+// - "거래 확정하기" 클릭 시 ConfirmDialog 로 한 번 더 확인
+// - 확정되면 completeOrder() 호출 후 후기 작성 화면으로 이동
+// TODO: 운송장/배송 단계는 현재 더미 데이터(STEPS) 기반. 외부 배송사 API 연동 필요
+
 import {
   Box,
   Button,
@@ -12,14 +18,20 @@ import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import AddPhotoAlternateRoundedIcon from "@mui/icons-material/AddPhotoAlternateRounded";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import { completeOrder } from "@/lib/repo";
+import {
+  completeOrder,
+  fetchBook,
+  fetchOrder,
+  type BookDetail,
+  type OrderRow,
+} from "@/lib/repo";
 
 const STEPS = [
   { step: "주문 완료", date: "01.16 10:00", done: true },
@@ -36,20 +48,43 @@ export default function OrderConfirmPage({
   const router = useRouter();
   const toast = useToast();
   const [confirm, setConfirm] = useState(false);
+  const [order, setOrder] = useState<OrderRow | null>(null);
+  const [book, setBook] = useState<BookDetail | null>(null);
+
+  // 주문 → 그 주문의 책 정보를 순차 조회 (책은 주문이 있어야 알 수 있음)
+  useEffect(() => {
+    let mounted = true;
+    fetchOrder(params.id).then(async (o) => {
+      if (!mounted) return;
+      setOrder(o);
+      if (o?.bookId) {
+        const b = await fetchBook(o.bookId);
+        if (mounted) setBook(b);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [params.id]);
+
+  const seedId = book?.id ?? order?.bookId ?? params.id;
+  const title = book?.title ?? order?.title ?? "도서";
+  const sellerName = book?.seller ?? "판매자";
+  const purchaseDate = order?.date ?? "-";
 
   return (
     <>
       <AppHeader title="거래 확정" left="back" />
       <ScrollBody>
         <Box sx={{ background: palette.surface, p: 2, display: "flex", gap: 1.5 }}>
-          <BookImage seed={params.id} width={64} height={84} radius={10} />
+          <BookImage seed={seedId} width={64} height={84} radius={10} />
           <Box>
-            <Typography sx={{ fontSize: 14, fontWeight: 800 }}>채식주의자</Typography>
+            <Typography sx={{ fontSize: 14, fontWeight: 800 }}>{title}</Typography>
             <Typography sx={{ fontSize: 12, color: palette.inkSubtle }}>
-              판매자 책방마니아
+              판매자 {sellerName}
             </Typography>
             <Typography sx={{ fontSize: 12, color: palette.inkSubtle, mt: 0.25 }}>
-              구매일 2024.01.16
+              구매일 {purchaseDate}
             </Typography>
           </Box>
         </Box>

@@ -1,5 +1,8 @@
 "use client";
 
+// 화면 우하단에 떠 있는 둥근 버튼(FAB: Floating Action Button)
+// 기본 동작은 /register(글쓰기) 이동. href 를 바꿔 다른 페이지로도 사용 가능
+
 import { Fab as MuiFab } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { useRouter } from "next/navigation";

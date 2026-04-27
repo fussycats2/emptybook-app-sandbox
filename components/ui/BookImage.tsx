@@ -1,5 +1,10 @@
 "use client";
 
+// 책 표지 자리 표시(placeholder) 이미지 컴포넌트
+// - 실제 이미지(src)가 있으면 그걸 보여주고
+// - 없으면 seed(예: 책 id)에 따라 결정되는 색조합 + 책 아이콘으로 채운다
+// TODO: Storage 연동 후 src 가 항상 들어오면 분기 단순화 가능
+
 import { Box } from "@mui/material";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import { palette } from "@/lib/theme";
@@ -16,6 +21,7 @@ interface Props {
   overlay?: React.ReactNode;
 }
 
+// 자리 표시용 색상 팔레트 (배경색, 전경색) 쌍 6개
 const PALETTES = [
   ["#E8F2EC", "#1F6F4E"],
   ["#FCEFE9", "#C44A3C"],
@@ -25,6 +31,8 @@ const PALETTES = [
   ["#F2EFE8", "#5A6B62"],
 ];
 
+// seed 값을 해싱해 항상 같은 책이면 같은 색이 나오도록 함
+// (h * 31 + charCode) 는 자바 스타일의 단순한 문자열 해시
 function pick(seed?: string | number) {
   const key = String(seed ?? "x");
   let h = 0;

@@ -1,5 +1,9 @@
 "use client";
 
+// 검색 화면에서 띄우는 필터 BottomSheet
+// 도서 상태 / 가격 / 카테고리 / 거래 방식 / 지역을 한 번에 설정할 수 있다
+// 적용 시 onApply 로 결과를 부모에 넘겨주고 시트를 닫는 구조
+
 import {
   Box,
   Button,
@@ -13,6 +17,7 @@ import { useState } from "react";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { palette } from "@/lib/theme";
 
+// DB enum(key) ↔ 사용자에게 보여줄 라벨(label)
 const STATES = [
   { key: "A_PLUS", label: "최상" },
   { key: "A", label: "상" },
@@ -37,15 +42,17 @@ const TRADE_METHODS = [
   { key: "BOTH", label: "둘 다" },
 ];
 
+// 필터에서 다루는 모든 옵션을 한 객체로 묶음
 export interface FilterValue {
-  states: string[];
+  states: string[]; // 다중선택: 상태 등급 키 배열
   category?: string;
   trade?: string;
-  priceRange: [number, number];
+  priceRange: [number, number]; // [min, max]
   region?: string;
   freeOnly?: boolean;
 }
 
+// "초기화" 버튼이 누르면 돌아갈 기본값
 const DEFAULT: FilterValue = {
   states: [],
   category: undefined,
@@ -66,7 +73,9 @@ export default function FilterSheet({
   initial?: FilterValue;
   onApply: (v: FilterValue) => void;
 }) {
+  // 부모가 initial 을 안 주면 기본값에서 시작
   const [v, setV] = useState<FilterValue>(initial ?? DEFAULT);
+  // 일부 필드만 patch 형태로 갱신 — setV({ ...v, key: val }) 보다 호출이 짧아짐
   const update = (patch: Partial<FilterValue>) => setV({ ...v, ...patch });
 
   return (
@@ -103,6 +112,7 @@ export default function FilterSheet({
               <Chip
                 key={s.key}
                 label={s.label}
+                // 다중선택 토글: 이미 있으면 빼고, 없으면 추가
                 onClick={() =>
                   update({
                     states: on
@@ -211,6 +221,7 @@ export default function FilterSheet({
   );
 }
 
+// 필터 시트 내부에서만 쓰는 작은 섹션 래퍼 (제목 + 옵션 우측 보조 텍스트 + 본문)
 function Section({
   title,
   right,

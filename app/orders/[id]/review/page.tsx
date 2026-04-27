@@ -1,14 +1,25 @@
 "use client";
 
+// 거래 후기 작성 페이지 (/orders/[id]/review)
+// - [id] 는 transactions.id (거래 ID)
+// - 마운트 시 fetchReviewContext 로 상대방/책/거래일/이미 작성 여부 조회
+// - 이미 작성된 거래면 입력을 잠그고 안내 문구 표시
+// - 별점(1~5) + 좋았던 점 태그(다중) + 상세 후기(선택) 후 createReview 호출
+
 import { Box, Button, Chip, Stack, TextField, Typography } from "@mui/material";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
+import {
+  createReview,
+  fetchReviewContext,
+  type ReviewContext,
+} from "@/lib/repo";
 
 const TAGS = [
   "도서 상태가 좋아요",
@@ -20,18 +31,66 @@ const TAGS = [
 ];
 const RATING_TEXT = ["별로예요", "그저 그래요", "괜찮아요", "좋아요!", "최고예요!"];
 
-export default function ReviewPage(_: { params: { id: string } }) {
+export default function ReviewPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const toast = useToast();
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [tags, setTags] = useState<string[]>([]);
   const [text, setText] = useState("");
+  const [ctx, setCtx] = useState<ReviewContext | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
+  // 거래 컨텍스트 로드 — 상대방/책/이미 작성 여부 확보
+  useEffect(() => {
+    let mounted = true;
+    fetchReviewContext(params.id)
+      .then((c) => {
+        if (!mounted) return;
+        setCtx(c);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [params.id]);
+
+  // 다중 선택 태그 토글 헬퍼
   const toggleTag = (t: string) =>
     setTags((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
 
+  // 마우스 호버 시 미리보기 별점, 호버가 없으면 실제 선택값을 표시
   const display = hover || rating;
+
+  // 작성 잠금 조건: 컨텍스트 없음(거래 당사자가 아님) 또는 이미 작성한 거래
+  const locked = !ctx || ctx.alreadyReviewed;
+
+  const submit = async () => {
+    if (!ctx || submitting || rating === 0) return;
+    setSubmitting(true);
+    try {
+      const res = await createReview({
+        transactionId: params.id,
+        revieweeId: ctx.revieweeId,
+        rating,
+        tags,
+        comment: text.trim() || undefined,
+      });
+      if (res.alreadyExists) {
+        toast?.show("이미 후기를 작성한 거래예요");
+      } else {
+        toast?.show("소중한 후기를 남겨주셔서 감사해요!");
+      }
+      router.push("/mypage");
+    } catch {
+      toast?.show("후기 저장에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
+      setSubmitting(false);
+    }
+  };
 
   return (
     <>
@@ -39,14 +98,33 @@ export default function ReviewPage(_: { params: { id: string } }) {
       <ScrollBody>
         <Box sx={{ p: 2.5, textAlign: "center" }}>
           <Stack direction="row" gap={1.25} alignItems="center" justifyContent="center" mb={2}>
-            <BookImage seed="reviewee" width={40} height={40} radius={999} />
+            <BookImage seed={ctx?.revieweeId ?? "reviewee"} width={40} height={40} radius={999} />
             <Box sx={{ textAlign: "left" }}>
-              <Typography sx={{ fontSize: 14.5, fontWeight: 800 }}>책방마니아</Typography>
+              <Typography sx={{ fontSize: 14.5, fontWeight: 800 }}>
+                {ctx?.revieweeName ?? (loading ? "불러오는 중…" : "상대방")}
+              </Typography>
               <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle }}>
-                채식주의자 · 2024.01.17
+                {ctx ? `${ctx.bookTitle} · ${ctx.completedAt}` : ""}
               </Typography>
             </Box>
           </Stack>
+
+          {ctx?.alreadyReviewed && (
+            <Box
+              sx={{
+                background: palette.primarySoft,
+                color: palette.primary,
+                borderRadius: 2,
+                px: 1.5,
+                py: 1,
+                fontSize: 12.5,
+                fontWeight: 700,
+                mb: 2,
+              }}
+            >
+              이미 후기를 작성한 거래예요
+            </Box>
+          )}
 
           <Typography sx={{ fontSize: 15, fontWeight: 700, mb: 2 }}>
             거래는 어떠셨나요?
@@ -55,10 +133,10 @@ export default function ReviewPage(_: { params: { id: string } }) {
             {[1, 2, 3, 4, 5].map((i) => (
               <Box
                 key={i}
-                onClick={() => setRating(i)}
-                onMouseEnter={() => setHover(i)}
+                onClick={() => !locked && setRating(i)}
+                onMouseEnter={() => !locked && setHover(i)}
                 onMouseLeave={() => setHover(0)}
-                sx={{ cursor: "pointer", p: 0.5 }}
+                sx={{ cursor: locked ? "default" : "pointer", p: 0.5, opacity: locked ? 0.5 : 1 }}
               >
                 <StarRoundedIcon
                   className={display >= i ? "animate-pop" : undefined}
@@ -99,7 +177,8 @@ export default function ReviewPage(_: { params: { id: string } }) {
                   key={t}
                   label={t}
                   variant={on ? "filled" : "outlined"}
-                  onClick={() => toggleTag(t)}
+                  onClick={() => !locked && toggleTag(t)}
+                  disabled={locked}
                   sx={{
                     height: 36,
                     px: 1,
@@ -125,6 +204,7 @@ export default function ReviewPage(_: { params: { id: string } }) {
             minRows={4}
             placeholder="다른 사용자들에게 도움이 될 후기를 남겨주세요. (최대 200자)"
             value={text}
+            disabled={locked}
             onChange={(e) => setText(e.target.value.slice(0, 200))}
           />
           <Typography sx={{ textAlign: "right", fontSize: 11, color: palette.inkSubtle, mt: 0.5 }}>
@@ -135,13 +215,10 @@ export default function ReviewPage(_: { params: { id: string } }) {
       <FixedFooter>
         <Button
           fullWidth
-          disabled={rating === 0}
-          onClick={() => {
-            toast?.show("소중한 후기를 남겨주셔서 감사해요!");
-            router.push("/mypage");
-          }}
+          disabled={locked || rating === 0 || submitting}
+          onClick={submit}
         >
-          후기 보내기
+          {submitting ? "보내는 중…" : ctx?.alreadyReviewed ? "이미 작성됨" : "후기 보내기"}
         </Button>
       </FixedFooter>
     </>

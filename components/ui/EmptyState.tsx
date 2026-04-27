@@ -1,5 +1,8 @@
 "use client";
 
+// 데이터가 없을 때 보여줄 안내 화면 (목록이 비었을 때, 검색 결과 0건 등)
+// 아이콘 + 제목 + 부가 설명 + 선택적 액션 버튼 구조
+
 import { Box, Stack, Typography, Button } from "@mui/material";
 import { palette } from "@/lib/theme";
 

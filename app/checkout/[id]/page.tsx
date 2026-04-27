@@ -1,5 +1,11 @@
 "use client";
 
+// 결제 화면 (/checkout/[id])
+// - 상품 요약 + 배송지 + 결제수단 + 쿠폰/포인트 + 결제 금액 + 약관 동의
+// - "결제하기" 클릭 시 createOrder() 호출 → 완료 페이지로 이동
+// - 무료나눔이면 결제수단/쿠폰 영역을 숨기고 신청 흐름으로 단순화
+// FIXME: 실제 PG 연동 없음 — 버튼 누르면 그냥 트랜잭션을 PAID 로 기록하고 다음 화면으로 진행
+
 import {
   Box,
   Button,
@@ -51,6 +57,8 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
     fetchBook(params.id).then(setBook);
   }, [params.id]);
 
+  // 결제 금액 계산: 상품가 + 배송비 - 쿠폰 (음수가 되지 않도록 0으로 클램프)
+  // 무료나눔은 배송비/쿠폰 모두 0
   const goods = useMemo(() => book?.priceNumber ?? 0, [book]);
   const ship = book?.free ? 0 : 3000;
   const coupon = book?.free ? 0 : 1000;
@@ -159,6 +167,7 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
           </Box>
         </Section>
 
+        {!book.free && (
         <Section title="결제 수단">
           <Stack gap={1}>
             {PAYMENTS.map((p) => {
@@ -242,7 +251,9 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
             })}
           </Stack>
         </Section>
+        )}
 
+        {!book.free && (
         <Section title="쿠폰 / 포인트">
           <Stack direction="row" gap={1}>
             <OutlinedInput
@@ -256,8 +267,9 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
             </Button>
           </Stack>
         </Section>
+        )}
 
-        <Section title="결제 금액">
+        <Section title={book.free ? "신청 정보" : "결제 금액"}>
           <Box
             sx={{
               border: `1px solid ${palette.line}`,
@@ -265,19 +277,28 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
               p: 1.5,
             }}
           >
-            <Row label="상품 금액" value={goods.toLocaleString() + "원"} />
-            <Row label="배송비" value={ship.toLocaleString() + "원"} />
-            <Row
-              label="쿠폰 할인"
-              value={`-${coupon.toLocaleString()}원`}
-              accent
-            />
-            <Divider sx={{ my: 1 }} />
-            <Row
-              label="총 결제 금액"
-              value={total.toLocaleString() + "원"}
-              big
-            />
+            {book.free ? (
+              <Typography sx={{ fontSize: 13, color: palette.inkMute, lineHeight: 1.6 }}>
+                무료나눔은 결제 없이 판매자 승인 후 진행돼요. 선택하신 배송지로
+                안내될 예정이에요.
+              </Typography>
+            ) : (
+              <>
+                <Row label="상품 금액" value={goods.toLocaleString() + "원"} />
+                <Row label="배송비" value={ship.toLocaleString() + "원"} />
+                <Row
+                  label="쿠폰 할인"
+                  value={`-${coupon.toLocaleString()}원`}
+                  accent
+                />
+                <Divider sx={{ my: 1 }} />
+                <Row
+                  label="총 결제 금액"
+                  value={total.toLocaleString() + "원"}
+                  big
+                />
+              </>
+            )}
           </Box>
         </Section>
 
@@ -327,6 +348,7 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
   );
 }
 
+// 결제 화면 안에서만 쓰는 섹션 래퍼 (제목 + 우측 액션 + 본문)
 function Section({
   title,
   right,
@@ -360,6 +382,7 @@ function Section({
   );
 }
 
+// 결제 금액 영역의 라벨/금액 한 줄 — big=총합, accent=할인 강조
 function Row({
   label,
   value,

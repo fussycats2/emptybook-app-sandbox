@@ -1,5 +1,10 @@
 "use client";
 
+// 책 카드 컴포넌트 모음 — 표시 형태별로 3가지 변형을 제공
+// - BookFeedItem: 홈 피드용 가로 큰 썸네일 + 상세
+// - BookGridCard: 검색/그리드용 정사각형 카드
+// - BookListRow: 목록형 작은 썸네일
+
 import { Box, Stack, Typography } from "@mui/material";
 import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
 import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
@@ -10,6 +15,7 @@ import StatusBadge, { type SaleStatus } from "./StatusBadge";
 import LikeButton from "./LikeButton";
 import { palette } from "@/lib/theme";
 
+// 카드에 필요한 최소 정보 — repo.ts 의 변환 함수가 이 형태로 데이터를 만들어 넘김
 export interface BookSummary {
   id: string;
   title: string;
@@ -23,13 +29,16 @@ export interface BookSummary {
   free?: boolean;
   likes?: number;
   chats?: number;
+  coverUrl?: string; // 외부 표지 URL — 있으면 placeholder 대신 표시
 }
 
+// 카드에 표시할 가격 텍스트 결정 — 무료나눔이면 "무료나눔" 레이블 우선
 function priceLine(book: BookSummary) {
   if (book.free || book.status === "free") return "무료나눔";
   return book.price;
 }
 
+// 홈 피드 한 줄: 큰 이미지 + 제목/저자/위치 + 가격 + 좋아요/채팅 카운트
 export function BookFeedItem({ book }: { book: BookSummary }) {
   const router = useRouter();
   const status: SaleStatus | undefined =
@@ -49,7 +58,7 @@ export function BookFeedItem({ book }: { book: BookSummary }) {
         "&:active": { background: palette.lineSoft },
       }}
     >
-      <BookImage seed={book.id} width={108} height={132} radius={12} />
+      <BookImage seed={book.id} src={book.coverUrl} width={108} height={132} radius={12} />
       <Stack flex={1} minWidth={0} justifyContent="space-between">
         <Box>
           <Stack direction="row" gap={0.75} alignItems="center" mb={0.5}>
@@ -79,25 +88,23 @@ export function BookFeedItem({ book }: { book: BookSummary }) {
           >
             {book.title}
           </Typography>
-          <Stack
-            direction="row"
-            gap={0.5}
-            alignItems="center"
-            sx={{ mt: 0.5, color: palette.inkSubtle, fontSize: 11 }}
-          >
-            {book.loc && (
-              <>
-                <LocationOnRoundedIcon sx={{ fontSize: 13 }} />
-                <span>{book.loc}</span>
-              </>
-            )}
-            {book.date && (
-              <>
-                <span>·</span>
-                <span>{book.date}</span>
-              </>
-            )}
-          </Stack>
+          {(book.loc || book.date) && (
+            <Stack
+              direction="row"
+              gap={0.5}
+              alignItems="center"
+              sx={{ mt: 0.5, color: palette.inkSubtle, fontSize: 11 }}
+            >
+              {book.loc && (
+                <>
+                  <LocationOnRoundedIcon sx={{ fontSize: 13 }} />
+                  <span>{book.loc}</span>
+                </>
+              )}
+              {book.loc && book.date && <span>·</span>}
+              {book.date && <span>{book.date}</span>}
+            </Stack>
+          )}
         </Box>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-end">
           <Typography
@@ -127,6 +134,7 @@ export function BookFeedItem({ book }: { book: BookSummary }) {
   );
 }
 
+// 검색 결과 등에서 사용하는 정사각형 카드 (2열 그리드 친화적)
 export function BookGridCard({ book }: { book: BookSummary }) {
   const router = useRouter();
   const status: SaleStatus | undefined =
@@ -145,14 +153,14 @@ export function BookGridCard({ book }: { book: BookSummary }) {
       }}
     >
       <Box sx={{ position: "relative" }}>
-        <BookImage seed={book.id} ratio={1} radius={0} />
+        <BookImage seed={book.id} src={book.coverUrl} ratio={1} radius={0} />
         {status && (
           <Box sx={{ position: "absolute", top: 8, left: 8 }}>
             <StatusBadge status={status} size="sm" />
           </Box>
         )}
         <Box sx={{ position: "absolute", top: 4, right: 4 }}>
-          <LikeButton size="small" bg="rgba(255,255,255,0.92)" />
+          <LikeButton bookId={book.id} size="small" bg="rgba(255,255,255,0.92)" />
         </Box>
       </Box>
       <Box sx={{ p: 1.25 }}>
@@ -188,6 +196,7 @@ export function BookGridCard({ book }: { book: BookSummary }) {
   );
 }
 
+// 마이페이지 거래내역 같은 곳에서 사용하는 컴팩트 가로 행
 export function BookListRow({ book }: { book: BookSummary }) {
   const router = useRouter();
   return (
@@ -202,7 +211,7 @@ export function BookListRow({ book }: { book: BookSummary }) {
         "&:hover": { background: palette.lineSoft },
       }}
     >
-      <BookImage seed={book.id} width={68} height={88} radius={10} />
+      <BookImage seed={book.id} src={book.coverUrl} width={68} height={88} radius={10} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
           {book.title}
@@ -236,12 +245,13 @@ export function BookListRow({ book }: { book: BookSummary }) {
         )}
       </Box>
       <Box sx={{ alignSelf: "flex-start" }}>
-        <LikeButton size="small" />
+        <LikeButton bookId={book.id} size="small" />
       </Box>
     </Box>
   );
 }
 
+// 이전 이름으로 import 하던 곳들이 있어서 alias 로 유지(별도 동작 동일)
 export function BookListItem(props: { book: BookSummary }) {
   return <BookListRow {...props} />;
 }

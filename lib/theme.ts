@@ -1,7 +1,13 @@
 "use client";
 
+// MUI(Material UI) 디자인 시스템 테마 정의 파일
+// - 색상/모서리/그림자 토큰을 한 곳에 모아두고 앱 전체에서 재사용
+// - createTheme 으로 만든 테마는 app/providers.tsx 의 ThemeProvider 에 전달됨
+
 import { createTheme, alpha } from "@mui/material/styles";
 
+// 앱 전역 색상 팔레트 ("도서관 그린" 톤)
+// 색상 변경이 필요할 때는 이 객체만 바꾸면 전체에 반영된다
 export const palette = {
   primary: "#1F6F4E",
   primaryDark: "#155A3E",
@@ -24,20 +30,23 @@ export const palette = {
   border: "#E8E4DC",
 };
 
+// 모서리 둥글기(radius) 토큰 — 버튼/카드/Chip 등에서 일관된 라운드값 사용
 export const radius = {
   xs: 4,
   sm: 8,
   md: 12,
   lg: 16,
-  pill: 999,
+  pill: 999, // 알약(pill) 모양: 양 끝이 완전히 둥근 형태
 };
 
+// 그림자(shadow) 토큰 — 카드/스티키 영역/팝업 등 깊이 표현에 사용
 export const shadow = {
   card: "0 1px 2px rgba(26, 43, 34, 0.04), 0 4px 16px rgba(26, 43, 34, 0.04)",
-  sticky: "0 -4px 16px rgba(26, 43, 34, 0.06)",
+  sticky: "0 -4px 16px rgba(26, 43, 34, 0.06)", // 화면 하단 고정 영역(예: 결제 버튼 바)에 위로 떠 보이도록
   raised: "0 8px 24px rgba(26, 43, 34, 0.12)",
 };
 
+// MUI 테마 객체 생성: 색상, 타이포그래피, 컴포넌트별 기본 스타일을 한 번에 정의
 const theme = createTheme({
   palette: {
     mode: "light",
@@ -54,6 +63,8 @@ const theme = createTheme({
     warning: { main: palette.warn },
   },
   typography: {
+    // 폰트 우선순위: Pretendard → 시스템 한글 폰트 → sans-serif
+    // 앞쪽 폰트가 없으면 다음 폰트로 자동 대체된다
     fontFamily:
       'Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Nanum Gothic", system-ui, sans-serif',
     h1: { fontSize: 24, fontWeight: 800, letterSpacing: "-0.02em" },
@@ -71,6 +82,10 @@ const theme = createTheme({
         body: { backgroundColor: palette.bg },
       },
     },
+    // MUI 버튼 기본 스타일 커스터마이징
+    // - disableElevation: 기본 그림자 제거(플랫 디자인)
+    // - variant: 별도 지정 안 하면 contained(채워진) 버튼
+    // - minHeight 44: 모바일 터치 영역(권장 최소 44px) 확보
     MuiButton: {
       defaultProps: { disableElevation: true, variant: "contained" },
       styleOverrides: {
@@ -120,6 +135,7 @@ const theme = createTheme({
         input: { padding: "12px 14px", fontSize: 14 },
       },
     },
+    // Chip(태그/필터 버튼)을 알약 모양으로 통일
     MuiChip: {
       styleOverrides: {
         root: {

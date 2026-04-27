@@ -1,5 +1,9 @@
 "use client";
 
+// 화면 하단 5탭 네비게이션 (홈/검색/등록/채팅/마이)
+// - "등록"은 가운데 떠 보이는 강조 버튼(FAB 스타일)으로 별도 처리
+// - 현재 경로(usePathname)와 비교해 활성 탭을 판별
+
 import { Box, Typography } from "@mui/material";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
@@ -13,6 +17,8 @@ import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { usePathname, useRouter } from "next/navigation";
 import { palette } from "@/lib/theme";
 
+// 탭 정의: 활성 시(on) / 비활성 시(off) 아이콘을 분리해 시각적 강조 차이를 둔다
+// primary: true 는 가운데 강조 등록 버튼 표시용 플래그
 const TABS = [
   { label: "홈", path: "/home", on: HomeRoundedIcon, off: HomeOutlinedIcon },
   {
@@ -53,6 +59,7 @@ export default function BottomTabNav() {
       }}
     >
       {TABS.map((tab) => {
+        // /chat 활성 판별 시 /chat/123 같은 하위 경로도 활성으로 인정
         const active =
           pathname === tab.path || pathname.startsWith(tab.path + "/");
         const Icon = active ? tab.on : tab.off;

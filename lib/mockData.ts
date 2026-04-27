@@ -1,6 +1,11 @@
+// Supabase 미연결(=환경변수 없음) 환경에서도 화면이 동작하도록 만든 더미 데이터 + 인메모리 저장소
+// - 앱 첫 진입 시 SEED_* 데이터를 globalThis 에 보관해 라우팅 사이에 상태가 유지되게 함
+// - 페이지에서는 lib/repo.ts 만 import 하고, 이 파일은 직접 import 하지 않는 것이 원칙
+
 import type { BookSummary } from "@/components/ui/BookCard";
 import type { SaleStatus } from "@/components/ui/StatusBadge";
 
+// BookCard 가 요구하는 필드(BookSummary)에 상세화면용 추가 필드를 합친 확장 타입
 export type MockBook = BookSummary & {
   publisher?: string;
   isbn?: string;
@@ -9,12 +14,14 @@ export type MockBook = BookSummary & {
   description?: string;
   comment?: string;
   seller?: string;
+  sellerId?: string; // 실제 auth user.id (Supabase 모드). mock에선 미사용
   sellerStats?: string;
   registeredAt?: string;
   tradeMethod?: string;
   category?: string;
   priceNumber: number;
   region?: string;
+  coverUrl?: string; // 외부(네이버 등) 표지 URL
 };
 
 export type MockOrder = {
@@ -27,6 +34,8 @@ export type MockOrder = {
   date: string;
   bookId: string;
   buyerName?: string;
+  // 내가 산 거래(buy)인지 판 거래(sell)인지 — orders 페이지 탭 필터에서 사용
+  side: "buy" | "sell";
 };
 
 export type MockChat = {
@@ -50,6 +59,19 @@ export type MockNotification = {
   unread: boolean;
 };
 
+// 후기 — 거래(transaction) 1건당 1개. 작성자(reviewer)/대상(reviewee)을 분리해 보관
+export type MockReview = {
+  id: string;
+  transactionId: string;
+  reviewerId: string;
+  revieweeId: string;
+  rating: number;
+  tags: string[];
+  comment?: string;
+  createdAt: string;
+};
+
+// 처음 화면을 띄웠을 때 보이는 기본 더미 책 목록
 const SEED_BOOKS: MockBook[] = [
   {
     id: "1",
@@ -163,6 +185,8 @@ const SEED_BOOKS: MockBook[] = [
   },
 ];
 
+// 마이페이지 → 거래 내역에서 사용할 더미 주문 데이터
+// side: 내가 산 거래(buy) / 내가 판 거래(sell) — 탭 필터 검증용으로 양쪽 다 시드로 둠
 const SEED_ORDERS: MockOrder[] = [
   {
     id: "o-1",
@@ -173,6 +197,7 @@ const SEED_ORDERS: MockOrder[] = [
     status: "거래완료",
     date: "2024.01.10",
     bookId: "2",
+    side: "buy",
   },
   {
     id: "o-2",
@@ -180,12 +205,25 @@ const SEED_ORDERS: MockOrder[] = [
     info: "판매자: 북헌터",
     price: "7,000원",
     priceNumber: 7000,
-    status: "거래완료",
+    status: "배송중",
     date: "2024.01.05",
     bookId: "3",
+    side: "buy",
+  },
+  {
+    id: "o-3",
+    title: "흰",
+    info: "구매자: 이웃A",
+    price: "5,000원",
+    priceNumber: 5000,
+    status: "거래완료",
+    date: "2024.01.02",
+    bookId: "6",
+    side: "sell",
   },
 ];
 
+// 채팅 목록 화면에 표시할 더미 채팅
 const SEED_CHATS: MockChat[] = [
   {
     id: "c-1",
@@ -222,6 +260,7 @@ const SEED_CHATS: MockChat[] = [
   },
 ];
 
+// 알림 화면 더미 데이터
 const SEED_NOTIFICATIONS: MockNotification[] = [
   {
     id: "n-1",
@@ -249,15 +288,21 @@ const SEED_NOTIFICATIONS: MockNotification[] = [
   },
 ];
 
+// globalThis 에 저장할 키. 페이지 이동 후에도 같은 데이터를 참조하기 위함
 const STORE_KEY = "__emptybook_mock_store__";
 
+// 인메모리 저장소의 형태
 type Store = {
   books: MockBook[];
   orders: MockOrder[];
   chats: MockChat[];
   notifications: MockNotification[];
+  likedBookIds: Set<string>; // 비로그인/mock 환경에서 찜 상태를 보관
+  reviews: MockReview[]; // 후기 — transactionId 별 1개 제약
 };
 
+// 처음 호출되면 SEED 데이터를 globalThis 에 박아두고, 이후엔 그걸 재사용한다
+// (페이지 새로고침이나 서버 재시작 시점에는 다시 SEED 로 초기화됨)
 function getStore(): Store {
   const g = globalThis as any;
   if (!g[STORE_KEY]) {
@@ -266,21 +311,26 @@ function getStore(): Store {
       orders: [...SEED_ORDERS],
       chats: [...SEED_CHATS],
       notifications: [...SEED_NOTIFICATIONS],
+      likedBookIds: new Set<string>(),
+      reviews: [],
     } satisfies Store;
   }
   return g[STORE_KEY] as Store;
 }
 
+// 책 목록 조회. limit 가 주어지면 앞에서부터 limit 개만 반환
 export function mockListBooks(opts?: { limit?: number }): MockBook[] {
   const s = getStore();
-  const list = [...s.books];
+  const list = [...s.books]; // 원본 배열 보호를 위해 복사본 반환
   return opts?.limit ? list.slice(0, opts.limit) : list;
 }
 
+// 단일 책 조회 — 못 찾으면 undefined
 export function mockGetBook(id: string): MockBook | undefined {
   return getStore().books.find((b) => b.id === id);
 }
 
+// 도서 등록. 등록 시점에 가격 0원이면 무료나눔으로 자동 분류
 export function mockCreateBook(input: {
   title: string;
   author?: string;
@@ -294,8 +344,10 @@ export function mockCreateBook(input: {
   description?: string;
   comment?: string;
   tradeMethod?: string;
+  coverUrl?: string;
 }): MockBook {
   const s = getStore();
+  // 'u-{timestamp}' 형태로 임시 ID 발급 (실제 DB 라면 UUID 사용)
   const id = `u-${Date.now()}`;
   const isFree = input.free || input.priceNumber === 0;
   const book: MockBook = {
@@ -321,11 +373,32 @@ export function mockCreateBook(input: {
     free: isFree,
     likes: 0,
     chats: 0,
+    coverUrl: input.coverUrl,
   };
+  // 새로 등록한 책이 목록 맨 위에 보이도록 prepend
   s.books = [book, ...s.books];
   return book;
 }
 
+// 등록 취소 — 책을 HIDDEN 상태로(목록에서 사라짐, 데이터는 남김)
+export function mockCancelBook(bookId: string): boolean {
+  const s = getStore();
+  const book = s.books.find((b) => b.id === bookId);
+  if (!book) return false;
+  book.status = "sold"; // mock의 SaleStatus 에는 HIDDEN 표현이 없어 sold(거래완료)로 대체
+  return true;
+}
+
+// 영구 삭제 — 책 행 + 관련 likes 정리
+export function mockDeleteBook(bookId: string): boolean {
+  const s = getStore();
+  const before = s.books.length;
+  s.books = s.books.filter((b) => b.id !== bookId);
+  s.likedBookIds.delete(bookId);
+  return s.books.length < before;
+}
+
+// 주문 목록/단일 조회
 export function mockListOrders(): MockOrder[] {
   return [...getStore().orders];
 }
@@ -334,6 +407,7 @@ export function mockGetOrder(id: string): MockOrder | undefined {
   return getStore().orders.find((o) => o.id === id);
 }
 
+// 결제 시점에 호출. 책 status 도 'sold'로 함께 변경한다
 export function mockCreateOrder(input: {
   bookId: string;
   status?: MockOrder["status"];
@@ -351,12 +425,15 @@ export function mockCreateOrder(input: {
     status: input.status ?? "배송중",
     date: new Date().toLocaleDateString("ko-KR"),
     buyerName: "나",
+    side: "buy",
   };
   s.orders = [order, ...s.orders];
+  // 주문이 생성되면 해당 책은 더 이상 판매중이 아님
   if (book) book.status = "sold";
   return order;
 }
 
+// 거래 확정/배송 상태 등 주문 상태만 갱신
 export function mockUpdateOrderStatus(id: string, status: MockOrder["status"]) {
   const s = getStore();
   const o = s.orders.find((x) => x.id === id);
@@ -364,6 +441,91 @@ export function mockUpdateOrderStatus(id: string, status: MockOrder["status"]) {
   return o;
 }
 
+// 찜 상태 조회/토글 — books.likes 카운터도 함께 갱신해 카드 UI와 즉시 일치시킨다
+export function mockIsLiked(bookId: string): boolean {
+  return getStore().likedBookIds.has(bookId);
+}
+
+export function mockListLikedIds(): string[] {
+  return [...getStore().likedBookIds];
+}
+
+export function mockToggleLike(bookId: string): {
+  liked: boolean;
+  likeCount: number;
+} {
+  const s = getStore();
+  const book = s.books.find((b) => b.id === bookId);
+  const wasLiked = s.likedBookIds.has(bookId);
+  if (wasLiked) {
+    s.likedBookIds.delete(bookId);
+    if (book) book.likes = Math.max(0, (book.likes ?? 0) - 1);
+  } else {
+    s.likedBookIds.add(bookId);
+    if (book) book.likes = (book.likes ?? 0) + 1;
+  }
+  return { liked: !wasLiked, likeCount: book?.likes ?? 0 };
+}
+
+// 후기 — 단일 거래에 대한 후기 조회/생성
+// mock 환경에서는 reviewer는 항상 "나"(buyer 역할), reviewee는 판매자(seller 이름)로 가정
+export function mockGetReviewByTx(transactionId: string): MockReview | undefined {
+  return getStore().reviews.find((r) => r.transactionId === transactionId);
+}
+
+export function mockCreateReview(input: {
+  transactionId: string;
+  reviewerId?: string;
+  revieweeId?: string;
+  rating: number;
+  tags: string[];
+  comment?: string;
+}): MockReview {
+  const s = getStore();
+  // UNIQUE(transaction_id) 제약을 mock에서도 흉내냄
+  const existing = s.reviews.find(
+    (r) => r.transactionId === input.transactionId
+  );
+  if (existing) return existing;
+  const review: MockReview = {
+    id: `rv-${Date.now()}`,
+    transactionId: input.transactionId,
+    reviewerId: input.reviewerId ?? "me",
+    revieweeId: input.revieweeId ?? "seller",
+    rating: input.rating,
+    tags: input.tags,
+    comment: input.comment,
+    createdAt: new Date().toISOString(),
+  };
+  s.reviews = [review, ...s.reviews];
+  return review;
+}
+
+// 후기 작성 화면 상단에 표시할 컨텍스트 — 상대방 이름/책 제목/거래일/이미 작성 여부
+// mock에서는 order(transaction)에 책 정보를 join한 형태로 반환
+export function mockGetReviewContext(transactionId: string): {
+  revieweeName: string;
+  revieweeId: string;
+  bookTitle: string;
+  bookId: string;
+  completedAt: string;
+  alreadyReviewed: boolean;
+} | null {
+  const s = getStore();
+  const order = s.orders.find((o) => o.id === transactionId);
+  if (!order) return null;
+  const book = s.books.find((b) => b.id === order.bookId);
+  return {
+    revieweeName: book?.seller ?? "판매자",
+    revieweeId: book?.seller ?? "seller", // mock 에선 별도 user id가 없어 이름을 키로 대체
+    bookTitle: order.title,
+    bookId: order.bookId,
+    completedAt: order.date,
+    alreadyReviewed: !!s.reviews.find((r) => r.transactionId === transactionId),
+  };
+}
+
+// 채팅/알림 조회 함수들
 export function mockListChats(): MockChat[] {
   return [...getStore().chats];
 }
@@ -376,6 +538,8 @@ export function mockListNotifications(): MockNotification[] {
   return [...getStore().notifications];
 }
 
+// 정적 메타데이터 (자주 바뀌지 않는 표시용 데이터)
+// 카테고리 칩, 인기 셀러, 최근 검색어 등 — 하드코딩 모음
 export const CATEGORIES: { name: string; emoji: string }[] = [
   { name: "소설", emoji: "📖" },
   { name: "에세이", emoji: "🌿" },
