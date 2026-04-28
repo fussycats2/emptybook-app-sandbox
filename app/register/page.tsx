@@ -28,7 +28,8 @@ import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import { createBook } from "@/lib/repo";
+import { createBook, meta } from "@/lib/repo";
+import { inferCategory } from "@/lib/categoryMap";
 import type { BookSearchItem } from "@/app/api/books/search/route";
 
 const STATES = [
@@ -55,6 +56,8 @@ export default function RegisterPage() {
   const [region, setRegion] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // 카테고리 — 검색 결과 선택 시 inferCategory 로 자동 추정, 사용자가 chip 으로 직접 변경 가능
+  const [category, setCategory] = useState<string>("소설");
   // 도서 검색 결과 + 선택된 항목
   // - results 가 채워지면 검색결과 리스트를 표시 (다수 매칭 시)
   // - selected 가 있으면 매칭된 도서 카드 표시 (단일 결과 / 사용자 선택 후)
@@ -83,6 +86,8 @@ export default function RegisterPage() {
         // 1건 매칭(주로 ISBN 검색): 바로 선택 + 제목도 정확한 값으로 교체
         setSelected(items[0]);
         setTitle(items[0].title);
+        // 제목 + 설명 텍스트로 카테고리 자동 추정
+        setCategory(inferCategory(`${items[0].title} ${items[0].description}`));
         toast?.show("도서 정보를 가져왔어요");
       } else {
         setResults(items);
@@ -98,6 +103,7 @@ export default function RegisterPage() {
   const handlePick = (item: BookSearchItem) => {
     setSelected(item);
     setTitle(item.title);
+    setCategory(inferCategory(`${item.title} ${item.description}`));
     setResults(null);
     toast?.show("도서 정보를 가져왔어요");
   };
@@ -120,7 +126,7 @@ export default function RegisterPage() {
         publisher: selected?.publisher || undefined,
         isbn: selected?.isbn || undefined,
         coverUrl: selected?.image || undefined,
-        category: "소설",
+        category,
         state,
         priceNumber,
         free,
@@ -558,6 +564,30 @@ export default function RegisterPage() {
               );
             })}
           </Stack>
+        </Box>
+
+        <Box sx={{ p: 2 }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
+            카테고리
+          </Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+            {meta.CATEGORIES.map((c) => {
+              const on = category === c.name;
+              return (
+                <Chip
+                  key={c.name}
+                  label={`${c.emoji} ${c.name}`}
+                  onClick={() => setCategory(c.name)}
+                  variant={on ? "filled" : "outlined"}
+                  sx={{
+                    height: 34,
+                    fontSize: 12.5,
+                    ...(on && { background: palette.primary, color: "#fff" }),
+                  }}
+                />
+              );
+            })}
+          </Box>
         </Box>
 
         <Box sx={{ p: 2 }}>

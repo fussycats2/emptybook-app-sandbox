@@ -2,10 +2,8 @@
 
 // 채팅 상세 페이지 (/chat/[id])
 // - 상단: 상대 프로필 헤더 + 거래 도서 미니 카드(거래액션 버튼)
-// - 본문: 시스템/내/상대 메시지 말풍선
-// - 하단: 메시지 입력창 + 전송 버튼
-// TODO: 메시지/방 상태 모두 클라이언트 상태(useState)에 머물러 있음.
-//       useRealtimeChat 훅으로 messages 테이블을 구독하고, 전송도 INSERT 로 교체 필요
+// - 본문: 시스템/내/상대 메시지 말풍선 (useRealtimeChat 훅이 messages 테이블 구독)
+// - 하단: 메시지 입력창 + 전송 버튼 (sendMessage repo → DB INSERT)
 
 import {
   Box,
@@ -20,7 +18,7 @@ import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BookImage from "@/components/ui/BookImage";
 import StatusBadge, { type SaleStatus } from "@/components/ui/StatusBadge";
 import BottomSheet from "@/components/ui/BottomSheet";
@@ -28,47 +26,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { fetchBook, fetchChat, type BookDetail, type ChatRow } from "@/lib/repo";
-
-// 화면에 그릴 메시지 형태 — system 은 "거래 시작됨" 같은 안내 말풍선용
-interface Msg {
-  id: number;
-  mine: boolean;
-  text?: string;
-  time: string;
-  read?: boolean;
-  type?: "text" | "system";
-}
-
-// 첫 진입 시 보여줄 더미 대화. Realtime 연동 후에는 빈 배열로 시작 → 서버에서 받아옴
-const INIT_MSGS: Msg[] = [
-  { id: 0, mine: false, type: "system", text: "거래가 시작되었어요", time: "" },
-  {
-    id: 1,
-    mine: false,
-    text: "안녕하세요! 채식주의자 아직 판매 중인가요?",
-    time: "오후 2:30",
-  },
-  {
-    id: 2,
-    mine: true,
-    text: "네 판매 중이에요! 깨끗해요 :)",
-    time: "오후 2:35",
-    read: true,
-  },
-  {
-    id: 3,
-    mine: false,
-    text: "내일 합정역에서 직거래 가능할까요?",
-    time: "오후 2:38",
-  },
-  {
-    id: 4,
-    mine: true,
-    text: "네 좋아요! 내일 2시에 합정역에서 만나요",
-    time: "오후 2:40",
-    read: true,
-  },
-];
+import { useRealtimeChat } from "@/lib/realtime/useRealtimeChat";
 
 const ACTIONS = [
   { key: "reserve", label: "예약하기" },
@@ -98,31 +56,31 @@ export default function ChatDetailPage({
       mounted = false;
     };
   }, [params.id]);
-  const [msgs, setMsgs] = useState<Msg[]>(INIT_MSGS);
+
+  // 실시간 메시지 — 초기 로드 + Realtime INSERT 구독 + send()
+  const { messages: msgs, send: sendMsg } = useRealtimeChat(params.id);
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<SaleStatus>("selling");
   const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmComplete, setConfirmComplete] = useState(false);
 
-  // 메시지 전송 — 빈 문자열은 무시하고, 보낸 직후 입력창 비우기
-  // TODO: 실제로는 messages 테이블 INSERT 후 Realtime 으로 양쪽에 반영되어야 함
-  const send = () => {
+  // 새 메시지 들어오면 자동 스크롤 (가장 마지막 메시지가 보이도록)
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [msgs.length]);
+
+  // 메시지 전송 — 빈 문자열은 무시. send 결과는 훅이 state에 push
+  const send = async () => {
     const text = draft.trim();
     if (!text) return;
-    setMsgs((m) => [
-      ...m,
-      {
-        id: m.length + 1,
-        mine: true,
-        text,
-        time: new Date().toLocaleTimeString("ko-KR", {
-          hour: "numeric",
-          minute: "2-digit",
-        }),
-        read: false,
-      },
-    ]);
-    setDraft("");
+    setDraft(""); // 즉시 입력창 비우기 (낙관적 UI)
+    const result = await sendMsg(text);
+    if (!result) {
+      // 실패 시 입력값 복구 + 토스트
+      setDraft(text);
+      toast?.show("메시지 전송에 실패했어요", "error");
+    }
   };
 
   // 거래 액션 BottomSheet 에서 항목을 골랐을 때의 처리 (예약/완료/취소)
@@ -130,10 +88,6 @@ export default function ChatDetailPage({
     setActionsOpen(false);
     if (key === "reserve") {
       setStatus("reserved");
-      setMsgs((m) => [
-        ...m,
-        { id: m.length + 1, mine: true, type: "system", text: "예약 처리되었어요", time: "" },
-      ]);
       toast?.show("예약으로 변경되었어요");
     }
     if (key === "complete") setConfirmComplete(true);
@@ -229,6 +183,7 @@ export default function ChatDetailPage({
           2024년 1월 15일
         </Box>
         {msgs.map((m) => {
+          const time = formatMsgTime(m.createdAt);
           if (m.type === "system") {
             return (
               <Box
@@ -244,7 +199,7 @@ export default function ChatDetailPage({
                   fontWeight: 600,
                 }}
               >
-                {m.text}
+                {m.body}
               </Box>
             );
           }
@@ -259,7 +214,7 @@ export default function ChatDetailPage({
             >
               <Box sx={{ fontSize: 10.5, color: palette.inkSubtle }}>
                 {m.read ? "읽음 · " : ""}
-                {m.time}
+                {time}
               </Box>
               <Box
                 sx={{
@@ -270,9 +225,10 @@ export default function ChatDetailPage({
                   p: "9px 13px",
                   fontSize: 13.5,
                   lineHeight: 1.5,
+                  whiteSpace: "pre-wrap",
                 }}
               >
-                {m.text}
+                {m.body}
               </Box>
             </Stack>
           ) : (
@@ -299,17 +255,19 @@ export default function ChatDetailPage({
                     fontSize: 13.5,
                     lineHeight: 1.5,
                     border: `1px solid ${palette.line}`,
+                    whiteSpace: "pre-wrap",
                   }}
                 >
-                  {m.text}
+                  {m.body}
                 </Box>
                 <Box sx={{ fontSize: 10.5, color: palette.inkSubtle, mt: 0.25 }}>
-                  {m.time}
+                  {time}
                 </Box>
               </Box>
             </Stack>
           );
         })}
+        <div ref={bottomRef} />
       </Box>
 
       <Box
@@ -389,4 +347,11 @@ export default function ChatDetailPage({
       />
     </>
   );
+}
+
+// ISO timestamp → "오후 2:35" 형태. 잘못된 값이면 빈 문자열
+function formatMsgTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
 }

@@ -4,6 +4,11 @@
 
 import type { BookSummary } from "@/components/ui/BookCard";
 import type { SaleStatus } from "@/components/ui/StatusBadge";
+import {
+  DEFAULT_APP_PREFS,
+  type AppPrefs,
+  type Profile,
+} from "./supabase/types";
 
 // BookCard 가 요구하는 필드(BookSummary)에 상세화면용 추가 필드를 합친 확장 타입
 export type MockBook = BookSummary & {
@@ -57,6 +62,16 @@ export type MockNotification = {
   body: string;
   time: string;
   unread: boolean;
+};
+
+// 채팅 메시지 한 건 — 화면 말풍선(my/their/system)으로 그릴 수 있는 최소 정보
+export type MockMessage = {
+  id: string;
+  roomId: string;
+  body: string;
+  type: "text" | "system";
+  mine: boolean; // mock 모드에선 reviewer/reviewee 구분처럼 단순화
+  createdAt: string;
 };
 
 // 후기 — 거래(transaction) 1건당 1개. 작성자(reviewer)/대상(reviewee)을 분리해 보관
@@ -304,6 +319,31 @@ const SEED_NOTIFICATIONS: MockNotification[] = [
   },
 ];
 
+// 채팅방별 시드 메시지 — Realtime 미사용(mock) 모드에서도 대화 흐름이 보이도록
+function seedMsg(roomId: string, body: string, mine: boolean, ageMin: number, type: "text" | "system" = "text"): MockMessage {
+  return {
+    id: `${roomId}-m-${ageMin}`,
+    roomId,
+    body,
+    type,
+    mine,
+    createdAt: new Date(Date.now() - ageMin * 60_000).toISOString(),
+  };
+}
+const SEED_MESSAGES: MockMessage[] = [
+  seedMsg("c-1", "거래가 시작되었어요", false, 30, "system"),
+  seedMsg("c-1", "안녕하세요! 채식주의자 아직 판매 중인가요?", false, 28),
+  seedMsg("c-1", "네 판매 중이에요! 깨끗해요 :)", true, 25),
+  seedMsg("c-1", "내일 합정역에서 직거래 가능할까요?", false, 20),
+  seedMsg("c-1", "네 좋아요! 내일 2시에 합정역에서 만나요", true, 18),
+
+  seedMsg("c-2", "거래가 시작되었어요", false, 120, "system"),
+  seedMsg("c-2", "잘 받았어요 감사합니다 :)", false, 60),
+
+  seedMsg("c-3", "거래가 시작되었어요", false, 1440, "system"),
+  seedMsg("c-3", "택배 운임은 3000원이에요", false, 1430),
+];
+
 // 마이페이지 "받은 후기"(/mypage/reviews) 데모용 시드 — 사용자(="나")가 reviewee
 const SEED_REVIEWS: MockReview[] = [
   {
@@ -346,6 +386,19 @@ const SEED_REVIEWS: MockReview[] = [
   },
 ];
 
+// 비로그인/mock 모드의 "내 프로필" 기본값 — /mypage/settings 편집 시뮬레이션용
+const SEED_PROFILE: Profile = {
+  id: "mock-me",
+  username: "guest",
+  display_name: "게스트",
+  phone: null,
+  avatar_url: null,
+  rating_avg: 0,
+  trade_count: 0,
+  preferred_genres: [],
+  app_prefs: { ...DEFAULT_APP_PREFS },
+};
+
 // globalThis 에 저장할 키. 페이지 이동 후에도 같은 데이터를 참조하기 위함
 const STORE_KEY = "__emptybook_mock_store__";
 
@@ -357,6 +410,8 @@ type Store = {
   notifications: MockNotification[];
   likedBookIds: Set<string>; // 비로그인/mock 환경에서 찜 상태를 보관
   reviews: MockReview[]; // 후기 — transactionId 별 1개 제약
+  profile: Profile; // 내 프로필(비로그인/mock 모드용)
+  messages: MockMessage[]; // 채팅방 메시지 — roomId 로 필터해서 사용
 };
 
 // 처음 호출되면 SEED 데이터를 globalThis 에 박아두고, 이후엔 그걸 재사용한다
@@ -371,6 +426,8 @@ function getStore(): Store {
       notifications: [...SEED_NOTIFICATIONS],
       likedBookIds: new Set<string>(),
       reviews: [...SEED_REVIEWS],
+      profile: { ...SEED_PROFILE, app_prefs: { ...DEFAULT_APP_PREFS } },
+      messages: [...SEED_MESSAGES],
     } satisfies Store;
   }
   return g[STORE_KEY] as Store;
@@ -601,6 +658,68 @@ export function mockGetReviewContext(transactionId: string): {
     completedAt: order.date,
     alreadyReviewed: !!s.reviews.find((r) => r.transactionId === transactionId),
   };
+}
+
+// ---------- Messages (채팅 메시지) ----------
+
+// 채팅방 메시지 목록 — roomId 로 필터, 시간순 오름차순
+export function mockListMessages(roomId: string): MockMessage[] {
+  return getStore()
+    .messages.filter((m) => m.roomId === roomId)
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+}
+
+// 메시지 전송 — 'mine' 메시지로 push 후 반환. 채팅 목록의 last_message 도 동기화
+export function mockSendMessage(roomId: string, body: string): MockMessage {
+  const s = getStore();
+  const msg: MockMessage = {
+    id: `${roomId}-m-${Date.now()}`,
+    roomId,
+    body,
+    type: "text",
+    mine: true,
+    createdAt: new Date().toISOString(),
+  };
+  s.messages = [...s.messages, msg];
+  // 채팅 목록의 마지막 메시지/시간을 동기화 (없는 방이면 무시)
+  const room = s.chats.find((c) => c.id === roomId);
+  if (room) {
+    room.msg = body;
+    room.time = "방금";
+  }
+  return msg;
+}
+
+// ---------- Profile (내 프로필) ----------
+
+// 내 프로필 조회 (mock 모드 — 항상 SEED_PROFILE 기반)
+export function mockGetProfile(): Profile {
+  return { ...getStore().profile };
+}
+
+// 내 프로필 부분 업데이트 — 빈 문자열은 null 로 변환해 일관성 유지
+export function mockUpdateProfile(input: Partial<Profile>): Profile {
+  const s = getStore();
+  s.profile = {
+    ...s.profile,
+    ...input,
+    app_prefs: { ...s.profile.app_prefs, ...(input.app_prefs ?? {}) },
+  };
+  return { ...s.profile };
+}
+
+// app_prefs 만 부분 갱신 (deep merge — push/privacy 객체 단위)
+export function mockUpdateAppPrefs(prefs: AppPrefs): AppPrefs {
+  const s = getStore();
+  const next: AppPrefs = {
+    push: { ...(s.profile.app_prefs.push ?? {}), ...(prefs.push ?? {}) },
+    privacy: {
+      ...(s.profile.app_prefs.privacy ?? {}),
+      ...(prefs.privacy ?? {}),
+    },
+  };
+  s.profile = { ...s.profile, app_prefs: next };
+  return next;
 }
 
 // 채팅/알림 조회 함수들

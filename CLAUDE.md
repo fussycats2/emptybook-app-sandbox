@@ -24,7 +24,7 @@
 | **공용 UI 컴포넌트** | `components/ui/` 전체 (PhoneFrame, AppHeader, BottomTabNav, BookCard, BookImage, ImageCarousel, BottomSheet, ConfirmDialog, StatusBadge, MannerTemperature, LikeButton, LocationChip, Fab, EmptyState, Skeleton, ToastProvider, Section, ImgPlaceholder). 전 컴포넌트에 한글 주석 추가 완료 |
 | **MUI 테마** | `lib/theme.ts` 완성 — 색상 토큰, 라운드 스케일, 그림자 토큰 |
 | **Mock 데이터 계층** | `lib/mockData.ts` + `lib/repo.ts` — Supabase 없이도 전 화면 동작. likes/reviews 인메모리 저장 포함 |
-| **DB 스키마** | `0001_init.sql` 전체 + `0002_books_cover_url.sql` (cover_url 컬럼) + `0003_review_rating_trigger.sql` (reviews → profiles.rating_avg/trade_count 자동 갱신). RLS·Realtime·Storage 포함 |
+| **DB 스키마** | `0001_init.sql` 전체 + `0002_books_cover_url.sql` (cover_url 컬럼) + `0003_review_rating_trigger.sql` (reviews → profiles.rating_avg/trade_count 자동 갱신) + `0004_profiles_app_prefs.sql` (profiles.app_prefs jsonb). RLS·Realtime·Storage 포함 |
 | **화면 UI** | 20개 화면 UI 골격 + 마이페이지 판매내역/찜한 책 화면 |
 | **거래 흐름 화면** | 도서 상세 → 결제 → 구매완료 → 거래확정 → 후기 작성 흐름 화면 |
 | **Supabase Auth** | 이메일/비번 로그인·회원가입·로그아웃, `AuthProvider` + `useAuth()` 훅 |
@@ -40,6 +40,9 @@
 | **받은 후기 화면** | `/mypage/reviews` — `listReceivedReviews` (reviews ⨝ reviewer profile ⨝ transactions ⨝ books). 평균 별점/후기수 요약 + 카드 리스트. 마이페이지 SECTIONS "받은 후기" 메뉴 연결 |
 | **알림 읽음 서버 반영** | `markNotificationRead(id)` / `markAllNotificationsRead()` — `/notifications` 단건 클릭/모두 읽음 버튼에서 fire-and-forget 으로 `read_at` UPDATE |
 | **profiles.rating_avg 트리거** | `0003_review_rating_trigger.sql` — reviews INSERT/UPDATE/DELETE 시 reviewee의 `rating_avg`(소수 둘째자리)와 `trade_count` 자동 재계산. 마이그레이션 시점에 기존 행 1회 일괄 동기화 |
+| **카테고리 자동 추정** | `lib/categoryMap.ts` `inferCategory(text)` — 키워드 휴리스틱(만화/아동/경제·경영/자기계발/역사/과학/에세이/소설). 등록 폼에서 네이버 검색 결과 선택 시 제목+설명으로 추정해 chip 자동 선택 (사용자 직접 변경 가능) |
+| **프로필 수정** | `/mypage/settings` — 프로필 정보(표시이름/사용자명/전화번호) UPDATE + 알림/개인정보 토글 즉시 `app_prefs` 반영. `getMyProfile`/`updateMyProfile`/`updateAppPrefs` repo |
+| **채팅 Realtime** | `lib/realtime/useRealtimeChat(roomId)` 훅 — `listMessages` 초기 로드 + Supabase Realtime `messages` INSERT 구독 + `sendMessage` (INSERT + chat_rooms.last_message 동기화). dedupe by id. `/chat/[id]` 연동 + 자동 스크롤. mock 모드는 in-memory store |
 
 ### 미완성 / 연결 안 된 것
 
@@ -48,14 +51,11 @@
 | **사용자 실물 사진 업로드** | 미연동 | Storage 버킷 스키마는 있으나 업로드 UI/로직 없음. 표지(cover_url)와는 별개 |
 | **OAuth 로그인** | 미연동 | 카카오/네이버/Apple 버튼만 있음 (토스트로 "준비중") |
 | **이메일 인증 플로우** | 부분 | 가입 시 `data.session` 없으면 `/login`으로 안내. Supabase 대시보드 "Confirm email" 정책 확정 필요 |
-| **채팅 Realtime** | UI만 완성 | Supabase Realtime 구독 훅 없음, 메시지 송수신 로직 없음 |
 | **결제 PG** | Mock UI | 실제 PG 연동 없음, 트랜잭션은 PAID로 즉시 기록 |
 | **알림 푸시** | 없음 | 푸시 알림 Edge Functions 미작성. 단건/모두 읽음 서버 반영은 완료 |
-| **프로필 수정** | UI만 | `/mypage/settings` 저장 로직 없음. 알림/개인정보 토글도 클라이언트만 |
+| **메시지 읽음 처리** | 없음 | `messages.read_at` 자동 업데이트 미구현. 채팅 들어가면 일괄 mark-as-read 필요 |
 | **최근 본 상품** | 진입점만 | view-history 추적 없음. 마이페이지 STATS "최근 본" + SECTIONS 메뉴 모두 "준비중" 처리 |
 | **쿠폰 / 공지 / 문의 / 약관** | 진입점만 | 마이페이지 SECTIONS 에 "준비중" 칩으로 노출. 정적 페이지/시스템 미구현 |
-| **fetchChat** | Mock 고정 | `lib/repo.ts` — 항상 mock 반환. 메시지 INSERT/Realtime 미연동 |
-| **카테고리 입력** | 하드코딩 | 등록 시 무조건 "소설". 네이버 카테고리 → 우리 8개 매핑 미구현 |
 
 ---
 
@@ -84,9 +84,10 @@ app/                              # 화면 라우트
   chat/[id]/page.tsx              # /chat/[id] — 채팅 상세
   mypage/page.tsx                 # /mypage
   mypage/orders/page.tsx          # /mypage/orders — 거래 트랜잭션 내역
-  mypage/selling/page.tsx         # /mypage/selling — 내가 등록한 책 (신규)
-  mypage/likes/page.tsx           # /mypage/likes — 찜한 책 (신규)
-  mypage/settings/page.tsx        # /mypage/settings
+  mypage/selling/page.tsx         # /mypage/selling — 내가 등록한 책
+  mypage/likes/page.tsx           # /mypage/likes — 찜한 책
+  mypage/reviews/page.tsx         # /mypage/reviews — 받은 후기
+  mypage/settings/page.tsx        # /mypage/settings — 프로필/알림/개인정보
   notifications/page.tsx          # /notifications
 
 components/
@@ -95,21 +96,26 @@ components/
 
 lib/
   theme.ts                        # MUI 테마 + 색상 토큰
-  mockData.ts                     # 더미 데이터 + in-memory store (likes/reviews 포함)
+  mockData.ts                     # 더미 데이터 + in-memory store (likes/reviews/messages/profile)
   repo.ts                         # 데이터 계층 — Supabase/Mock 자동 분기
+  categoryMap.ts                  # 제목/설명 → 8개 카테고리 추정 휴리스틱
   auth/
     AuthProvider.tsx              # 클라이언트 user/session Context + useAuth() 훅
+  realtime/
+    useRealtimeChat.ts            # 채팅방 메시지 Realtime 구독 + 송신 훅
   supabase/
     client.ts                     # 브라우저 클라이언트
     server.ts                     # RSC 서버 클라이언트
     middleware.ts                 # SSR 쿠키 갱신 + getUser 헬퍼
-    types.ts                      # DB row 타입 정의
+    types.ts                      # DB row 타입 + AppPrefs/DEFAULT_APP_PREFS
 
 middleware.ts                     # 보호 라우트 가드 + 인증 페이지 리다이렉트
 
 supabase/migrations/
-  0001_init.sql                   # 전체 스키마 + RLS + Realtime + Storage
-  0002_books_cover_url.sql        # books.cover_url 컬럼 추가
+  0001_init.sql                       # 전체 스키마 + RLS + Realtime + Storage
+  0002_books_cover_url.sql            # books.cover_url 컬럼
+  0003_review_rating_trigger.sql      # reviews → profiles.rating_avg/trade_count 자동 갱신
+  0004_profiles_app_prefs.sql         # profiles.app_prefs jsonb 컬럼
 ```
 
 ---
@@ -136,10 +142,16 @@ supabase/migrations/
 | `createOrder({ bookId })` | 결제 시점 호출 |
 | `completeOrder(id)` | 거래 확정 |
 | `listChats()` | 채팅 목록 |
-| `fetchChat(id)` | 채팅 상세 (현재 mock 고정) |
+| `fetchChat(id)` | 채팅 상세 (chat_rooms + 책 + 양쪽 프로필 join, 상대방 자동 결정) |
+| `listMessages(roomId)` / `sendMessage(roomId, body)` | 채팅 메시지 조회/전송 (전송 시 chat_rooms.last_message 동기화) |
+| `useRealtimeChat(roomId)` *(훅)* | 초기 로드 + Realtime INSERT 구독 + send. dedupe by id |
 | `listNotifications()` | 알림 |
+| `markNotificationRead(id)` / `markAllNotificationsRead()` | 알림 read_at 단건/일괄 갱신 |
 | `isLiked(bookId)` / `listLikedBookIds()` / `listLikedBooks()` / `toggleLike(bookId)` | 찜 |
 | `fetchReviewContext(transactionId)` / `createReview(input)` | 후기 작성 컨텍스트 + 저장 |
+| `listReceivedReviews(userId?)` | 받은 후기 목록 (`/mypage/reviews`) |
+| `getMyProfile()` / `updateMyProfile(input)` / `updateAppPrefs(prefs)` | 내 프로필 조회/수정 + app_prefs 토글 |
+| `withDefaultPrefs(prefs?)` | app_prefs 누락 키를 DEFAULT_APP_PREFS 로 채워서 반환 |
 | `meta.{CATEGORIES, …}` | 정적 메타데이터 |
 
 ---
@@ -167,11 +179,9 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 ## 다음 개발 단계 우선순위
 
 1. **이미지 업로드** — Storage `book-images` 버킷에 업로드 후 `book_images` insert (등록 폼)
-2. **채팅 Realtime 훅** — `useRealtimeChat(roomId)` + `fetchChat` 실데이터 + 메시지 송신 `repo.ts` 함수
-3. **프로필 수정** — `/mypage/settings` 저장 로직 + 알림/개인정보 토글 서버 반영
-4. **알림 푸시** — Supabase Edge Functions 로 푸시 발송 (단건/모두 읽음 서버 반영은 완료)
-5. **결제 PG 연동** — 현재 Mock UI를 토스/카카오페이 등으로 교체
-6. **카테고리 매핑** — 네이버 검색 결과 카테고리 → 우리 8개 카테고리 매핑 (현재 등록은 "소설" 고정)
+2. **메시지 읽음 처리** — `/chat/[id]` 진입 시 상대방 메시지 일괄 `read_at` UPDATE + 채팅 목록 unread 카운트
+3. **알림 푸시** — Supabase Edge Functions 로 푸시 발송
+4. **결제 PG 연동** — 현재 Mock UI를 토스/카카오페이 등으로 교체
 
 ---
 

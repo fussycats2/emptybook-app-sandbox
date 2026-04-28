@@ -1,19 +1,21 @@
 "use client";
 
 // 설정 페이지 (/mypage/settings)
-// 계정/알림/개인정보/기타 섹션과 로그아웃·탈퇴 버튼
-// TODO: 알림/개인정보 토글은 클라이언트 상태만 갱신. profiles/notifications 테이블 저장 미연동
-// TODO: 이메일 변경, 비밀번호 변경, 본인 인증, 계정 탈퇴 모두 토스트 placeholder 상태
+// 프로필/계정/알림/개인정보/기타 섹션과 로그아웃·탈퇴 버튼
+// - 프로필 정보(표시이름/사용자명/전화번호) 는 updateMyProfile 로 저장
+// - 알림/개인정보 토글은 updateAppPrefs (app_prefs jsonb) 로 즉시 반영 (debounce 없이 fire-and-forget)
+// - 이메일 변경/비번 변경/연동/본인인증 행은 여전히 placeholder
 
 import {
   Box,
   Button,
+  OutlinedInput,
   Stack,
   Switch,
   Typography,
 } from "@mui/material";
 import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -21,18 +23,40 @@ import { palette } from "@/lib/theme";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import {
+  getMyProfile,
+  updateAppPrefs,
+  updateMyProfile,
+  withDefaultPrefs,
+} from "@/lib/repo";
 
-const ACCOUNT = [
-  { label: "이메일 변경", value: "" },
+const ACCOUNT_PLACEHOLDER = [
   { label: "비밀번호 변경" },
   { label: "연동 계정", value: "Kakao" },
   { label: "본인 인증", value: "완료" },
 ];
+
 const ETC: { label: string; value?: string; info?: boolean }[] = [
   { label: "이용 약관" },
   { label: "개인정보 처리방침" },
   { label: "오픈소스 라이선스" },
   { label: "앱 버전", value: "1.2.3", info: true },
+];
+
+// 알림/개인정보 토글 — key 는 AppPrefs 의 push/privacy 자식 키와 1:1
+const PUSH_ITEMS: { key: "all" | "chat" | "trade" | "marketing"; label: string }[] = [
+  { key: "all", label: "푸시 알림" },
+  { key: "chat", label: "채팅 알림" },
+  { key: "trade", label: "거래 알림" },
+  { key: "marketing", label: "마케팅 알림" },
+];
+const PRIVACY_ITEMS: {
+  key: "location" | "wishlist_public" | "trades_public";
+  label: string;
+}[] = [
+  { key: "location", label: "위치 정보 사용" },
+  { key: "wishlist_public", label: "관심 도서 공개" },
+  { key: "trades_public", label: "거래 내역 공개" },
 ];
 
 export default function SettingsPage() {
@@ -42,59 +66,149 @@ export default function SettingsPage() {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // ACCOUNT 데이터의 "이메일 변경" 행에만 현재 로그인 이메일을 채워 넣어 표시
-  const accountRows = ACCOUNT.map((a) =>
-    a.label === "이메일 변경" ? { ...a, value: user?.email ?? "" } : a
-  );
+  // 프로필 입력 폼 상태 — 마운트 시 1회 로드
+  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [phone, setPhone] = useState("");
+  // 원본값(서버 저장 직후 동기화) — 변경 여부 감지에 사용
+  const [original, setOriginal] = useState({
+    displayName: "",
+    username: "",
+    phone: "",
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
 
-  const [push, setPush] = useState({
-    "푸시 알림": true,
-    "채팅 알림": true,
-    "거래 알림": true,
-    "마케팅 알림": false,
-  });
-  const [privacy, setPrivacy] = useState({
-    "위치 정보 사용": true,
-    "관심 도서 공개": false,
-    "거래 내역 공개": true,
-  });
+  // 토글 상태 — 기본값으로 우선 채우고, 프로필 로드되면 덮어쓴다
+  const [push, setPush] = useState(withDefaultPrefs().push);
+  const [privacy, setPrivacy] = useState(withDefaultPrefs().privacy);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMyProfile()
+      .then((p) => {
+        if (cancelled || !p) return;
+        const dn = p.display_name ?? "";
+        const un = p.username ?? "";
+        const ph = p.phone ?? "";
+        setDisplayName(dn);
+        setUsername(un);
+        setPhone(ph);
+        setOriginal({ displayName: dn, username: un, phone: ph });
+        const prefs = withDefaultPrefs(p.app_prefs);
+        setPush(prefs.push);
+        setPrivacy(prefs.privacy);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 변경된 항목이 하나라도 있을 때만 저장 버튼 활성화
+  const profileDirty =
+    displayName !== original.displayName ||
+    username !== original.username ||
+    phone !== original.phone;
+
+  const handleSaveProfile = async () => {
+    if (savingProfile || !profileDirty) return;
+    setSavingProfile(true);
+    try {
+      const res = await updateMyProfile({ display_name: displayName, username, phone });
+      if (res.uniqueViolation) {
+        toast?.show("이미 사용 중인 사용자명이에요", "warning");
+      } else if (res.ok) {
+        toast?.show("프로필을 저장했어요");
+        setOriginal({ displayName, username, phone });
+      } else {
+        toast?.show("저장에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
+      }
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // 토글 변경 → 즉시 서버 반영 (실패해도 UI는 새 상태 유지)
+  const togglePush = (key: typeof PUSH_ITEMS[number]["key"], v: boolean) => {
+    setPush((prev) => ({ ...prev, [key]: v }));
+    updateAppPrefs({ push: { [key]: v } }).catch(() => {});
+  };
+  const togglePrivacy = (
+    key: typeof PRIVACY_ITEMS[number]["key"],
+    v: boolean
+  ) => {
+    setPrivacy((prev) => ({ ...prev, [key]: v }));
+    updateAppPrefs({ privacy: { [key]: v } }).catch(() => {});
+  };
 
   return (
     <>
       <AppHeader title="설정" left="back" />
       <ScrollBody>
+        <Group title="프로필 정보">
+          <Box sx={{ p: 1.5 }}>
+            <Stack gap={1}>
+              <Field
+                label="표시 이름"
+                placeholder="이웃에게 보여질 이름"
+                value={displayName}
+                onChange={setDisplayName}
+              />
+              <Field
+                label="사용자명"
+                placeholder="영문/숫자 (예: bookworm)"
+                value={username}
+                onChange={setUsername}
+              />
+              <Field
+                label="전화번호"
+                placeholder="010-1234-5678"
+                value={phone}
+                onChange={setPhone}
+              />
+              <Button
+                onClick={handleSaveProfile}
+                disabled={!profileDirty || savingProfile}
+                sx={{ mt: 0.5 }}
+              >
+                {savingProfile ? "저장 중…" : "프로필 저장"}
+              </Button>
+            </Stack>
+          </Box>
+        </Group>
+
         <Group title="계정">
-          {accountRows.map((a, i) => (
+          <Row label="이메일" value={user?.email ?? "-"} first />
+          {ACCOUNT_PLACEHOLDER.map((a) => (
             <Row
               key={a.label}
               label={a.label}
               value={a.value}
-              first={i === 0}
               onClick={() => toast?.show("준비 중인 기능이에요")}
             />
           ))}
         </Group>
 
         <Group title="알림">
-          {Object.entries(push).map(([k, v], i) => (
+          {PUSH_ITEMS.map((item, i) => (
             <Toggle
-              key={k}
-              label={k}
-              checked={v}
+              key={item.key}
+              label={item.label}
+              checked={!!push[item.key]}
               first={i === 0}
-              onChange={(x) => setPush((p) => ({ ...p, [k]: x }))}
+              onChange={(v) => togglePush(item.key, v)}
             />
           ))}
         </Group>
 
         <Group title="개인정보 보호">
-          {Object.entries(privacy).map(([k, v], i) => (
+          {PRIVACY_ITEMS.map((item, i) => (
             <Toggle
-              key={k}
-              label={k}
-              checked={v}
+              key={item.key}
+              label={item.label}
+              checked={!!privacy[item.key]}
               first={i === 0}
-              onChange={(x) => setPrivacy((p) => ({ ...p, [k]: x }))}
+              onChange={(v) => togglePrivacy(item.key, v)}
             />
           ))}
         </Group>
@@ -114,10 +228,7 @@ export default function SettingsPage() {
         </Group>
 
         <Stack sx={{ p: 2, pb: 4 }} gap={1}>
-          <Button
-            variant="outlined"
-            onClick={() => setConfirmLogout(true)}
-          >
+          <Button variant="outlined" onClick={() => setConfirmLogout(true)}>
             로그아웃
           </Button>
           <Button
@@ -184,6 +295,36 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
       >
         {children}
       </Box>
+    </Box>
+  );
+}
+
+// 텍스트 입력 1행 — 레이블 + Outlined input
+function Field({
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Box>
+      <Typography
+        sx={{ fontSize: 11.5, fontWeight: 700, color: palette.inkSubtle, mb: 0.5 }}
+      >
+        {label}
+      </Typography>
+      <OutlinedInput
+        fullWidth
+        size="small"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </Box>
   );
 }

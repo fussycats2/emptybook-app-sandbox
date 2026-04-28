@@ -24,24 +24,48 @@ import {
   mockListLikedIds,
   mockListNotifications,
   mockListOrders,
+  mockGetProfile,
+  mockListMessages,
   mockListReceivedReviews,
+  mockSendMessage,
   mockToggleLike,
+  mockUpdateAppPrefs,
   mockUpdateOrderStatus,
+  mockUpdateProfile,
   type MockBook,
   type MockChat,
+  type MockMessage,
   type MockNotification,
   type MockOrder,
   type MockReview,
   type ReceivedReviewCard,
 } from "./mockData";
 import type { BookSummary } from "@/components/ui/BookCard";
-import { STATE_LABEL, type BookRow, type BookState } from "./supabase/types";
+import {
+  DEFAULT_APP_PREFS,
+  STATE_LABEL,
+  type AppPrefs,
+  type BookRow,
+  type BookState,
+  type Profile,
+} from "./supabase/types";
 
 export type BookDetail = MockBook;
 export type OrderRow = MockOrder;
 export type ChatRow = MockChat;
 export type NotificationRow = MockNotification;
 export type ReceivedReview = ReceivedReviewCard;
+
+// 채팅방 메시지 — 화면이 그릴 수 있는 정규화 형태
+// mine: 내가 보낸 메시지인지, type: text/system, read: 상대가 읽었는지
+export type MessageRowUI = {
+  id: string;
+  body: string;
+  type: "text" | "system";
+  mine: boolean;
+  read: boolean;
+  createdAt: string;
+};
 
 // UI에서 사용자가 선택한 한글 상태("최상" 등) → DB enum("A_PLUS" 등) 변환표
 // 등록 폼/검색 필터에서 두 가지 표기가 모두 들어올 수 있어 양쪽 다 지원
@@ -148,6 +172,99 @@ async function tryClient() {
   } catch {
     return null;
   }
+}
+
+// ---------- Profile (내 프로필) ----------
+
+// 누락된 prefs 키를 기본값으로 채워서 반환 — 화면이 항상 일관된 형태를 받도록
+export function withDefaultPrefs(prefs?: AppPrefs | null): {
+  push: Required<NonNullable<AppPrefs["push"]>>;
+  privacy: Required<NonNullable<AppPrefs["privacy"]>>;
+} {
+  return {
+    push: { ...DEFAULT_APP_PREFS.push, ...(prefs?.push ?? {}) },
+    privacy: { ...DEFAULT_APP_PREFS.privacy, ...(prefs?.privacy ?? {}) },
+  };
+}
+
+// 내 프로필 조회 — Supabase 모드에선 profiles 테이블에서 1건 가져옴
+// 비로그인/Supabase 미설정이면 mock 저장소의 프로필을 반환
+export async function getMyProfile(): Promise<Profile | null> {
+  const supabase = await tryClient();
+  if (!supabase) return mockGetProfile();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return mockGetProfile();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", auth.user.id)
+    .maybeSingle();
+  if (error || !data) return null;
+  // app_prefs 가 NULL 이면 빈 객체로 정규화
+  return { ...(data as Profile), app_prefs: (data as any).app_prefs ?? {} };
+}
+
+// 내 프로필 부분 수정 — display_name / username / phone 등
+// username UNIQUE 위반(23505) 시 { uniqueViolation: true } 반환
+export async function updateMyProfile(input: {
+  display_name?: string | null;
+  username?: string | null;
+  phone?: string | null;
+}): Promise<{ ok: boolean; uniqueViolation?: boolean }> {
+  const supabase = await tryClient();
+  if (!supabase) {
+    mockUpdateProfile(input);
+    return { ok: true };
+  }
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) {
+    mockUpdateProfile(input);
+    return { ok: true };
+  }
+  // 빈 문자열은 null 로 정규화 (username UNIQUE 충돌 방지 + 일관성)
+  const payload: Record<string, string | null> = {};
+  if (input.display_name !== undefined)
+    payload.display_name = input.display_name?.trim() || null;
+  if (input.username !== undefined)
+    payload.username = input.username?.trim() || null;
+  if (input.phone !== undefined)
+    payload.phone = input.phone?.trim() || null;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ ...payload, updated_at: new Date().toISOString() })
+    .eq("id", auth.user.id);
+  if (error?.code === "23505") return { ok: false, uniqueViolation: true };
+  return { ok: !error };
+}
+
+// 알림/개인정보 토글 등 app_prefs 부분 갱신
+// jsonb 컬럼은 한 번에 통째로 덮어써야 하므로 현재 값을 읽어 deep-merge 후 UPDATE
+export async function updateAppPrefs(prefs: AppPrefs): Promise<void> {
+  const supabase = await tryClient();
+  if (!supabase) {
+    mockUpdateAppPrefs(prefs);
+    return;
+  }
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) {
+    mockUpdateAppPrefs(prefs);
+    return;
+  }
+  const { data: current } = await supabase
+    .from("profiles")
+    .select("app_prefs")
+    .eq("id", auth.user.id)
+    .maybeSingle();
+  const base = ((current as any)?.app_prefs ?? {}) as AppPrefs;
+  const next: AppPrefs = {
+    push: { ...(base.push ?? {}), ...(prefs.push ?? {}) },
+    privacy: { ...(base.privacy ?? {}), ...(prefs.privacy ?? {}) },
+  };
+  await supabase
+    .from("profiles")
+    .update({ app_prefs: next, updated_at: new Date().toISOString() })
+    .eq("id", auth.user.id);
 }
 
 // ---------- Books (도서) ----------
@@ -514,10 +631,137 @@ export async function listChats(): Promise<ChatRow[]> {
 }
 
 // 채팅방 단건 조회
-// TODO: 현재 항상 mock 만 반환. Supabase chat_rooms + messages 조회로 교체 필요
-//       Realtime 메시지 구독 훅(useRealtimeChat)도 함께 작성 예정
+// chat_rooms + 책 + 양쪽 프로필 join 후 ChatRow 형태로 정규화
+// 비로그인/Supabase 미설정이면 mock 저장소에서 반환
 export async function fetchChat(id: string): Promise<ChatRow | null> {
-  return mockGetChat(id) ?? null;
+  const supabase = await tryClient();
+  if (!supabase) return mockGetChat(id) ?? null;
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return mockGetChat(id) ?? null;
+  const { data } = await supabase
+    .from("chat_rooms")
+    .select(
+      `*, books(title, status),
+        buyer:profiles!chat_rooms_buyer_id_fkey(display_name),
+        seller:profiles!chat_rooms_seller_id_fkey(display_name)`
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return mockGetChat(id) ?? null;
+  const r: any = data;
+  const isBuying = r.buyer_id === uid;
+  // 상대방 = 내가 buyer면 seller, 내가 seller면 buyer
+  const counterpartName =
+    (isBuying ? r.seller?.display_name : r.buyer?.display_name) ?? "상대방";
+  return {
+    id: r.id,
+    user: counterpartName,
+    book: r.books?.title ?? "",
+    bookId: r.book_id ?? "",
+    msg: r.last_message ?? "",
+    time: r.last_message_at
+      ? new Date(r.last_message_at).toLocaleTimeString("ko-KR", {
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : "",
+    unread: 0,
+    buying: isBuying,
+    status:
+      r.books?.status === "SOLD"
+        ? "sold"
+        : r.books?.status === "RESERVED"
+        ? "reserved"
+        : "selling",
+  };
+}
+
+// ---------- Messages (채팅 메시지) ----------
+
+// 메시지 목록 조회 — 시간순 오름차순. 비로그인/mock은 mock 저장소
+export async function listMessages(roomId: string): Promise<MessageRowUI[]> {
+  const supabase = await tryClient();
+  if (!supabase) return mockListMessages(roomId).map(mockMsgToUI);
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return mockListMessages(roomId).map(mockMsgToUI);
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, body, type, sender_id, read_at, created_at")
+    .eq("room_id", roomId)
+    .order("created_at", { ascending: true });
+  if (error || !data) return [];
+  return (data as any[]).map((m) => dbMsgToUI(m, uid));
+}
+
+// 메시지 전송 — INSERT 후 chat_rooms.last_message/last_message_at 동기화
+// 반환: 새로 만든 메시지(UI 형태). 실패 시 null
+export async function sendMessage(
+  roomId: string,
+  body: string
+): Promise<MessageRowUI | null> {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  const supabase = await tryClient();
+  if (!supabase) return mockMsgToUI(mockSendMessage(roomId, trimmed));
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return mockMsgToUI(mockSendMessage(roomId, trimmed));
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      room_id: roomId,
+      sender_id: uid,
+      body: trimmed,
+      type: "TEXT",
+    })
+    .select("id, body, type, sender_id, read_at, created_at")
+    .single();
+  if (error || !data) return null;
+  // 채팅 목록의 마지막 메시지 동기화 (실패해도 메시지 자체는 들어갔으니 결과만 반환)
+  await supabase
+    .from("chat_rooms")
+    .update({
+      last_message: trimmed,
+      last_message_at: new Date().toISOString(),
+    })
+    .eq("id", roomId);
+  return dbMsgToUI(data as any, uid);
+}
+
+function mockMsgToUI(m: MockMessage): MessageRowUI {
+  return {
+    id: m.id,
+    body: m.body,
+    type: m.type,
+    mine: m.mine,
+    read: false,
+    createdAt: m.createdAt,
+  };
+}
+
+// DB row → UI 형태. type 은 DB의 'TEXT'/'SYSTEM' 등 → 소문자로 정규화
+function dbMsgToUI(
+  m: {
+    id: string;
+    body: string | null;
+    type: string;
+    sender_id: string;
+    read_at: string | null;
+    created_at: string;
+  },
+  uid: string
+): MessageRowUI {
+  const t = (m.type ?? "TEXT").toLowerCase();
+  return {
+    id: m.id,
+    body: m.body ?? "",
+    type: t === "system" ? "system" : "text",
+    mine: m.sender_id === uid,
+    read: !!m.read_at,
+    createdAt: m.created_at,
+  };
 }
 
 // ---------- Notifications (알림) ----------

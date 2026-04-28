@@ -30,7 +30,32 @@ export interface Profile {
   rating_avg: number; // 평균 별점(0~5)
   trade_count: number; // 누적 거래 횟수
   preferred_genres: string[]; // 선호 장르 (회원가입 시 선택)
+  app_prefs: AppPrefs; // 알림/개인정보 토글 등 환경설정 묶음
 }
+
+// 사용자 환경설정 — profiles.app_prefs(jsonb) 의 형상
+// 누락된 키는 false 로 처리하지 말고 항목별 기본값(아래 DEFAULT_APP_PREFS) 적용
+export interface AppPrefs {
+  push?: {
+    all?: boolean;
+    chat?: boolean;
+    trade?: boolean;
+    marketing?: boolean;
+  };
+  privacy?: {
+    location?: boolean;
+    wishlist_public?: boolean;
+    trades_public?: boolean;
+  };
+}
+
+export const DEFAULT_APP_PREFS: Required<{
+  push: Required<NonNullable<AppPrefs["push"]>>;
+  privacy: Required<NonNullable<AppPrefs["privacy"]>>;
+}> = {
+  push: { all: true, chat: true, trade: true, marketing: false },
+  privacy: { location: true, wishlist_public: false, trades_public: true },
+};
 
 // books 테이블 한 행(row)에 대응하는 타입
 export interface BookRow {
