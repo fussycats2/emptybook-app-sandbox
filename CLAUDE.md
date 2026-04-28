@@ -42,7 +42,11 @@
 | **profiles.rating_avg 트리거** | `0003_review_rating_trigger.sql` — reviews INSERT/UPDATE/DELETE 시 reviewee의 `rating_avg`(소수 둘째자리)와 `trade_count` 자동 재계산. 마이그레이션 시점에 기존 행 1회 일괄 동기화 |
 | **카테고리 자동 추정** | `lib/categoryMap.ts` `inferCategory(text)` — 키워드 휴리스틱(만화/아동/경제·경영/자기계발/역사/과학/에세이/소설). 등록 폼에서 네이버 검색 결과 선택 시 제목+설명으로 추정해 chip 자동 선택 (사용자 직접 변경 가능) |
 | **프로필 수정** | `/mypage/settings` — 프로필 정보(표시이름/사용자명/전화번호) UPDATE + 알림/개인정보 토글 즉시 `app_prefs` 반영. `getMyProfile`/`updateMyProfile`/`updateAppPrefs` repo |
-| **채팅 Realtime** | `lib/realtime/useRealtimeChat(roomId)` 훅 — `listMessages` 초기 로드 + Supabase Realtime `messages` INSERT 구독 + `sendMessage` (INSERT + chat_rooms.last_message 동기화). dedupe by id. `/chat/[id]` 연동 + 자동 스크롤. mock 모드는 in-memory store |
+| **채팅 Realtime** | `lib/realtime/useRealtimeChat(roomId)` 훅 — `listMessages` 초기 로드 + Supabase Realtime `messages` INSERT 구독 + `sendMessage` (INSERT + chat_rooms.last_message 동기화). dedupe by id. `/chat/[id]` 연동 + 자동 스크롤. Strict Mode 안전(채널 topic 에 random suffix). mock 모드는 in-memory store |
+| **채팅방 자동 생성** | `getOrCreateChatRoom(bookId)` — 도서 상세/결제완료/주문 내역 "채팅" 버튼이 (book, 나, seller) 조합 chat_rooms 행을 조회·없으면 INSERT. UNIQUE race(23505) 시 재조회. 본인 책이면 `error: "self"`. mock 모드는 `mockGetOrCreateChatRoomByBook` |
+| **mock id UUID 가드** | `isUuid()` 헬퍼 — `fetchChat`/`listMessages`/`sendMessage`/`useRealtimeChat`/`getOrCreateChatRoom` 모두 비-UUID id 면 Supabase 호출 스킵하고 mock 저장소로 라우팅. mock 시드 채팅(c-1 등)이 RLS/FK 에러를 내지 않게 함 |
+| **로그인 진입 흐름** | 스플래시 "카카오로 시작" → 카카오 OAuth(미구현 → 토스트), "이메일로 로그인" → /login. /login 은 이메일 폼이 메인, SNS 버튼은 하단 보조. 이미 로그인된 상태로 스플래시 로그인 버튼 누르면 자동 signOut 후 /login 진입(middleware 자동 리다이렉트 우회) |
+| **한글 IME Enter 가드** | `/chat/[id]`/`/login`/`/register`/`/search` 의 Enter 키 핸들러에 `e.nativeEvent.isComposing` 검사 추가 — 한글 조합 중 Enter(=글자 확정)에서 폼이 폭주하지 않게 함 |
 
 ### 미완성 / 연결 안 된 것
 
@@ -143,8 +147,10 @@ supabase/migrations/
 | `completeOrder(id)` | 거래 확정 |
 | `listChats()` | 채팅 목록 |
 | `fetchChat(id)` | 채팅 상세 (chat_rooms + 책 + 양쪽 프로필 join, 상대방 자동 결정) |
+| `getOrCreateChatRoom(bookId)` | (book, 나, seller) chat_rooms 조회·생성 → "채팅" 버튼 진입점. 본인 책이면 `error:"self"` |
 | `listMessages(roomId)` / `sendMessage(roomId, body)` | 채팅 메시지 조회/전송 (전송 시 chat_rooms.last_message 동기화) |
-| `useRealtimeChat(roomId)` *(훅)* | 초기 로드 + Realtime INSERT 구독 + send. dedupe by id |
+| `useRealtimeChat(roomId)` *(훅)* | 초기 로드 + Realtime INSERT 구독 + send. dedupe by id, channel topic 에 random suffix (Strict Mode 안전) |
+| `isUuid(s)` | UUID 형식 검사 — mock 시드 id 가 Supabase 쿼리로 흘러가지 않게 가드 |
 | `listNotifications()` | 알림 |
 | `markNotificationRead(id)` / `markAllNotificationsRead()` | 알림 read_at 단건/일괄 갱신 |
 | `isLiked(bookId)` / `listLikedBookIds()` / `listLikedBooks()` / `toggleLike(bookId)` | 찜 |

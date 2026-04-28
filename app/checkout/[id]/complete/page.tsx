@@ -11,7 +11,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import { fetchBook, fetchOrder, type BookDetail, type OrderRow } from "@/lib/repo";
+import {
+  fetchBook,
+  fetchOrder,
+  getOrCreateChatRoom,
+  type BookDetail,
+  type OrderRow,
+} from "@/lib/repo";
 
 function CompleteInner({ bookId }: { bookId: string }) {
   const router = useRouter();
@@ -20,6 +26,23 @@ function CompleteInner({ bookId }: { bookId: string }) {
   const orderId = params.get("orderId") ?? undefined;
   const [order, setOrder] = useState<OrderRow | null>(null);
   const [book, setBook] = useState<BookDetail | null>(null);
+  const [chatBusy, setChatBusy] = useState(false);
+
+  // "판매자와 채팅" — bookId 가 아닌 chat_rooms.id 로 라우팅
+  const handleStartChat = async () => {
+    if (chatBusy) return;
+    setChatBusy(true);
+    try {
+      const res = await getOrCreateChatRoom(bookId);
+      if ("error" in res) {
+        toast?.show("채팅방을 만들 수 없어요", "error");
+        return;
+      }
+      router.push(`/chat/${res.id}`);
+    } finally {
+      setChatBusy(false);
+    }
+  };
 
   // 주문 정보(가격/일자) + 책 정보(제목/표지)를 동시에 조회해 주문번호와 함께 표시
   useEffect(() => {
@@ -163,7 +186,8 @@ function CompleteInner({ bookId }: { bookId: string }) {
           <Button
             variant="outlined"
             sx={{ flex: 1 }}
-            onClick={() => router.push(`/chat/${bookId}`)}
+            onClick={handleStartChat}
+            disabled={chatBusy}
           >
             판매자와 채팅
           </Button>

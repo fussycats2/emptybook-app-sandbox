@@ -172,7 +172,8 @@ function SearchInner() {
             placeholder="책 제목, 저자, 출판사"
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") submit(q);
+              // 한글 IME 조합 중 Enter 는 무시 (글자 확정용 키)
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(q);
             }}
             startAdornment={
               <InputAdornment position="start">

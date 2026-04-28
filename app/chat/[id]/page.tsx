@@ -226,6 +226,8 @@ export default function ChatDetailPage({
                   fontSize: 13.5,
                   lineHeight: 1.5,
                   whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  overflowWrap: "anywhere",
                 }}
               >
                 {m.body}
@@ -290,7 +292,14 @@ export default function ChatDetailPage({
           placeholder="메시지를 입력하세요"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && send()}
+          // 한글 IME 조합 중 Enter 는 글자 확정 키이므로 전송하지 않는다
+          // (isComposing 검사 없으면 조합 글자가 잘리거나 중복 전송돼 글자가 깨져 보임)
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            if (e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            send();
+          }}
           sx={{
             background: palette.lineSoft,
             borderRadius: 999,

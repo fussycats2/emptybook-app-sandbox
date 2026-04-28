@@ -1,13 +1,16 @@
 "use client";
 
 // 스플래시/온보딩 화면 ("/") — 최초 진입 시 앱 소개 + 시작 진입점 제공
-// TODO: 카카오/네이버/Apple OAuth 미연결. 현재 로그인 페이지로 이동만 함
 //
-// 로그인 진입 동작:
-// - 이미 로그인된 사용자는 middleware 가 /login → /home 으로 자동 리다이렉트한다.
-// - 그래서 사용자가 스플래시에서 "이메일/카카오로 시작하기" 를 눌렀을 때,
-//   "다시 로그인하려는 의도" 를 존중하기 위해 기존 세션을 먼저 로그아웃 후 /login 으로 보낸다.
-// - "로그인 없이 둘러보기" 는 세션 유지 — 이미 로그인 상태라면 그대로 둠.
+// 버튼 별 동작:
+// - "카카오로 3초 만에 시작하기" → 카카오 OAuth 시도 (현재 미구현 → 토스트 안내). /login 으로 가지 않음
+// - "이메일로 로그인" → /login 으로 이동 (이메일 폼이 메인으로 표시되는 화면)
+// - "로그인 없이 둘러보기" → /home 으로 게스트 진입
+//
+// 로그인 진입 시 자동 리다이렉트 우회:
+//   middleware 는 이미 로그인된 사용자가 /login 에 가면 /home 으로 보내버림.
+//   그래서 스플래시에서 명시적으로 로그인 버튼을 눌렀을 땐 기존 세션을 먼저 로그아웃하여
+//   "다시 로그인하려는 의도"가 그대로 살아 있게 한다.
 
 import { Box, Button, Stack, Typography } from "@mui/material";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
@@ -16,21 +19,29 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { palette } from "@/lib/theme";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export default function SplashPage() {
   const router = useRouter();
+  const toast = useToast();
   const { user, signOut } = useAuth();
   const [navigating, setNavigating] = useState(false);
 
-  // 로그인 화면으로 이동 — 이미 로그인된 경우 먼저 로그아웃해 자동 리다이렉트(/login → /home)를 우회
-  const goLogin = async () => {
+  // 카카오 OAuth — 아직 연결되지 않아 사용자에게 안내만
+  // (구현되면 supabase.auth.signInWithOAuth({ provider: 'kakao' }) 로 교체)
+  const goKakao = () => {
+    toast?.show("카카오 로그인은 준비 중이에요");
+  };
+
+  // 이메일 로그인 화면으로 이동 — 이미 로그인된 경우 먼저 로그아웃해 middleware 자동 리다이렉트를 우회
+  const goEmailLogin = async () => {
     if (navigating) return;
     setNavigating(true);
     try {
       if (user) await signOut();
       router.push("/login");
     } catch {
-      // signOut 이 실패해도 사용자가 시도할 수 있도록 /login 으로 시도
+      // signOut 이 실패해도 사용자가 시도할 수 있도록 /login 으로 보낸다
       router.push("/login");
     } finally {
       setNavigating(false);
@@ -96,8 +107,7 @@ export default function SplashPage() {
         <Stack gap={1.25} className="safe-bottom">
           <Button
             fullWidth
-            onClick={goLogin}
-            disabled={navigating}
+            onClick={goKakao}
             sx={{
               background: palette.kakao,
               color: palette.kakaoText,
@@ -110,7 +120,7 @@ export default function SplashPage() {
           <Button
             fullWidth
             variant="outlined"
-            onClick={goLogin}
+            onClick={goEmailLogin}
             disabled={navigating}
             sx={{
               background: "rgba(255,255,255,0.08)",
@@ -122,7 +132,7 @@ export default function SplashPage() {
               },
             }}
           >
-            이메일로 시작하기
+            이메일로 로그인
           </Button>
           <Button
             fullWidth

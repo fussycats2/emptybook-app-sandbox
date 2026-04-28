@@ -731,6 +731,31 @@ export function mockGetChat(id: string): MockChat | undefined {
   return getStore().chats.find((c) => c.id === id);
 }
 
+// 책 ID 로 mock 채팅방을 찾거나 생성 — 도서 상세 "채팅" 버튼 등에서 사용
+// 같은 bookId 의 기존 채팅이 있으면 그것을 재사용, 없으면 새로 만든다 (mock 모드 전용)
+export function mockGetOrCreateChatRoomByBook(bookId: string): string {
+  const s = getStore();
+  const existing = s.chats.find((c) => c.bookId === bookId);
+  if (existing) return existing.id;
+  const book = s.books.find((b) => b.id === bookId);
+  const newId = `c-${Date.now()}`;
+  s.chats = [
+    {
+      id: newId,
+      user: book?.seller ?? "판매자",
+      book: book?.title ?? "도서",
+      bookId,
+      msg: "",
+      time: "",
+      unread: 0,
+      buying: true,
+      status: book?.status ?? "selling",
+    },
+    ...s.chats,
+  ];
+  return newId;
+}
+
 export function mockListNotifications(): MockNotification[] {
   return [...getStore().notifications];
 }

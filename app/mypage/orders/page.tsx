@@ -13,8 +13,9 @@ import BookImage from "@/components/ui/BookImage";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import StatusBadge, { type SaleStatus } from "@/components/ui/StatusBadge";
-import { listOrders, type OrderRow } from "@/lib/repo";
+import { getOrCreateChatRoom, listOrders, type OrderRow } from "@/lib/repo";
 import { palette } from "@/lib/theme";
+import { useToast } from "@/components/ui/ToastProvider";
 
 const TABS = [
   { key: "buy", label: "구매" },
@@ -32,9 +33,28 @@ const STATUS_TO_BADGE: Record<OrderRow["status"], SaleStatus> = {
 
 export default function OrdersPage() {
   const router = useRouter();
+  const toast = useToast();
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("buy");
   const [status, setStatus] = useState("전체");
   const [orders, setOrders] = useState<OrderRow[] | null>(null);
+  // 채팅 진입 중인 주문 id (버튼 비활성화용)
+  const [chatBusyId, setChatBusyId] = useState<string | null>(null);
+
+  // "채팅" 클릭 — order.id 가 아니라 order.bookId 로 chat_rooms 조회/생성
+  const handleStartChat = async (item: OrderRow) => {
+    if (chatBusyId) return;
+    setChatBusyId(item.id);
+    try {
+      const res = await getOrCreateChatRoom(item.bookId);
+      if ("error" in res) {
+        toast?.show("채팅방을 만들 수 없어요", "error");
+        return;
+      }
+      router.push(`/chat/${res.id}`);
+    } finally {
+      setChatBusyId(null);
+    }
+  };
 
   useEffect(() => {
     listOrders()
@@ -193,7 +213,8 @@ export default function OrdersPage() {
                   variant="outlined"
                   size="small"
                   sx={{ flex: 1 }}
-                  onClick={() => router.push(`/chat/${item.id}`)}
+                  onClick={() => handleStartChat(item)}
+                  disabled={chatBusyId === item.id}
                 >
                   채팅
                 </Button>

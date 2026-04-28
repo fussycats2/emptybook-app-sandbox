@@ -1,14 +1,13 @@
 "use client";
 
 // 로그인 페이지 (/login)
-// - OAuth 버튼(카카오/네이버/Apple)은 현재 토스트만 띄우는 placeholder
-// - 이메일/비밀번호 로그인은 Supabase Auth 와 실제로 연동되어 있다
+// - 스플래시에서 "이메일로 로그인" 으로 진입하는 화면이라, 이메일/비밀번호 폼을 메인으로 배치
+// - 하단의 "또는 SNS로 로그인" 영역에 카카오/네이버/Apple 버튼을 보조로 둠 (아직 OAuth 미구현 → 토스트)
 // - URL의 next 쿼리스트링이 있으면 로그인 후 그 경로로 돌아간다
 
 import {
   Box,
   Button,
-  Collapse,
   Divider,
   IconButton,
   OutlinedInput,
@@ -17,8 +16,6 @@ import {
 } from "@mui/material";
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
-import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
-import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
@@ -45,7 +42,6 @@ function LoginPageInner() {
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(false);
-  const [emailMode, setEmailMode] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // 이메일/비밀번호 로그인 핸들러
@@ -78,6 +74,10 @@ function LoginPageInner() {
     router.refresh();
   };
 
+  // SNS 로그인은 OAuth 미구현 — 모두 동일한 안내 토스트
+  const notReady = (provider: string) =>
+    toast?.show(`${provider} 로그인은 준비 중이에요`);
+
   return (
     <>
       <AppHeader title="" left="back" bordered={false} />
@@ -89,111 +89,105 @@ function LoginPageInner() {
             환영해요 👋
           </Typography>
           <Typography sx={{ fontSize: 14, color: palette.inkMute, mt: 1 }}>
-            가장 빠른 방법으로 시작하세요.
+            이메일과 비밀번호를 입력해주세요.
           </Typography>
         </Box>
 
+        {/* 이메일/비밀번호 폼 — 첫 화면에 곧바로 보이도록 토글 없이 펼쳐둔다 */}
         <Stack gap={1.25} mt={4}>
+          <OutlinedInput
+            fullWidth
+            placeholder="이메일 주소"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <OutlinedInput
+            fullWidth
+            placeholder="비밀번호"
+            type={show ? "text" : "password"}
+            autoComplete="current-password"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+            onKeyDown={(e) => {
+              // 한글 IME 조합 중 Enter 는 무시 (글자 확정용 키)
+              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+              e.preventDefault();
+              handleEmailLogin();
+            }}
+            endAdornment={
+              <IconButton size="small" onClick={() => setShow((s) => !s)}>
+                {show ? (
+                  <VisibilityOffOutlinedIcon fontSize="small" />
+                ) : (
+                  <VisibilityOutlinedIcon fontSize="small" />
+                )}
+              </IconButton>
+            }
+          />
           <Button
             fullWidth
-            onClick={() => toast?.show("준비 중인 기능이에요")}
+            onClick={handleEmailLogin}
+            disabled={submitting}
+            sx={{ mt: 0.5, minHeight: 48 }}
+          >
+            {submitting ? "로그인 중…" : "로그인"}
+          </Button>
+          <Stack
+            direction="row"
+            justifyContent="center"
+            gap={2}
+            sx={{ fontSize: 12.5, color: palette.inkSubtle, mt: 1 }}
+          >
+            <span style={{ cursor: "pointer" }}>아이디 찾기</span>
+            <span>|</span>
+            <span style={{ cursor: "pointer" }}>비밀번호 찾기</span>
+            <span>|</span>
+            <span
+              onClick={() => router.push("/signup")}
+              style={{ color: palette.primary, fontWeight: 700, cursor: "pointer" }}
+            >
+              회원가입
+            </span>
+          </Stack>
+        </Stack>
+
+        <Divider sx={{ my: 3, color: palette.inkSubtle, fontSize: 12 }}>
+          또는 SNS로 로그인
+        </Divider>
+
+        <Stack gap={1.25}>
+          <Button
+            fullWidth
+            onClick={() => notReady("카카오")}
             sx={{
               background: palette.kakao,
               color: palette.kakaoText,
               fontWeight: 800,
-              minHeight: 52,
+              minHeight: 48,
               "&:hover": { background: "#FFE000" },
             }}
           >
-            카카오로 시작
+            카카오로 계속하기
           </Button>
           <Button
             fullWidth
             variant="outlined"
-            sx={{ minHeight: 52 }}
-            onClick={() => toast?.show("준비 중인 기능이에요")}
+            sx={{ minHeight: 48 }}
+            onClick={() => notReady("네이버")}
           >
-            네이버로 시작
+            네이버로 계속하기
           </Button>
           <Button
             fullWidth
             variant="outlined"
-            sx={{ minHeight: 52 }}
-            onClick={() => toast?.show("준비 중인 기능이에요")}
+            sx={{ minHeight: 48 }}
+            onClick={() => notReady("Apple")}
           >
-            Apple로 시작
+            Apple로 계속하기
           </Button>
         </Stack>
-
-        <Divider sx={{ my: 3, color: palette.inkSubtle, fontSize: 12 }}>또는</Divider>
-
-        <Button
-          variant="text"
-          endIcon={
-            emailMode ? (
-              <KeyboardArrowUpRoundedIcon />
-            ) : (
-              <KeyboardArrowDownRoundedIcon />
-            )
-          }
-          onClick={() => setEmailMode((v) => !v)}
-          sx={{ color: palette.inkMute, alignSelf: "center" }}
-        >
-          이메일로 로그인
-        </Button>
-
-        <Collapse in={emailMode} timeout={220}>
-          <Stack gap={1.25} mt={2}>
-            <OutlinedInput
-              fullWidth
-              placeholder="이메일 주소"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <OutlinedInput
-              fullWidth
-              placeholder="비밀번호"
-              type={show ? "text" : "password"}
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
-              endAdornment={
-                <IconButton size="small" onClick={() => setShow((s) => !s)}>
-                  {show ? (
-                    <VisibilityOffOutlinedIcon fontSize="small" />
-                  ) : (
-                    <VisibilityOutlinedIcon fontSize="small" />
-                  )}
-                </IconButton>
-              }
-            />
-            <Button
-              fullWidth
-              onClick={handleEmailLogin}
-              disabled={submitting}
-              sx={{ mt: 0.5 }}
-            >
-              {submitting ? "로그인 중…" : "로그인"}
-            </Button>
-            <Stack
-              direction="row"
-              justifyContent="center"
-              gap={2}
-              sx={{ fontSize: 12.5, color: palette.inkSubtle, mt: 1 }}
-            >
-              <span style={{ cursor: "pointer" }}>아이디 찾기</span>
-              <span>|</span>
-              <span style={{ cursor: "pointer" }}>비밀번호 찾기</span>
-              <span>|</span>
-              <span
-                onClick={() => router.push("/signup")}
-                style={{ color: palette.primary, fontWeight: 700, cursor: "pointer" }}
-              >
-                회원가입
-              </span>
-            </Stack>
-          </Stack>
-        </Collapse>
       </Box>
     </>
   );

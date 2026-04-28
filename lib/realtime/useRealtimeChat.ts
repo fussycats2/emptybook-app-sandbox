@@ -10,7 +10,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isSupabaseConfigured, listMessages, sendMessage, type MessageRowUI } from "@/lib/repo";
+import { isSupabaseConfigured, isUuid, listMessages, sendMessage, type MessageRowUI } from "@/lib/repo";
 
 export type UseRealtimeChat = {
   messages: MessageRowUI[];
@@ -61,17 +61,26 @@ export function useRealtimeChat(roomId: string | null | undefined): UseRealtimeC
   }, [roomId]);
 
   // Realtime 구독 — Supabase 모드 + roomId 있을 때만
+  // 주의: Supabase 는 같은 topic 의 채널을 캐시·재사용한다 (`client.channel(name)`).
+  // React Strict Mode 가 effect 를 두 번 마운트할 때 같은 이름이면 두 번째 마운트가
+  // 이미 .subscribe() 된 채널에 .on() 을 호출해서 에러가 난다. → 매 마운트마다 고유한 topic 사용.
   useEffect(() => {
     if (!roomId || !isSupabaseConfigured) return;
-    let unsub: (() => void) | undefined;
+    // mock 시드 채팅(c-1 등) 은 Supabase Realtime 구독 의미 없음 — sendMessage 에서 mock 으로 라우팅됨
+    if (!isUuid(roomId)) return;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
     (async () => {
       const { supabaseBrowser } = await import("@/lib/supabase/client");
       const supabase = supabaseBrowser();
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id;
-      if (!uid) return;
+      // setup 중간에 cleanup 이 들어왔으면 더 이상 진행하지 않음
+      if (!uid || cancelled) return;
+      // topic 에 랜덤 suffix 를 붙여 mount 마다 새 채널을 보장
+      const topic = `chat:${roomId}:${Math.random().toString(36).slice(2)}`;
       const channel = supabase
-        .channel(`chat:${roomId}`)
+        .channel(topic)
         .on(
           "postgres_changes",
           {
@@ -94,11 +103,19 @@ export function useRealtimeChat(roomId: string | null | undefined): UseRealtimeC
           }
         )
         .subscribe();
-      unsub = () => {
+      // 채널을 만든 직후 이미 cleanup 이 호출됐다면 즉시 정리
+      if (cancelled) {
+        supabase.removeChannel(channel);
+        return;
+      }
+      cleanup = () => {
         supabase.removeChannel(channel);
       };
     })();
-    return () => unsub?.();
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
   }, [roomId, appendMessage]);
 
   // 메시지 전송 — INSERT 결과를 즉시 추가 (Realtime echo 는 dedupe 됨)

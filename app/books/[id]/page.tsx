@@ -37,6 +37,7 @@ import {
   cancelBook,
   deleteBook,
   fetchBook,
+  getOrCreateChatRoom,
   listRecentBooks,
   type BookDetail,
 } from "@/lib/repo";
@@ -60,6 +61,27 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState<null | "cancel" | "delete">(null);
   const [busy, setBusy] = useState(false);
+  // 채팅 진입 — 채팅방 get-or-create 비동기 처리 중 더블클릭 방지
+  const [chatBusy, setChatBusy] = useState(false);
+
+  // "채팅" 버튼 클릭 — 책 ID 가 아니라 chat_rooms.id 로 라우팅해야 RLS 통과
+  const handleStartChat = async () => {
+    if (!book || chatBusy) return;
+    setChatBusy(true);
+    try {
+      const res = await getOrCreateChatRoom(book.id);
+      if ("error" in res) {
+        if (res.error === "self") toast?.show("내 책에는 채팅을 보낼 수 없어요");
+        else if (res.error === "book_not_found")
+          toast?.show("도서 정보를 찾을 수 없어요", "error");
+        else toast?.show("채팅방을 만들 수 없어요", "error");
+        return;
+      }
+      router.push(`/chat/${res.id}`);
+    } finally {
+      setChatBusy(false);
+    }
+  };
 
   // 단일 도서 + 관련 도서 8개를 동시에 조회
   // 관련 도서 목록에서는 현재 보고 있는 책 자기 자신은 제외
@@ -439,7 +461,8 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           <Button
             variant="outlined"
             sx={{ minWidth: 80 }}
-            onClick={() => router.push(`/chat/${book.id}`)}
+            onClick={handleStartChat}
+            disabled={chatBusy}
           >
             채팅
           </Button>

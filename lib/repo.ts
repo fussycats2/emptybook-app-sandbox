@@ -24,6 +24,7 @@ import {
   mockListLikedIds,
   mockListNotifications,
   mockListOrders,
+  mockGetOrCreateChatRoomByBook,
   mockGetProfile,
   mockListMessages,
   mockListReceivedReviews,
@@ -159,6 +160,14 @@ function rowToDetail(b: BookRow): BookDetail {
     chats: 0,
     coverUrl: b.cover_url ?? undefined,
   };
+}
+
+// 표준 UUID(v1~v5) 형식인지 검사 — chat 시드 ID("c-1" 등) 와 실제 DB UUID 를 구분하기 위함
+// (Supabase 환경변수가 있어도 mock 폴백된 시드 ID 가 그대로 INSERT 로 흘러들어가지 않게 가드)
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function isUuid(s: string | null | undefined): s is string {
+  return !!s && UUID_RE.test(s);
 }
 
 // Supabase 클라이언트를 안전하게 가져오는 헬퍼
@@ -632,13 +641,15 @@ export async function listChats(): Promise<ChatRow[]> {
 
 // 채팅방 단건 조회
 // chat_rooms + 책 + 양쪽 프로필 join 후 ChatRow 형태로 정규화
-// 비로그인/Supabase 미설정이면 mock 저장소에서 반환
+// 비로그인/Supabase 미설정/UUID 가 아닌 mock id 면 mock 저장소에서 반환
 export async function fetchChat(id: string): Promise<ChatRow | null> {
   const supabase = await tryClient();
   if (!supabase) return mockGetChat(id) ?? null;
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) return mockGetChat(id) ?? null;
+  // mock 시드 id (예: "c-1") 가 들어오면 Supabase 에 쿼리 보내지 말고 바로 mock
+  if (!isUuid(id)) return mockGetChat(id) ?? null;
   const { data } = await supabase
     .from("chat_rooms")
     .select(
@@ -677,6 +688,70 @@ export async function fetchChat(id: string): Promise<ChatRow | null> {
   };
 }
 
+// 도서 ID 로 채팅방을 가져오거나 새로 만든다 — "채팅" 버튼 진입점에서 사용
+// - 본인 책이면 null 반환 (자기 자신과 채팅 불가)
+// - 같은 (bookId, buyer=나, seller=책 판매자) 조합의 방이 이미 있으면 재사용
+// - 없으면 INSERT (UNIQUE 제약 위반 23505 시 다시 SELECT 로 안전하게 fallback)
+// 반환: 채팅방 id (UUID 또는 mock c-xxx)
+export type ChatRoomResult =
+  | { id: string }
+  | { error: "self" | "unauthenticated" | "book_not_found" | "unknown" };
+
+export async function getOrCreateChatRoom(
+  bookId: string
+): Promise<ChatRoomResult> {
+  const supabase = await tryClient();
+  if (!supabase) return { id: mockGetOrCreateChatRoomByBook(bookId) };
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return { id: mockGetOrCreateChatRoomByBook(bookId) };
+  // mock 시드 bookId — Supabase 에 쿼리해봐야 없으니 mock 으로
+  if (!isUuid(bookId)) return { id: mockGetOrCreateChatRoomByBook(bookId) };
+
+  // 책의 판매자 조회
+  const { data: book } = await supabase
+    .from("books")
+    .select("seller_id")
+    .eq("id", bookId)
+    .maybeSingle();
+  if (!book) return { error: "book_not_found" };
+  const sellerId = (book as { seller_id: string }).seller_id;
+  if (sellerId === uid) return { error: "self" };
+
+  // 기존 방 조회
+  const { data: existing } = await supabase
+    .from("chat_rooms")
+    .select("id")
+    .eq("book_id", bookId)
+    .eq("buyer_id", uid)
+    .eq("seller_id", sellerId)
+    .maybeSingle();
+  if (existing) return { id: (existing as { id: string }).id };
+
+  // 새로 생성
+  const { data: created, error } = await supabase
+    .from("chat_rooms")
+    .insert({ book_id: bookId, buyer_id: uid, seller_id: sellerId })
+    .select("id")
+    .single();
+  // UNIQUE 위반(동시 생성 race) 시 다시 SELECT 로 안전 복구
+  if (error?.code === "23505") {
+    const { data: again } = await supabase
+      .from("chat_rooms")
+      .select("id")
+      .eq("book_id", bookId)
+      .eq("buyer_id", uid)
+      .eq("seller_id", sellerId)
+      .maybeSingle();
+    if (again) return { id: (again as { id: string }).id };
+  }
+  if (error || !created) {
+    console.error("[getOrCreateChatRoom] insert failed", error);
+    return { error: "unknown" };
+  }
+  return { id: (created as { id: string }).id };
+}
+
 // ---------- Messages (채팅 메시지) ----------
 
 // 메시지 목록 조회 — 시간순 오름차순. 비로그인/mock은 mock 저장소
@@ -686,12 +761,18 @@ export async function listMessages(roomId: string): Promise<MessageRowUI[]> {
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) return mockListMessages(roomId).map(mockMsgToUI);
+  // mock 시드 roomId 면 Supabase 쿼리하지 않고 mock 저장소
+  if (!isUuid(roomId)) return mockListMessages(roomId).map(mockMsgToUI);
   const { data, error } = await supabase
     .from("messages")
     .select("id, body, type, sender_id, read_at, created_at")
     .eq("room_id", roomId)
     .order("created_at", { ascending: true });
-  if (error || !data) return [];
+  if (error) {
+    console.error("[listMessages] Supabase error", error);
+    return [];
+  }
+  if (!data) return [];
   return (data as any[]).map((m) => dbMsgToUI(m, uid));
 }
 
@@ -708,6 +789,8 @@ export async function sendMessage(
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) return mockMsgToUI(mockSendMessage(roomId, trimmed));
+  // mock 시드 roomId — Supabase 에 INSERT 하면 UUID 형식/FK 에러로 무조건 실패하므로 mock 으로
+  if (!isUuid(roomId)) return mockMsgToUI(mockSendMessage(roomId, trimmed));
   const { data, error } = await supabase
     .from("messages")
     .insert({
@@ -718,7 +801,11 @@ export async function sendMessage(
     })
     .select("id, body, type, sender_id, read_at, created_at")
     .single();
-  if (error || !data) return null;
+  if (error || !data) {
+    // 실제 원인을 콘솔에서 확인할 수 있도록 (RLS, FK 위반 등)
+    console.error("[sendMessage] Supabase INSERT failed", error);
+    return null;
+  }
   // 채팅 목록의 마지막 메시지 동기화 (실패해도 메시지 자체는 들어갔으니 결과만 반환)
   await supabase
     .from("chat_rooms")
