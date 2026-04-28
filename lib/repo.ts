@@ -24,6 +24,7 @@ import {
   mockListLikedIds,
   mockListNotifications,
   mockListOrders,
+  mockListReceivedReviews,
   mockToggleLike,
   mockUpdateOrderStatus,
   type MockBook,
@@ -31,6 +32,7 @@ import {
   type MockNotification,
   type MockOrder,
   type MockReview,
+  type ReceivedReviewCard,
 } from "./mockData";
 import type { BookSummary } from "@/components/ui/BookCard";
 import { STATE_LABEL, type BookRow, type BookState } from "./supabase/types";
@@ -39,6 +41,7 @@ export type BookDetail = MockBook;
 export type OrderRow = MockOrder;
 export type ChatRow = MockChat;
 export type NotificationRow = MockNotification;
+export type ReceivedReview = ReceivedReviewCard;
 
 // UI에서 사용자가 선택한 한글 상태("최상" 등) → DB enum("A_PLUS" 등) 변환표
 // 등록 폼/검색 필터에서 두 가지 표기가 모두 들어올 수 있어 양쪽 다 지원
@@ -552,6 +555,34 @@ export async function listNotifications(): Promise<NotificationRow[]> {
   }));
 }
 
+// 알림 단건 읽음 처리 — 사용자가 알림 항목을 클릭했을 때 호출
+// 비로그인/Supabase 미설정이면 no-op (UI는 이미 클라 상태로 토글된 상태)
+export async function markNotificationRead(id: string): Promise<void> {
+  const supabase = await tryClient();
+  if (!supabase) return;
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return;
+  await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("user_id", auth.user.id) // RLS와 별개로 추가 가드
+    .is("read_at", null); // 이미 읽음이면 갱신 스킵
+}
+
+// 내 알림 전부 읽음 처리 — 헤더 "모두 읽음" 버튼에서 호출
+export async function markAllNotificationsRead(): Promise<void> {
+  const supabase = await tryClient();
+  if (!supabase) return;
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return;
+  await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", auth.user.id)
+    .is("read_at", null);
+}
+
 // ---------- Reviews (후기) ----------
 
 // 후기 작성 화면에 필요한 정보(상대방 이름/책 제목/거래일/이미 작성 여부)를 한 번에 조회
@@ -665,6 +696,48 @@ export async function createReview(input: {
   }
   if (error || !data) throw error ?? new Error("후기 저장 실패");
   return { id: (data as { id: string }).id };
+}
+
+// 내가 받은 후기 목록 — /mypage/reviews 화면용
+// reviews(reviewee_id = 나) ⨝ reviewer profile ⨝ transactions ⨝ books 한 번에
+// 비로그인/Supabase 미설정이면 mock 저장소의 시드 데이터를 반환
+// userId 인자가 없으면 현재 로그인 사용자(auth.uid) 기준
+export async function listReceivedReviews(
+  userId?: string
+): Promise<ReceivedReview[]> {
+  const supabase = await tryClient();
+  if (!supabase) return mockListReceivedReviews();
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = userId ?? auth.user?.id;
+  if (!uid) return mockListReceivedReviews();
+
+  const { data, error } = await supabase
+    .from("reviews")
+    .select(
+      `id, rating, tags, comment, created_at,
+       reviewer:profiles!reviews_reviewer_id_fkey(id, display_name, avatar_url),
+       transactions(book_id, books(id, title))`
+    )
+    .eq("reviewee_id", uid)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return (data as any[]).map((r): ReceivedReview => {
+    const reviewerName = r.reviewer?.display_name ?? "익명";
+    const reviewerId = r.reviewer?.id ?? "anon";
+    const book = r.transactions?.books;
+    return {
+      id: r.id,
+      rating: r.rating,
+      tags: r.tags ?? [],
+      comment: r.comment ?? undefined,
+      createdAt: r.created_at,
+      reviewerName,
+      reviewerSeed: reviewerId,
+      bookTitle: book?.title ?? "도서",
+      bookId: book?.id,
+    };
+  });
 }
 
 // ---------- Likes (찜) ----------

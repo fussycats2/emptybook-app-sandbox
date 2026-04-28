@@ -2,8 +2,8 @@
 
 // 알림 페이지 (/notifications)
 // - 종류별(전체/거래/채팅/시스템) 필터 + "안 읽음만" 토글
-// - "모두 읽음" 누르면 클라이언트 상태에서 읽음 처리 (서버 갱신은 미구현)
-// TODO: 클릭 시 notifications.read_at 을 UPDATE 하는 서버 호출 필요
+// - 알림 클릭 → markNotificationRead, "모두 읽음" → markAllNotificationsRead 로 서버 read_at 갱신
+//   (UI는 즉시 토글하고 서버 호출은 fire-and-forget)
 
 import {
   Box,
@@ -21,7 +21,12 @@ import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
 import EmptyState from "@/components/ui/EmptyState";
-import { listNotifications, type NotificationRow } from "@/lib/repo";
+import {
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  type NotificationRow,
+} from "@/lib/repo";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { ListSkeleton } from "@/components/ui/Skeleton";
@@ -72,6 +77,8 @@ export default function NotificationsPage() {
               setItems((arr) =>
                 (arr ?? []).map((x) => ({ ...x, unread: false }))
               );
+              // 서버 반영(실패해도 UI는 이미 갱신됨 → fire-and-forget)
+              markAllNotificationsRead().catch(() => {});
               toast?.show("모두 읽음으로 표시했어요");
             }}
             sx={{
@@ -156,14 +163,17 @@ export default function NotificationsPage() {
                 background: n.unread ? palette.surface : "transparent",
                 cursor: "pointer",
               }}
-              // 클릭한 알림만 unread=false 로 갱신 (서버 반영은 추후 추가 예정)
-              onClick={() =>
+              // 클릭한 알림만 unread=false 로 갱신 + 서버 read_at UPDATE (fire-and-forget)
+              onClick={() => {
+                if (n.unread) {
+                  markNotificationRead(n.id).catch(() => {});
+                }
                 setItems((arr) =>
                   (arr ?? []).map((x) =>
                     x.id === n.id ? { ...x, unread: false } : x
                   )
-                )
-              }
+                );
+              }}
             >
               <Box
                 sx={{

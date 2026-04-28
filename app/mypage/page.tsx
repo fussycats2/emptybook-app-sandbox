@@ -45,7 +45,7 @@ const SECTIONS: { title: string; items: MenuItem[] }[] = [
     items: [
       { label: "구매 내역", href: "/mypage/orders", icon: <ShoppingBagRoundedIcon /> },
       { label: "판매 내역", href: "/mypage/selling", icon: <StorefrontRoundedIcon /> },
-      { label: "받은 후기", icon: <StarRoundedIcon />, comingSoon: true },
+      { label: "받은 후기", href: "/mypage/reviews", icon: <StarRoundedIcon /> },
     ],
   },
   {

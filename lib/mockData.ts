@@ -65,10 +65,26 @@ export type MockReview = {
   transactionId: string;
   reviewerId: string;
   revieweeId: string;
+  reviewerName?: string; // mock 표시용 — 실제 DB에서는 profiles join으로 채움
+  bookTitle?: string; // mock 표시용 — 실제 DB에서는 transactions→books join
+  bookId?: string;
   rating: number;
   tags: string[];
   comment?: string;
   createdAt: string;
+};
+
+// 받은 후기 화면(/mypage/reviews) 카드용 — 후기 + 작성자/책 정보 합본
+export type ReceivedReviewCard = {
+  id: string;
+  rating: number;
+  tags: string[];
+  comment?: string;
+  createdAt: string;
+  reviewerName: string;
+  reviewerSeed: string; // 아바타 시드(이름 등 식별 가능한 문자열)
+  bookTitle: string;
+  bookId?: string;
 };
 
 // 처음 화면을 띄웠을 때 보이는 기본 더미 책 목록
@@ -288,6 +304,48 @@ const SEED_NOTIFICATIONS: MockNotification[] = [
   },
 ];
 
+// 마이페이지 "받은 후기"(/mypage/reviews) 데모용 시드 — 사용자(="나")가 reviewee
+const SEED_REVIEWS: MockReview[] = [
+  {
+    id: "rv-seed-1",
+    transactionId: "o-seed-rv-1",
+    reviewerId: "독서왕",
+    revieweeId: "나",
+    reviewerName: "독서왕",
+    bookTitle: "82년생 김지영",
+    bookId: "2",
+    rating: 5,
+    tags: ["응답이 빨라요", "친절해요", "도서 상태가 좋아요"],
+    comment: "책 상태도 깨끗하고 응답도 빨라서 정말 편하게 거래했어요. 또 거래하고 싶어요!",
+    createdAt: "2024-01-12T10:30:00.000Z",
+  },
+  {
+    id: "rv-seed-2",
+    transactionId: "o-seed-rv-2",
+    reviewerId: "리딩클럽",
+    revieweeId: "나",
+    reviewerName: "리딩클럽",
+    bookTitle: "달러구트 꿈 백화점",
+    bookId: "4",
+    rating: 5,
+    tags: ["약속을 잘 지켜요", "포장이 꼼꼼해요"],
+    comment: "약속 시간 정확히 지켜주시고 포장도 꼼꼼하게 해주셨어요. 감사합니다 :)",
+    createdAt: "2023-12-28T15:00:00.000Z",
+  },
+  {
+    id: "rv-seed-3",
+    transactionId: "o-seed-rv-3",
+    reviewerId: "북헌터",
+    revieweeId: "나",
+    reviewerName: "북헌터",
+    bookTitle: "아몬드",
+    bookId: "3",
+    rating: 4,
+    tags: ["설명이 정확해요"],
+    createdAt: "2023-12-15T09:20:00.000Z",
+  },
+];
+
 // globalThis 에 저장할 키. 페이지 이동 후에도 같은 데이터를 참조하기 위함
 const STORE_KEY = "__emptybook_mock_store__";
 
@@ -312,7 +370,7 @@ function getStore(): Store {
       chats: [...SEED_CHATS],
       notifications: [...SEED_NOTIFICATIONS],
       likedBookIds: new Set<string>(),
-      reviews: [],
+      reviews: [...SEED_REVIEWS],
     } satisfies Store;
   }
   return g[STORE_KEY] as Store;
@@ -499,6 +557,26 @@ export function mockCreateReview(input: {
   };
   s.reviews = [review, ...s.reviews];
   return review;
+}
+
+// 받은 후기 — mock 모드의 사용자("나")를 reviewee 로 가진 후기들
+// 최신순 정렬, 카드용 형태로 가공
+export function mockListReceivedReviews(): ReceivedReviewCard[] {
+  const s = getStore();
+  return [...s.reviews]
+    .filter((r) => r.revieweeId === "나" || r.revieweeId === "me")
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+    .map((r) => ({
+      id: r.id,
+      rating: r.rating,
+      tags: r.tags,
+      comment: r.comment,
+      createdAt: r.createdAt,
+      reviewerName: r.reviewerName ?? r.reviewerId ?? "익명",
+      reviewerSeed: r.reviewerName ?? r.reviewerId ?? "anon",
+      bookTitle: r.bookTitle ?? "도서",
+      bookId: r.bookId,
+    }));
 }
 
 // 후기 작성 화면 상단에 표시할 컨텍스트 — 상대방 이름/책 제목/거래일/이미 작성 여부
