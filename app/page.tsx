@@ -2,15 +2,40 @@
 
 // 스플래시/온보딩 화면 ("/") — 최초 진입 시 앱 소개 + 시작 진입점 제공
 // TODO: 카카오/네이버/Apple OAuth 미연결. 현재 로그인 페이지로 이동만 함
+//
+// 로그인 진입 동작:
+// - 이미 로그인된 사용자는 middleware 가 /login → /home 으로 자동 리다이렉트한다.
+// - 그래서 사용자가 스플래시에서 "이메일/카카오로 시작하기" 를 눌렀을 때,
+//   "다시 로그인하려는 의도" 를 존중하기 위해 기존 세션을 먼저 로그아웃 후 /login 으로 보낸다.
+// - "로그인 없이 둘러보기" 는 세션 유지 — 이미 로그인 상태라면 그대로 둠.
 
 import { Box, Button, Stack, Typography } from "@mui/material";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { palette } from "@/lib/theme";
+import { useAuth } from "@/lib/auth/AuthProvider";
 
 export default function SplashPage() {
   const router = useRouter();
+  const { user, signOut } = useAuth();
+  const [navigating, setNavigating] = useState(false);
+
+  // 로그인 화면으로 이동 — 이미 로그인된 경우 먼저 로그아웃해 자동 리다이렉트(/login → /home)를 우회
+  const goLogin = async () => {
+    if (navigating) return;
+    setNavigating(true);
+    try {
+      if (user) await signOut();
+      router.push("/login");
+    } catch {
+      // signOut 이 실패해도 사용자가 시도할 수 있도록 /login 으로 시도
+      router.push("/login");
+    } finally {
+      setNavigating(false);
+    }
+  };
   return (
     <Box
       sx={{
@@ -71,7 +96,8 @@ export default function SplashPage() {
         <Stack gap={1.25} className="safe-bottom">
           <Button
             fullWidth
-            onClick={() => router.push("/login")}
+            onClick={goLogin}
+            disabled={navigating}
             sx={{
               background: palette.kakao,
               color: palette.kakaoText,
@@ -84,7 +110,8 @@ export default function SplashPage() {
           <Button
             fullWidth
             variant="outlined"
-            onClick={() => router.push("/login")}
+            onClick={goLogin}
+            disabled={navigating}
             sx={{
               background: "rgba(255,255,255,0.08)",
               borderColor: "rgba(255,255,255,0.4)",
