@@ -7,13 +7,13 @@
 import { Box, Chip, Stack } from "@mui/material";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
-import { BookListRow, type BookSummary } from "@/components/ui/BookCard";
+import { BookListRow } from "@/components/ui/BookCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
-import { listMyBooks } from "@/lib/repo";
+import { useMyBooks } from "@/lib/query/bookHooks";
 import { palette } from "@/lib/theme";
 
 // 칩 라벨 ↔ BookSummary.status (UI status) 매핑
@@ -26,14 +26,8 @@ const FILTERS: { key: string; label: string }[] = [
 
 export default function SellingPage() {
   const router = useRouter();
-  const [books, setBooks] = useState<BookSummary[] | null>(null);
+  const { data: books, isLoading } = useMyBooks();
   const [filter, setFilter] = useState("all");
-
-  useEffect(() => {
-    listMyBooks()
-      .then(setBooks)
-      .catch(() => setBooks([]));
-  }, []);
 
   // 무료나눔(status=free)도 "판매중"으로 묶어 노출
   const filtered = useMemo(() => {
@@ -82,7 +76,7 @@ export default function SellingPage() {
       </Box>
 
       <ScrollBody>
-        {!filtered && <ListSkeleton count={4} />}
+        {isLoading && <ListSkeleton count={4} />}
         {filtered && filtered.length === 0 && (
           <EmptyState
             icon={<StorefrontRoundedIcon />}

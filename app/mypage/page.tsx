@@ -15,7 +15,6 @@ import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import LocalActivityRoundedIcon from "@mui/icons-material/LocalActivityRounded";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import { ScrollBody } from "@/components/ui/Section";
@@ -24,12 +23,10 @@ import MannerTemperature from "@/components/ui/MannerTemperature";
 import { palette } from "@/lib/theme";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useToast } from "@/components/ui/ToastProvider";
-import {
-  isSupabaseConfigured,
-  listLikedBookIds,
-  listMyBooks,
-  listOrders,
-} from "@/lib/repo";
+import { useMyBooks } from "@/lib/query/bookHooks";
+import { useOrders } from "@/lib/query/orderHooks";
+import { useMyProfile } from "@/lib/query/profileHooks";
+import { useLikesStore } from "@/lib/store/likesStore";
 
 // 메뉴 항목 정의 — href 가 있으면 라우팅, comingSoon 이면 "준비중" 칩 + 토스트로 안내
 type MenuItem = {
@@ -76,64 +73,24 @@ export default function MyPage() {
   const router = useRouter();
   const toast = useToast();
   const { user, signOut } = useAuth();
-  const [profile, setProfile] = useState<{
-    display_name: string | null;
-    username: string | null;
-  } | null>(null);
-  // 통계 카운트 — 로딩 중에는 null("-" 표시), 실패해도 0 으로 폴백해 화면이 멈추지 않게 한다
-  const [sellingCount, setSellingCount] = useState<number | null>(null);
-  const [buyingCount, setBuyingCount] = useState<number | null>(null);
-  const [likeCount, setLikeCount] = useState<number | null>(null);
 
-  // STATS 카운트 한 번에 로드 (판매중 / 구매내역 / 찜)
-  // - 판매중: 내 책 중 SOLD/취소 외 활성 상태(판매중·예약중·무료나눔)
-  // - 구매내역: 트랜잭션 중 내가 buyer 인 행
-  // - 비로그인/mock 환경이면 각 함수가 mock 저장소로 자동 폴백
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([listMyBooks(), listOrders(), listLikedBookIds()])
-      .then(([books, orders, liked]) => {
-        if (cancelled) return;
-        setSellingCount(
-          books.filter((b) => {
-            const s = b.status ?? (b.free ? "free" : "selling");
-            return s === "selling" || s === "free" || s === "reserved";
-          }).length
-        );
-        setBuyingCount(orders.filter((o) => o.side === "buy").length);
-        setLikeCount(liked.size);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setSellingCount(0);
-        setBuyingCount(0);
-        setLikeCount(0);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // React Query — 마이페이지 STATS / 프로필 모두 캐시 공유
+  // - books / orders / profile 은 다른 화면에서도 같은 캐시 사용
+  // - 찜 카운트는 Zustand likesStore 에서 즉시 구독 (다른 곳 토글 시 자동 반영)
+  const { data: myBooks } = useMyBooks();
+  const { data: orders } = useOrders();
+  const { data: profile } = useMyProfile();
+  const likeCount = useLikesStore((s) => s.liked.size);
 
-  // 로그인 + Supabase 활성 상태일 때만 profiles 조회
-  // (cancelled 플래그: 빠른 페이지 이탈 시 setProfile 호출 방지)
-  useEffect(() => {
-    if (!isSupabaseConfigured || !user) return;
-    let cancelled = false;
-    (async () => {
-      const { supabaseBrowser } = await import("@/lib/supabase/client");
-      const { data } = await supabaseBrowser()
-        .from("profiles")
-        .select("display_name, username")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (!cancelled && data) {
-        setProfile(data as { display_name: string | null; username: string | null });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
+  const sellingCount = myBooks
+    ? myBooks.filter((b) => {
+        const s = b.status ?? (b.free ? "free" : "selling");
+        return s === "selling" || s === "free" || s === "reserved";
+      }).length
+    : null;
+  const buyingCount = orders
+    ? orders.filter((o) => o.side === "buy").length
+    : null;
 
   // 표시 이름/핸들 결정 우선순위:
   // 1) profiles.display_name → 2) 이메일 앞부분 → 3) "게스트"

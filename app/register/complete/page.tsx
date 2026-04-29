@@ -8,11 +8,11 @@ import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import IosShareRoundedIcon from "@mui/icons-material/IosShareRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import BookImage from "@/components/ui/BookImage";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import { fetchBook, type BookDetail } from "@/lib/repo";
+import { useBook } from "@/lib/query/bookHooks";
 
 const TIPS = [
   { icon: "📸", title: "사진을 추가해보세요", desc: "사진이 5장 이상이면 채팅 응답률이 1.7배 늘어요." },
@@ -26,13 +26,8 @@ function CompleteInner() {
   const params = useSearchParams();
   const toast = useToast();
   const id = params.get("id") ?? undefined;
-  const [book, setBook] = useState<BookDetail | null>(null);
-
-  // URL 의 id 로 방금 등록한 책 정보 다시 불러오기
-  useEffect(() => {
-    if (!id) return;
-    fetchBook(id).then(setBook);
-  }, [id]);
+  // React Query — 방금 등록한 책 정보 (createBook 의 onSuccess 가 cache 무효화 했음)
+  const { data: book } = useBook(id);
 
   return (
     <>

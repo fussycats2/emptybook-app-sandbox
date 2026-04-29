@@ -6,14 +6,16 @@
 
 import { Box, Button, Chip, Stack, Typography } from "@mui/material";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import StatusBadge, { type SaleStatus } from "@/components/ui/StatusBadge";
-import { getOrCreateChatRoom, listOrders, type OrderRow } from "@/lib/repo";
+import { type OrderRow } from "@/lib/repo";
+import { useOrders } from "@/lib/query/orderHooks";
+import { useGetOrCreateChatRoom } from "@/lib/query/chatHooks";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -36,7 +38,8 @@ export default function OrdersPage() {
   const toast = useToast();
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("buy");
   const [status, setStatus] = useState("전체");
-  const [orders, setOrders] = useState<OrderRow[] | null>(null);
+  const { data: orders, isLoading } = useOrders();
+  const chatRoom = useGetOrCreateChatRoom();
   // 채팅 진입 중인 주문 id (버튼 비활성화용)
   const [chatBusyId, setChatBusyId] = useState<string | null>(null);
 
@@ -45,7 +48,7 @@ export default function OrdersPage() {
     if (chatBusyId) return;
     setChatBusyId(item.id);
     try {
-      const res = await getOrCreateChatRoom(item.bookId);
+      const res = await chatRoom.mutateAsync(item.bookId);
       if ("error" in res) {
         toast?.show("채팅방을 만들 수 없어요", "error");
         return;
@@ -55,12 +58,6 @@ export default function OrdersPage() {
       setChatBusyId(null);
     }
   };
-
-  useEffect(() => {
-    listOrders()
-      .then((o) => setOrders(o))
-      .catch(() => setOrders([]));
-  }, []);
 
   // 1) 탭(구매/판매)으로 side 필터 → 2) 상태 필터(전체 외) 적용
   const list =
@@ -127,7 +124,7 @@ export default function OrdersPage() {
       </Box>
 
       <ScrollBody>
-        {!list && <ListSkeleton count={4} />}
+        {isLoading && <ListSkeleton count={4} />}
         {list && list.length === 0 && (
           <EmptyState
             icon="🧾"

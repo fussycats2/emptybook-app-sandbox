@@ -1,17 +1,18 @@
 "use client";
 
 // 찜(좋아요) 토글 하트 버튼
-// - bookId 가 주어지면 마운트 시 isLiked()로 초기 상태 조회 + 클릭 시 toggleLike() 호출
+// - bookId 가 주어지면 useBookLike 훅으로 store(Zustand) + mutation(React Query) 사용
+//   → 같은 책이 여러 화면에 떠 있어도 토글이 자동 동기화된다
 // - bookId 가 없으면 단순 비제어 토글로만 동작 (디자인 시안용)
 // stopPropagation: 리스트 카드 위에서 사용 시 카드 클릭 이벤트로 번지지 않도록
 
 import { IconButton } from "@mui/material";
 import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
 import FavoriteBorderRoundedIcon from "@mui/icons-material/FavoriteBorderRounded";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { palette } from "@/lib/theme";
 import { useToast } from "./ToastProvider";
-import { isLiked as fetchIsLiked, toggleLike } from "@/lib/repo";
+import { useBookLike } from "@/lib/query/likeHooks";
 
 interface Props {
   bookId?: string;
@@ -30,60 +31,48 @@ export default function LikeButton({
   bg,
   stopPropagation = true,
 }: Props) {
-  const [liked, setLiked] = useState(defaultLiked);
-  const [pop, setPop] = useState(false);
-  const [pending, setPending] = useState(false);
   const toast = useToast();
+  const [pop, setPop] = useState(false);
+  // bookId 없는 경우(디자인 데모)에 쓰이는 로컬 상태
+  const [localLiked, setLocalLiked] = useState(defaultLiked);
 
-  // 마운트 시 1회: bookId 가 있으면 서버에서 실제 찜 여부를 가져와 동기화
-  // (cancelled 플래그: 빠른 페이지 이탈 시 setLiked 호출을 막는다)
+  // bookId 가 있는 정상 모드: 전역 store + mutation 훅 사용
+  const { liked: storeLiked, count, toggle, isPending } = useBookLike(bookId);
+  const liked = bookId ? storeLiked : localLiked;
+
+  // onChange 콜백을 store 변화에 맞춰 통지 (이전 값과 비교해 중복 통지 방지)
+  const lastNotified = useRef<{ liked: boolean; count?: number } | null>(null);
   useEffect(() => {
-    if (!bookId) return;
-    let cancelled = false;
-    fetchIsLiked(bookId)
-      .then((v) => {
-        if (!cancelled) setLiked(v);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [bookId]);
+    if (!bookId || !onChange) return;
+    const snapshot = { liked: storeLiked, count };
+    if (
+      lastNotified.current?.liked === snapshot.liked &&
+      lastNotified.current?.count === snapshot.count
+    )
+      return;
+    lastNotified.current = snapshot;
+    onChange(storeLiked, count);
+  }, [bookId, storeLiked, count, onChange]);
 
-  const handleClick = async (e: React.MouseEvent) => {
+  const handleClick = (e: React.MouseEvent) => {
     if (stopPropagation) e.stopPropagation();
-    if (pending) return; // 더블클릭으로 인한 중복 토글 방지
 
-    // pop 애니메이션은 즉시 트리거 (서버 응답 기다리지 않음 → 반응 빠르게)
+    // pop 애니메이션은 즉시 (서버 응답 기다리지 않음)
     setPop(true);
     setTimeout(() => setPop(false), 400);
 
-    // bookId 가 없으면 로컬 토글만 — 디자인 데모용 동작 유지
     if (!bookId) {
-      const next = !liked;
-      setLiked(next);
+      const next = !localLiked;
+      setLocalLiked(next);
       onChange?.(next);
       toast?.show(next ? "찜 목록에 추가했어요" : "찜을 해제했어요");
       return;
     }
 
-    // 낙관적 업데이트(optimistic): 응답 전에 UI 부터 토글해 끊김 없게
+    if (isPending) return; // 중복 토글 방지
     const optimistic = !liked;
-    setLiked(optimistic);
-    setPending(true);
-    try {
-      const res = await toggleLike(bookId);
-      // 서버 결과로 한 번 더 정정 (보통 동일하지만 경쟁 상태 방지)
-      setLiked(res.liked);
-      onChange?.(res.liked, res.likeCount);
-      toast?.show(res.liked ? "찜 목록에 추가했어요" : "찜을 해제했어요");
-    } catch {
-      // 실패 시 원복
-      setLiked(!optimistic);
-      toast?.show("잠시 후 다시 시도해주세요", "error");
-    } finally {
-      setPending(false);
-    }
+    toggle();
+    toast?.show(optimistic ? "찜 목록에 추가했어요" : "찜을 해제했어요");
   };
 
   return (

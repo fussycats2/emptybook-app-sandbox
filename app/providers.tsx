@@ -9,6 +9,8 @@ import { AppRouterCacheProvider } from "@mui/material-nextjs/v14-appRouter";
 import theme from "@/lib/theme";
 import ToastProvider from "@/components/ui/ToastProvider";
 import AuthProvider from "@/lib/auth/AuthProvider";
+import QueryProvider from "@/lib/query/QueryProvider";
+import AppBootstrap from "@/lib/store/AppBootstrap";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -17,9 +19,14 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <ThemeProvider theme={theme}>
         {/* CssBaseline: 브라우저 기본 마진/폰트를 정리해 일관된 시작점 만들기 */}
         <CssBaseline />
-        <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
-        </AuthProvider>
+        {/* QueryProvider: useQuery/useMutation 사용을 위해 AuthProvider 바깥에 둔다 */}
+        <QueryProvider>
+          <AuthProvider>
+            {/* 로그인 시 찜 ID 전역 hydrate, 로그아웃 시 store/캐시 초기화 */}
+            <AppBootstrap />
+            <ToastProvider>{children}</ToastProvider>
+          </AuthProvider>
+        </QueryProvider>
       </ThemeProvider>
     </AppRouterCacheProvider>
   );

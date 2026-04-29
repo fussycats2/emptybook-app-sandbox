@@ -1,0 +1,92 @@
+"use client";
+
+// 도서 관련 React Query 훅
+// - 조회: useRecentBooks, useSearchBooks, useBook, useMyBooks
+// - 변경: useCreateBook, useCancelBook, useDeleteBook
+// 변경 mutation 은 onSuccess 에서 관련된 list 캐시를 invalidate 해 자동 새로고침
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  cancelBook,
+  createBook,
+  deleteBook,
+  fetchBook,
+  listMyBooks,
+  listRecentBooks,
+  searchBooks,
+} from "@/lib/repo";
+import { queryKeys } from "./keys";
+
+// 홈 피드 — 최근 등록 도서
+export function useRecentBooks(limit = 10) {
+  return useQuery({
+    queryKey: queryKeys.book.recent(limit),
+    queryFn: () => listRecentBooks(limit),
+  });
+}
+
+// 검색 — q/category/state 가 모두 비면 비활성 (불필요한 호출 방지)
+export function useSearchBooks(params: {
+  q?: string;
+  category?: string;
+  state?: string;
+}) {
+  const enabled = !!(params.q || params.category || params.state);
+  return useQuery({
+    queryKey: queryKeys.book.search(params),
+    queryFn: () => searchBooks(params),
+    enabled,
+  });
+}
+
+// 단건 도서 상세
+export function useBook(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.book.detail(id ?? ""),
+    queryFn: () => fetchBook(id!),
+    enabled: !!id,
+  });
+}
+
+// 내가 등록한 책 (마이페이지/판매 내역)
+export function useMyBooks() {
+  return useQuery({
+    queryKey: queryKeys.book.mine(),
+    queryFn: () => listMyBooks(),
+  });
+}
+
+// 도서 등록
+export function useCreateBook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: createBook,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.book.lists() });
+    },
+  });
+}
+
+// 판매 취소
+export function useCancelBook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (bookId: string) => cancelBook(bookId),
+    onSuccess: (_ok, bookId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.book.lists() });
+      qc.invalidateQueries({ queryKey: queryKeys.book.detail(bookId) });
+    },
+  });
+}
+
+// 영구 삭제
+export function useDeleteBook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (bookId: string) => deleteBook(bookId),
+    onSuccess: (_ok, bookId) => {
+      qc.invalidateQueries({ queryKey: queryKeys.book.lists() });
+      qc.invalidateQueries({ queryKey: queryKeys.book.detail(bookId) });
+    },
+  });
+}

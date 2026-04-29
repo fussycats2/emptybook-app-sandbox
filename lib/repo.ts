@@ -1132,9 +1132,11 @@ export async function listLikedBooks(): Promise<BookSummary[]> {
     .map((r) => rowToSummary(r.books));
 }
 
-// 찜 토글 — 현재 상태 → 반대로 바꾸고, books.like_count 도 함께 ±1 갱신
-// (DB에 트리거가 없어서 클라이언트가 직접 갱신. 동시성 race는 작은 사용자 베이스에서는 무시)
-// 반환: { liked: 새로운 상태, likeCount: 갱신된 카운터 }
+// 찜 토글 — likes 행을 INSERT/DELETE 하면 0005_likes_count_trigger.sql 의
+// SECURITY DEFINER 트리거가 books.like_count 를 자동 갱신한다.
+// (클라이언트에서 books 를 직접 UPDATE 하면 books_update_own RLS 때문에
+//  판매자가 아닌 사용자에서는 카운트가 절대 올라가지 않는다 — 트리거로 우회)
+// 반환: { liked: 새로운 상태, likeCount: 트리거 반영 후 다시 읽은 값 }
 export async function toggleLike(
   bookId: string
 ): Promise<{ liked: boolean; likeCount: number }> {
@@ -1142,27 +1144,17 @@ export async function toggleLike(
   if (!supabase) return mockToggleLike(bookId);
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
-  // 비로그인 — mock 저장소에 보관해 UI 토글은 즉시 보이게 하고, 로그인 후 동기화는 추후 과제
+  // 비로그인 — mock 저장소에 보관해 UI 토글은 즉시 보이게 한다
   if (!uid) return mockToggleLike(bookId);
 
-  // 현재 likes 행 + 현재 like_count 동시 조회
-  const [{ data: existing }, { data: book }] = await Promise.all([
-    supabase
-      .from("likes")
-      .select("book_id")
-      .eq("user_id", uid)
-      .eq("book_id", bookId)
-      .maybeSingle(),
-    supabase
-      .from("books")
-      .select("like_count")
-      .eq("id", bookId)
-      .maybeSingle(),
-  ]);
-
-  const currentCount = (book as { like_count?: number } | null)?.like_count ?? 0;
+  // 현재 찜 여부 확인
+  const { data: existing } = await supabase
+    .from("likes")
+    .select("book_id")
+    .eq("user_id", uid)
+    .eq("book_id", bookId)
+    .maybeSingle();
   const wasLiked = !!existing;
-  const nextCount = Math.max(0, currentCount + (wasLiked ? -1 : 1));
 
   if (wasLiked) {
     await supabase
@@ -1175,11 +1167,14 @@ export async function toggleLike(
       .from("likes")
       .insert({ user_id: uid, book_id: bookId });
   }
-  // 카운터 동기화 (실패해도 토글 자체는 성공이므로 결과만 반환)
-  await supabase
+
+  // 트리거 반영 후 새 like_count 를 다시 읽어서 반환
+  const { data: book } = await supabase
     .from("books")
-    .update({ like_count: nextCount })
-    .eq("id", bookId);
+    .select("like_count")
+    .eq("id", bookId)
+    .maybeSingle();
+  const nextCount = (book as { like_count?: number } | null)?.like_count ?? 0;
 
   return { liked: !wasLiked, likeCount: nextCount };
 }

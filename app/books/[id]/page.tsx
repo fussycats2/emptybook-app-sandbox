@@ -34,72 +34,62 @@ import BookImage from "@/components/ui/BookImage";
 import BottomSheet from "@/components/ui/BottomSheet";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
-  cancelBook,
-  deleteBook,
-  fetchBook,
-  getOrCreateChatRoom,
-  listRecentBooks,
-  type BookDetail,
-} from "@/lib/repo";
-import type { BookSummary } from "@/components/ui/BookCard";
+  useBook,
+  useCancelBook,
+  useDeleteBook,
+  useRecentBooks,
+} from "@/lib/query/bookHooks";
+import { useGetOrCreateChatRoom } from "@/lib/query/chatHooks";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { useLikesStore, selectLikeCount } from "@/lib/store/likesStore";
 
 export default function BookDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const router = useRouter();
   const toast = useToast();
   const { user } = useAuth();
-  const [book, setBook] = useState<BookDetail | null>(null);
-  const [related, setRelated] = useState<BookSummary[]>([]);
+  // React Query — 도서 상세 + 관련(최근) 도서. 같은 캐시를 다른 화면도 공유
+  const { data: book } = useBook(id);
+  const { data: recent } = useRecentBooks(8);
+  const related = (recent ?? []).filter((x) => x.id !== id);
+  const cancelMutation = useCancelBook();
+  const deleteMutation = useDeleteBook();
+  const chatRoom = useGetOrCreateChatRoom();
+
   const [scrolled, setScrolled] = useState(false);
-  // 찜 카운트는 별도 state — LikeButton 토글 시 즉시 화면에 반영하기 위함
-  // (book.likes 는 로드 시점 스냅샷이라 toggle 후 stale)
-  const [likeCount, setLikeCount] = useState<number>(0);
+  // 찜 카운트 — Zustand store 에서 구독해 다른 화면(예: 카드 LikeButton)
+  // 에서의 토글에도 자동 반영. store 가 비어 있으면 book.likes 로 폴백.
+  const storeCount = useLikesStore(selectLikeCount(id));
+  const setLikeCountInStore = useLikesStore((s) => s.setCount);
+  const likeCount = storeCount ?? book?.likes ?? 0;
   // 본인 책일 때 MoreVert 메뉴(시트) + 취소/삭제 확인 다이얼로그 상태
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirm, setConfirm] = useState<null | "cancel" | "delete">(null);
-  const [busy, setBusy] = useState(false);
-  // 채팅 진입 — 채팅방 get-or-create 비동기 처리 중 더블클릭 방지
-  const [chatBusy, setChatBusy] = useState(false);
+  const busy = cancelMutation.isPending || deleteMutation.isPending;
+  const chatBusy = chatRoom.isPending;
 
   // "채팅" 버튼 클릭 — 책 ID 가 아니라 chat_rooms.id 로 라우팅해야 RLS 통과
   const handleStartChat = async () => {
     if (!book || chatBusy) return;
-    setChatBusy(true);
-    try {
-      const res = await getOrCreateChatRoom(book.id);
-      if ("error" in res) {
-        if (res.error === "self") toast?.show("내 책에는 채팅을 보낼 수 없어요");
-        else if (res.error === "book_not_found")
-          toast?.show("도서 정보를 찾을 수 없어요", "error");
-        else toast?.show("채팅방을 만들 수 없어요", "error");
-        return;
-      }
-      router.push(`/chat/${res.id}`);
-    } finally {
-      setChatBusy(false);
+    const res = await chatRoom.mutateAsync(book.id);
+    if ("error" in res) {
+      if (res.error === "self") toast?.show("내 책에는 채팅을 보낼 수 없어요");
+      else if (res.error === "book_not_found")
+        toast?.show("도서 정보를 찾을 수 없어요", "error");
+      else toast?.show("채팅방을 만들 수 없어요", "error");
+      return;
     }
+    router.push(`/chat/${res.id}`);
   };
 
-  // 단일 도서 + 관련 도서 8개를 동시에 조회
-  // 관련 도서 목록에서는 현재 보고 있는 책 자기 자신은 제외
+  // book 이 처음 로드되면 store 에 카운트 시드 — 이미 store 값이 있으면 유지
   useEffect(() => {
-    let mounted = true;
-    fetchBook(id).then((b) => {
-      if (!mounted) return;
-      setBook(b);
-      setLikeCount(b?.likes ?? 0);
-    });
-    listRecentBooks(8).then((list) => {
-      if (!mounted) return;
-      setRelated(list.filter((x) => x.id !== id));
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [id]);
+    if (book && useLikesStore.getState().counts[id] == null) {
+      setLikeCountInStore(id, book.likes ?? 0);
+    }
+  }, [book, id, setLikeCountInStore]);
 
   if (!book) {
     return (
@@ -127,10 +117,8 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
 
   // "판매 취소" — books.status → HIDDEN. 매물 목록/검색에서 사라지지만 데이터는 보존
   const handleCancel = async () => {
-    if (busy) return;
-    setBusy(true);
-    const ok = await cancelBook(book.id);
-    setBusy(false);
+    if (busy || !book) return;
+    const ok = await cancelMutation.mutateAsync(book.id);
     setConfirm(null);
     setMenuOpen(false);
     if (ok) {
@@ -144,12 +132,10 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
 
   // "삭제" — 영구 삭제. 거래 이력이 있어 RESTRICT 로 막히면 cancelBook 으로 폴백
   const handleDelete = async () => {
-    if (busy) return;
-    setBusy(true);
-    const deleted = await deleteBook(book.id);
+    if (busy || !book) return;
+    const deleted = await deleteMutation.mutateAsync(book.id);
     if (!deleted) {
-      const hidden = await cancelBook(book.id);
-      setBusy(false);
+      const hidden = await cancelMutation.mutateAsync(book.id);
       setConfirm(null);
       setMenuOpen(false);
       if (hidden) {
@@ -161,7 +147,6 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
       }
       return;
     }
-    setBusy(false);
     setConfirm(null);
     setMenuOpen(false);
     toast?.show("삭제했어요");
@@ -438,13 +423,7 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
               placeItems: "center",
             }}
           >
-            <LikeButton
-              bookId={book.id}
-              size="small"
-              onChange={(_, count) => {
-                if (count != null) setLikeCount(count);
-              }}
-            />
+            <LikeButton bookId={book.id} size="small" />
           </Box>
           <Box sx={{ borderLeft: `1px solid ${palette.line}`, height: 32 }} />
           <Box sx={{ flex: 1 }}>

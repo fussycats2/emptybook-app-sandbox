@@ -17,7 +17,6 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 import LocalFireDepartmentRoundedIcon from "@mui/icons-material/LocalFireDepartmentRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import LocationChip from "@/components/ui/LocationChip";
 import { BookFeedItem } from "@/components/ui/BookCard";
@@ -28,28 +27,17 @@ import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/ToastProvider";
 import { palette } from "@/lib/theme";
-import { listRecentBooks, meta } from "@/lib/repo";
+import { meta } from "@/lib/repo";
+import { useRecentBooks } from "@/lib/query/bookHooks";
 
 const { CATEGORIES, POPULAR_SELLERS } = meta;
-import type { BookSummary } from "@/components/ui/BookCard";
 import MannerTemperature from "@/components/ui/MannerTemperature";
 
 export default function HomePage() {
   const router = useRouter();
   const toast = useToast();
-  const [books, setBooks] = useState<BookSummary[] | null>(null);
-
-  // 최근 등록 책 10개를 비동기로 조회
-  // mounted 플래그: 컴포넌트가 사라진 뒤에 setBooks 가 호출되는 걸 막기 위함
-  useEffect(() => {
-    let mounted = true;
-    listRecentBooks(10)
-      .then((b) => mounted && setBooks(b))
-      .catch(() => mounted && setBooks([]));
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  // React Query — 캐시 공유 + 자동 refetch 정책 + 에러 시 빈 배열 처리
+  const { data: books, isLoading } = useRecentBooks(10);
 
   return (
     <>
@@ -201,8 +189,8 @@ export default function HomePage() {
         </SectionLabel>
 
         <Box sx={{ background: palette.surface }}>
-          {/* 로딩(books === null) → 스켈레톤, 빈 결과 → EmptyState, 데이터 있음 → 카드 목록 */}
-          {!books && <ListSkeleton count={4} />}
+          {/* 로딩 → 스켈레톤, 빈 결과 → EmptyState, 데이터 있음 → 카드 목록 */}
+          {isLoading && <ListSkeleton count={4} />}
           {books && books.length === 0 && (
             <EmptyState
               icon="📚"

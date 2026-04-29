@@ -8,47 +8,34 @@ import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import IosShareRoundedIcon from "@mui/icons-material/IosShareRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import {
-  fetchBook,
-  fetchOrder,
-  getOrCreateChatRoom,
-  type BookDetail,
-  type OrderRow,
-} from "@/lib/repo";
+import { useBook } from "@/lib/query/bookHooks";
+import { useOrder } from "@/lib/query/orderHooks";
+import { useGetOrCreateChatRoom } from "@/lib/query/chatHooks";
 
 function CompleteInner({ bookId }: { bookId: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const toast = useToast();
   const orderId = params.get("orderId") ?? undefined;
-  const [order, setOrder] = useState<OrderRow | null>(null);
-  const [book, setBook] = useState<BookDetail | null>(null);
-  const [chatBusy, setChatBusy] = useState(false);
+  // React Query — order/book 동시 조회. orderId 없으면 useOrder 가 비활성
+  const { data: order } = useOrder(orderId);
+  const { data: book } = useBook(bookId);
+  const chatRoom = useGetOrCreateChatRoom();
+  const chatBusy = chatRoom.isPending;
 
   // "판매자와 채팅" — bookId 가 아닌 chat_rooms.id 로 라우팅
   const handleStartChat = async () => {
     if (chatBusy) return;
-    setChatBusy(true);
-    try {
-      const res = await getOrCreateChatRoom(bookId);
-      if ("error" in res) {
-        toast?.show("채팅방을 만들 수 없어요", "error");
-        return;
-      }
-      router.push(`/chat/${res.id}`);
-    } finally {
-      setChatBusy(false);
+    const res = await chatRoom.mutateAsync(bookId);
+    if ("error" in res) {
+      toast?.show("채팅방을 만들 수 없어요", "error");
+      return;
     }
+    router.push(`/chat/${res.id}`);
   };
-
-  // 주문 정보(가격/일자) + 책 정보(제목/표지)를 동시에 조회해 주문번호와 함께 표시
-  useEffect(() => {
-    if (orderId) fetchOrder(orderId).then(setOrder);
-    fetchBook(bookId).then(setBook);
-  }, [orderId, bookId]);
 
   const orderNo = orderId ?? "ORD-PENDING";
   const amount = order?.price ?? book?.price ?? "-";

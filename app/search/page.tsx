@@ -21,14 +21,15 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import LocalFireDepartmentRoundedIcon from "@mui/icons-material/LocalFireDepartmentRounded";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import { BookListRow, type BookSummary } from "@/components/ui/BookCard";
 import { ScrollBody } from "@/components/ui/Section";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/lib/theme";
-import { searchBooks, meta } from "@/lib/repo";
+import { meta } from "@/lib/repo";
+import { useSearchBooks } from "@/lib/query/bookHooks";
 import FilterSheet, { type FilterValue } from "@/components/search/FilterSheet";
 
 const { POPULAR_SEARCHES, RECENT_SEARCHES, CATEGORIES } = meta;
@@ -59,7 +60,6 @@ function SearchInner() {
     region: "",
   });
   const [sort, setSort] = useState("recent");
-  const [results, setResults] = useState<BookSummary[] | null>(null);
   const [recent, setRecent] = useState<string[]>(RECENT_SEARCHES);
 
   // 결과 모드 진입 조건: 검색어가 있거나, 카테고리/상태/무료나눔 필터가 활성화된 경우
@@ -69,18 +69,12 @@ function SearchInner() {
     filter.states.length > 0 ||
     !!filter.freeOnly;
 
-  // 검색어/카테고리 바뀔 때마다 서버에 다시 질의
-  // 결과 모드가 아니면 빈 배열로 두고, 결과 모드 진입 시 null(=로딩) 상태로 만든 후 호출
-  useEffect(() => {
-    if (!isResultMode) {
-      setResults([]);
-      return;
-    }
-    setResults(null);
-    searchBooks({ q, category: filter.category })
-      .then((r) => setResults(r))
-      .catch(() => setResults([]));
-  }, [q, filter.category, isResultMode]);
+  // React Query — q/category 조합별 캐시. enabled 로 결과 모드일 때만 호출
+  const searchQuery = useSearchBooks(
+    isResultMode ? { q, category: filter.category } : {}
+  );
+  const results = isResultMode ? searchQuery.data ?? null : [];
+  const isLoadingResults = isResultMode && searchQuery.isLoading;
 
   // 서버 응답을 받아 클라이언트에서 추가 필터(가격/상태/무료) 적용
   // 서버는 키워드/카테고리만 처리하고, 나머지는 클라이언트에서 가벼운 후처리로 끝낸다
@@ -324,7 +318,7 @@ function SearchInner() {
 
         {isResultMode && (
           <>
-            {!sorted && <ListSkeleton count={5} />}
+            {isLoadingResults && <ListSkeleton count={5} />}
             {sorted && sorted.length === 0 && (
               <EmptyState
                 icon={<SearchRoundedIcon />}

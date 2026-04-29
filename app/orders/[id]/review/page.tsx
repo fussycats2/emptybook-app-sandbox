@@ -9,17 +9,13 @@
 import { Box, Button, Chip, Stack, TextField, Typography } from "@mui/material";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import {
-  createReview,
-  fetchReviewContext,
-  type ReviewContext,
-} from "@/lib/repo";
+import { useCreateReview, useReviewContext } from "@/lib/query/reviewHooks";
 
 const TAGS = [
   "도서 상태가 좋아요",
@@ -38,26 +34,10 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
   const [hover, setHover] = useState(0);
   const [tags, setTags] = useState<string[]>([]);
   const [text, setText] = useState("");
-  const [ctx, setCtx] = useState<ReviewContext | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-
-  // 거래 컨텍스트 로드 — 상대방/책/이미 작성 여부 확보
-  useEffect(() => {
-    let mounted = true;
-    fetchReviewContext(params.id)
-      .then((c) => {
-        if (!mounted) return;
-        setCtx(c);
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (mounted) setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, [params.id]);
+  // React Query — 거래 컨텍스트 + 후기 작성 mutation
+  const { data: ctx, isLoading: loading } = useReviewContext(params.id);
+  const createReviewMutation = useCreateReview();
+  const submitting = createReviewMutation.isPending;
 
   // 다중 선택 태그 토글 헬퍼
   const toggleTag = (t: string) =>
@@ -71,9 +51,8 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
 
   const submit = async () => {
     if (!ctx || submitting || rating === 0) return;
-    setSubmitting(true);
     try {
-      const res = await createReview({
+      const res = await createReviewMutation.mutateAsync({
         transactionId: params.id,
         revieweeId: ctx.revieweeId,
         rating,
@@ -88,7 +67,6 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
       router.push("/mypage");
     } catch {
       toast?.show("후기 저장에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
-      setSubmitting(false);
     }
   };
 

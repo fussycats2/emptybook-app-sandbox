@@ -7,29 +7,23 @@
 import { Box } from "@mui/material";
 import FavoriteBorderRoundedIcon from "@mui/icons-material/FavoriteBorderRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
-import { BookGridCard, type BookSummary } from "@/components/ui/BookCard";
+import { BookGridCard } from "@/components/ui/BookCard";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
-import { listLikedBooks } from "@/lib/repo";
+import { useLikedBooks } from "@/lib/query/likeHooks";
 
 export default function LikesPage() {
   const router = useRouter();
-  const [books, setBooks] = useState<BookSummary[] | null>(null);
-
-  useEffect(() => {
-    listLikedBooks()
-      .then(setBooks)
-      .catch(() => setBooks([]));
-  }, []);
+  // React Query — 다른 화면에서 토글하면 invalidate 되어 자동 refetch
+  const { data: books, isLoading } = useLikedBooks();
 
   return (
     <>
       <AppHeader title="찜한 책" left="back" />
       <ScrollBody>
-        {!books && <ListSkeleton count={4} />}
+        {isLoading && <ListSkeleton count={4} />}
         {books && books.length === 0 && (
           <EmptyState
             icon={<FavoriteBorderRoundedIcon />}

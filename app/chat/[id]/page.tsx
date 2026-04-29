@@ -25,7 +25,8 @@ import BottomSheet from "@/components/ui/BottomSheet";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import { fetchBook, fetchChat, type BookDetail, type ChatRow } from "@/lib/repo";
+import { useChat } from "@/lib/query/chatHooks";
+import { useBook } from "@/lib/query/bookHooks";
 import { useRealtimeChat } from "@/lib/realtime/useRealtimeChat";
 
 const ACTIONS = [
@@ -41,21 +42,9 @@ export default function ChatDetailPage({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const [chat, setChat] = useState<ChatRow | null>(null);
-  const [book, setBook] = useState<BookDetail | null>(null);
-  useEffect(() => {
-    let mounted = true;
-    fetchChat(params.id).then(async (c) => {
-      if (!mounted) return;
-      setChat(c);
-      const bookId = c?.bookId ?? params.id;
-      const b = await fetchBook(bookId);
-      if (mounted) setBook(b);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [params.id]);
+  // React Query — chat 이 먼저 로드되면 그 안의 bookId 로 책 조회 (의존 쿼리)
+  const { data: chat } = useChat(params.id);
+  const { data: book } = useBook(chat?.bookId ?? params.id);
 
   // 실시간 메시지 — 초기 로드 + Realtime INSERT 구독 + send()
   const { messages: msgs, send: sendMsg } = useRealtimeChat(params.id);

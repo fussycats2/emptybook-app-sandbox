@@ -16,7 +16,7 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import { ScrollBody } from "@/components/ui/Section";
@@ -24,7 +24,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import StatusBadge from "@/components/ui/StatusBadge";
 import BookImage from "@/components/ui/BookImage";
-import { listChats, type ChatRow } from "@/lib/repo";
+import { useChats } from "@/lib/query/chatHooks";
 import { palette } from "@/lib/theme";
 
 const TABS = [
@@ -36,14 +36,8 @@ const TABS = [
 export default function ChatListPage() {
   const router = useRouter();
   const [active, setActive] = useState<(typeof TABS)[number]["key"]>("all");
-  const [chats, setChats] = useState<ChatRow[] | null>(null);
   const [q, setQ] = useState("");
-
-  useEffect(() => {
-    listChats()
-      .then((c) => setChats(c))
-      .catch(() => setChats([]));
-  }, []);
+  const { data: chats, isLoading } = useChats();
 
   // 탭(전체/구매/판매) + 검색어로 동시 필터링
   // user/book/msg 셋을 합친 문자열에 검색어가 포함되는지로 단순 매칭
@@ -117,7 +111,7 @@ export default function ChatListPage() {
         </Stack>
       </Box>
       <ScrollBody>
-        {!chats && <ListSkeleton count={4} />}
+        {isLoading && <ListSkeleton count={4} />}
         {filtered && filtered.length === 0 && (
           <EmptyState
             icon={<ChatBubbleOutlineRoundedIcon />}

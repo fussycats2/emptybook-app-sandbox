@@ -8,23 +8,17 @@
 import { Box, Chip, Stack, Typography } from "@mui/material";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import StarOutlineRoundedIcon from "@mui/icons-material/StarOutlineRounded";
-import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
 import EmptyState from "@/components/ui/EmptyState";
 import BookImage from "@/components/ui/BookImage";
 import { ListSkeleton } from "@/components/ui/Skeleton";
-import { listReceivedReviews, type ReceivedReview } from "@/lib/repo";
+import { type ReceivedReview } from "@/lib/repo";
+import { useReceivedReviews } from "@/lib/query/profileHooks";
 import { palette } from "@/lib/theme";
 
 export default function MyReviewsPage() {
-  const [reviews, setReviews] = useState<ReceivedReview[] | null>(null);
-
-  useEffect(() => {
-    listReceivedReviews()
-      .then(setReviews)
-      .catch(() => setReviews([]));
-  }, []);
+  const { data: reviews, isLoading } = useReceivedReviews();
 
   // 평균 별점 — 후기 0개면 0.0 으로 표시
   const avg =
@@ -36,7 +30,7 @@ export default function MyReviewsPage() {
     <>
       <AppHeader title="받은 후기" left="back" />
       <ScrollBody>
-        {!reviews && <ListSkeleton count={3} />}
+        {isLoading && <ListSkeleton count={3} />}
         {reviews && reviews.length === 0 && (
           <EmptyState
             icon={<StarOutlineRoundedIcon />}

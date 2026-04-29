@@ -18,20 +18,15 @@ import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import AddPhotoAlternateRoundedIcon from "@mui/icons-material/AddPhotoAlternateRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import {
-  completeOrder,
-  fetchBook,
-  fetchOrder,
-  type BookDetail,
-  type OrderRow,
-} from "@/lib/repo";
+import { useBook } from "@/lib/query/bookHooks";
+import { useCompleteOrder, useOrder } from "@/lib/query/orderHooks";
 
 const STEPS = [
   { step: "주문 완료", date: "01.16 10:00", done: true },
@@ -48,24 +43,10 @@ export default function OrderConfirmPage({
   const router = useRouter();
   const toast = useToast();
   const [confirm, setConfirm] = useState(false);
-  const [order, setOrder] = useState<OrderRow | null>(null);
-  const [book, setBook] = useState<BookDetail | null>(null);
-
-  // 주문 → 그 주문의 책 정보를 순차 조회 (책은 주문이 있어야 알 수 있음)
-  useEffect(() => {
-    let mounted = true;
-    fetchOrder(params.id).then(async (o) => {
-      if (!mounted) return;
-      setOrder(o);
-      if (o?.bookId) {
-        const b = await fetchBook(o.bookId);
-        if (mounted) setBook(b);
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [params.id]);
+  // React Query — order 가 먼저 로드되면 그 안의 bookId 로 useBook 활성화 (의존 쿼리)
+  const { data: order } = useOrder(params.id);
+  const { data: book } = useBook(order?.bookId);
+  const completeMutation = useCompleteOrder();
 
   const seedId = book?.id ?? order?.bookId ?? params.id;
   const title = book?.title ?? order?.title ?? "도서";
@@ -251,7 +232,7 @@ export default function OrderConfirmPage({
         onCancel={() => setConfirm(false)}
         onConfirm={async () => {
           setConfirm(false);
-          await completeOrder(params.id);
+          await completeMutation.mutateAsync(params.id);
           toast?.show("거래가 확정됐어요");
           router.push(`/orders/${params.id}/review`);
         }}

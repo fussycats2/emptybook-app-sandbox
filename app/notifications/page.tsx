@@ -17,16 +17,15 @@ import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
 import ChatBubbleRoundedIcon from "@mui/icons-material/ChatBubbleRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 import NotificationsOffRoundedIcon from "@mui/icons-material/NotificationsOffRounded";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
 import EmptyState from "@/components/ui/EmptyState";
 import {
-  listNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-  type NotificationRow,
-} from "@/lib/repo";
+  useMarkAllNotificationsRead,
+  useMarkNotificationRead,
+  useNotifications,
+} from "@/lib/query/notificationHooks";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { ListSkeleton } from "@/components/ui/Skeleton";
@@ -53,11 +52,10 @@ export default function NotificationsPage() {
   const toast = useToast();
   const [type, setType] = useState("all");
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [items, setItems] = useState<NotificationRow[] | null>(null);
-
-  useEffect(() => {
-    listNotifications().then(setItems).catch(() => setItems([]));
-  }, []);
+  // React Query — 결과는 캐시에 보관, optimistic mutation 으로 즉시 갱신
+  const { data: items, isLoading } = useNotifications();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
 
   // 종류 필터 + 안읽음 필터 동시 적용
   const list = (items ?? []).filter((n) => {
@@ -74,11 +72,7 @@ export default function NotificationsPage() {
         right={
           <Typography
             onClick={() => {
-              setItems((arr) =>
-                (arr ?? []).map((x) => ({ ...x, unread: false }))
-              );
-              // 서버 반영(실패해도 UI는 이미 갱신됨 → fire-and-forget)
-              markAllNotificationsRead().catch(() => {});
+              markAllRead.mutate();
               toast?.show("모두 읽음으로 표시했어요");
             }}
             sx={{
@@ -142,7 +136,7 @@ export default function NotificationsPage() {
       </Box>
 
       <ScrollBody>
-        {!items && <ListSkeleton count={4} />}
+        {isLoading && <ListSkeleton count={4} />}
         {items && list.length === 0 && (
           <EmptyState
             icon={<NotificationsOffRoundedIcon />}
@@ -163,16 +157,9 @@ export default function NotificationsPage() {
                 background: n.unread ? palette.surface : "transparent",
                 cursor: "pointer",
               }}
-              // 클릭한 알림만 unread=false 로 갱신 + 서버 read_at UPDATE (fire-and-forget)
+              // 클릭 → mutation 이 optimistic 으로 캐시 갱신 + 서버 UPDATE
               onClick={() => {
-                if (n.unread) {
-                  markNotificationRead(n.id).catch(() => {});
-                }
-                setItems((arr) =>
-                  (arr ?? []).map((x) =>
-                    x.id === n.id ? { ...x, unread: false } : x
-                  )
-                );
+                if (n.unread) markRead.mutate(n.id);
               }}
             >
               <Box

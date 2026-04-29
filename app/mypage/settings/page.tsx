@@ -23,12 +23,12 @@ import { palette } from "@/lib/theme";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { withDefaultPrefs } from "@/lib/repo";
 import {
-  getMyProfile,
-  updateAppPrefs,
-  updateMyProfile,
-  withDefaultPrefs,
-} from "@/lib/repo";
+  useMyProfile,
+  useUpdateAppPrefs,
+  useUpdateMyProfile,
+} from "@/lib/query/profileHooks";
 
 const ACCOUNT_PLACEHOLDER = [
   { label: "비밀번호 변경" },
@@ -66,43 +66,38 @@ export default function SettingsPage() {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // 프로필 입력 폼 상태 — 마운트 시 1회 로드
+  // React Query — 프로필 단일 캐시. settings 저장 시 mypage 도 자동 invalidate
+  const { data: profile } = useMyProfile();
+  const updateProfile = useUpdateMyProfile();
+  const updateAppPrefsMutation = useUpdateAppPrefs();
+  const savingProfile = updateProfile.isPending;
+
+  // 프로필 입력 폼 — 서버에서 받아온 값으로 한 번 시드
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
-  // 원본값(서버 저장 직후 동기화) — 변경 여부 감지에 사용
   const [original, setOriginal] = useState({
     displayName: "",
     username: "",
     phone: "",
   });
-  const [savingProfile, setSavingProfile] = useState(false);
-
-  // 토글 상태 — 기본값으로 우선 채우고, 프로필 로드되면 덮어쓴다
   const [push, setPush] = useState(withDefaultPrefs().push);
   const [privacy, setPrivacy] = useState(withDefaultPrefs().privacy);
 
+  // profile 캐시가 들어오면 폼 한 번 시드 (이후 사용자가 입력하는 동안엔 덮지 않음)
   useEffect(() => {
-    let cancelled = false;
-    getMyProfile()
-      .then((p) => {
-        if (cancelled || !p) return;
-        const dn = p.display_name ?? "";
-        const un = p.username ?? "";
-        const ph = p.phone ?? "";
-        setDisplayName(dn);
-        setUsername(un);
-        setPhone(ph);
-        setOriginal({ displayName: dn, username: un, phone: ph });
-        const prefs = withDefaultPrefs(p.app_prefs);
-        setPush(prefs.push);
-        setPrivacy(prefs.privacy);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!profile) return;
+    const dn = profile.display_name ?? "";
+    const un = profile.username ?? "";
+    const ph = profile.phone ?? "";
+    setDisplayName(dn);
+    setUsername(un);
+    setPhone(ph);
+    setOriginal({ displayName: dn, username: un, phone: ph });
+    const prefs = withDefaultPrefs(profile.app_prefs);
+    setPush(prefs.push);
+    setPrivacy(prefs.privacy);
+  }, [profile]);
 
   // 변경된 항목이 하나라도 있을 때만 저장 버튼 활성화
   const profileDirty =
@@ -112,33 +107,32 @@ export default function SettingsPage() {
 
   const handleSaveProfile = async () => {
     if (savingProfile || !profileDirty) return;
-    setSavingProfile(true);
-    try {
-      const res = await updateMyProfile({ display_name: displayName, username, phone });
-      if (res.uniqueViolation) {
-        toast?.show("이미 사용 중인 사용자명이에요", "warning");
-      } else if (res.ok) {
-        toast?.show("프로필을 저장했어요");
-        setOriginal({ displayName, username, phone });
-      } else {
-        toast?.show("저장에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
-      }
-    } finally {
-      setSavingProfile(false);
+    const res = await updateProfile.mutateAsync({
+      display_name: displayName,
+      username,
+      phone,
+    });
+    if (res.uniqueViolation) {
+      toast?.show("이미 사용 중인 사용자명이에요", "warning");
+    } else if (res.ok) {
+      toast?.show("프로필을 저장했어요");
+      setOriginal({ displayName, username, phone });
+    } else {
+      toast?.show("저장에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
     }
   };
 
-  // 토글 변경 → 즉시 서버 반영 (실패해도 UI는 새 상태 유지)
+  // 토글 변경 → mutation 호출. 실패해도 UI 는 새 상태 유지 (낙관적)
   const togglePush = (key: typeof PUSH_ITEMS[number]["key"], v: boolean) => {
     setPush((prev) => ({ ...prev, [key]: v }));
-    updateAppPrefs({ push: { [key]: v } }).catch(() => {});
+    updateAppPrefsMutation.mutate({ push: { [key]: v } });
   };
   const togglePrivacy = (
     key: typeof PRIVACY_ITEMS[number]["key"],
     v: boolean
   ) => {
     setPrivacy((prev) => ({ ...prev, [key]: v }));
-    updateAppPrefs({ privacy: { [key]: v } }).catch(() => {});
+    updateAppPrefsMutation.mutate({ privacy: { [key]: v } });
   };
 
   return (

@@ -28,7 +28,9 @@ import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import { createBook, meta } from "@/lib/repo";
+import { meta } from "@/lib/repo";
+import { useCreateBook } from "@/lib/query/bookHooks";
+import { useNaverBookSearch } from "@/lib/query/naverBookHooks";
 import { inferCategory } from "@/lib/categoryMap";
 import type { BookSearchItem } from "@/app/api/books/search/route";
 
@@ -55,15 +57,17 @@ export default function RegisterPage() {
   const [title, setTitle] = useState("");
   const [region, setRegion] = useState("");
   const [description, setDescription] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   // 카테고리 — 검색 결과 선택 시 inferCategory 로 자동 추정, 사용자가 chip 으로 직접 변경 가능
   const [category, setCategory] = useState<string>("소설");
   // 도서 검색 결과 + 선택된 항목
-  // - results 가 채워지면 검색결과 리스트를 표시 (다수 매칭 시)
-  // - selected 가 있으면 매칭된 도서 카드 표시 (단일 결과 / 사용자 선택 후)
-  const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<BookSearchItem[] | null>(null);
   const [selected, setSelected] = useState<BookSearchItem | null>(null);
+
+  // React Query mutations — 등록(useCreateBook) / 네이버 검색(useNaverBookSearch)
+  const createBookMutation = useCreateBook();
+  const naverSearch = useNaverBookSearch();
+  const submitting = createBookMutation.isPending;
+  const searching = naverSearch.isPending;
 
   // 검색 실행 — 결과 1건이면 자동 선택, 다건이면 리스트 표시
   const handleSearch = async () => {
@@ -73,20 +77,15 @@ export default function RegisterPage() {
       return;
     }
     if (searching) return;
-    setSearching(true);
     setResults(null);
     setSelected(null);
     try {
-      const res = await fetch(`/api/books/search?q=${encodeURIComponent(q)}`);
-      const data = (await res.json()) as { items?: BookSearchItem[] };
-      const items = data.items ?? [];
+      const items = (await naverSearch.mutateAsync(q)) as BookSearchItem[];
       if (items.length === 0) {
         toast?.show("검색 결과가 없어요");
       } else if (items.length === 1) {
-        // 1건 매칭(주로 ISBN 검색): 바로 선택 + 제목도 정확한 값으로 교체
         setSelected(items[0]);
         setTitle(items[0].title);
-        // 제목 + 설명 텍스트로 카테고리 자동 추정
         setCategory(inferCategory(`${items[0].title} ${items[0].description}`));
         toast?.show("도서 정보를 가져왔어요");
       } else {
@@ -94,8 +93,6 @@ export default function RegisterPage() {
       }
     } catch {
       toast?.show("검색에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
-    } finally {
-      setSearching(false);
     }
   };
 
@@ -115,11 +112,10 @@ export default function RegisterPage() {
       toast?.show("도서 제목을 입력해주세요", "warning");
       return;
     }
-    setSubmitting(true);
     try {
       // 무료나눔이면 가격 0, 아니면 입력값을 숫자로 변환 (입력이 비어있으면 0)
       const priceNumber = free ? 0 : parseInt(price || "0", 10) || 0;
-      const { id } = await createBook({
+      const { id } = await createBookMutation.mutateAsync({
         title: title.trim(),
         // 검색으로 선택한 도서가 있으면 그 정보를, 없으면 빈 값으로 등록
         author: selected?.author || undefined,
@@ -144,7 +140,6 @@ export default function RegisterPage() {
       router.push(`/register/complete?id=${id}`);
     } catch (e) {
       toast?.show("등록에 실패했어요. 다시 시도해주세요.", "error");
-      setSubmitting(false);
     }
   };
 

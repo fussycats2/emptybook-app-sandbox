@@ -18,11 +18,12 @@ import {
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
-import { createOrder, fetchBook, type BookDetail } from "@/lib/repo";
+import { useBook } from "@/lib/query/bookHooks";
+import { useCreateOrder } from "@/lib/query/orderHooks";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 
@@ -48,14 +49,11 @@ const PAYMENTS: {
 export default function CheckoutPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const toast = useToast();
-  const [book, setBook] = useState<BookDetail | null>(null);
+  const { data: book } = useBook(params.id);
+  const createOrderMutation = useCreateOrder();
   const [pay, setPay] = useState("kakao");
   const [agreed, setAgreed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    fetchBook(params.id).then(setBook);
-  }, [params.id]);
+  const submitting = createOrderMutation.isPending;
 
   // 결제 금액 계산: 상품가 + 배송비 - 쿠폰 (음수가 되지 않도록 0으로 클램프)
   // 무료나눔은 배송비/쿠폰 모두 0
@@ -76,15 +74,13 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
   }
 
   const submit = async () => {
-    if (submitting) return;
-    setSubmitting(true);
+    if (submitting || !book) return;
     try {
-      const { id } = await createOrder({ bookId: book.id });
+      const { id } = await createOrderMutation.mutateAsync({ bookId: book.id });
       toast?.show(book.free ? "신청이 완료되었어요" : "결제가 완료되었어요");
       router.push(`/checkout/${book.id}/complete?orderId=${id}`);
     } catch (e) {
       toast?.show("결제 처리에 실패했어요", "error");
-      setSubmitting(false);
     }
   };
 
