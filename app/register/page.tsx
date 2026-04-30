@@ -3,8 +3,7 @@
 // 도서 등록 페이지 (/register)
 // - 사진(최대 10장) / 도서 검색 / 가격 / 상태 / 거래 방식 / 지역 / 설명 입력
 // - 도서 검색: /api/books/search 로 네이버 API 호출 → 결과 선택 시 폼 자동 채움
-// - 등록 성공 시 /register/complete?id=... 로 이동
-// TODO: 사진은 현재 클라이언트 상태만 보유. Storage 업로드 + book_images insert 연결 필요
+// - 등록 성공 시 Storage 에 사진 업로드 → /register/complete?id=... 로 이동
 
 import {
   Box,
@@ -22,17 +21,21 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
-import { meta } from "@/lib/repo";
+import { meta, uploadBookImages } from "@/lib/repo";
 import { useCreateBook } from "@/lib/query/bookHooks";
 import { useNaverBookSearch } from "@/lib/query/naverBookHooks";
 import { inferCategory } from "@/lib/categoryMap";
 import type { BookSearchItem } from "@/app/api/books/search/route";
+
+const MAX_PHOTOS = 10;
+// 단일 파일 최대 8MB — Storage 비용/대역폭 보호
+const MAX_FILE_SIZE = 8 * 1024 * 1024;
 
 const STATES = [
   { key: "최상", label: "최상", desc: "거의 새책" },
@@ -49,7 +52,12 @@ const TRADE = [
 export default function RegisterPage() {
   const router = useRouter();
   const toast = useToast();
-  const [photos, setPhotos] = useState<number[]>([0, 1]);
+  // 선택한 실제 파일들 + blob 미리보기 URL 한 쌍씩 보관
+  // 파일 추가/삭제 시 createObjectURL/revokeObjectURL 으로 라이프사이클 관리
+  const [photos, setPhotos] = useState<
+    { file: File; previewUrl: string }[]
+  >([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<"최상" | "상" | "중" | "하">("상");
   const [trade, setTrade] = useState("DIRECT");
   const [free, setFree] = useState(false);
@@ -66,8 +74,53 @@ export default function RegisterPage() {
   // React Query mutations — 등록(useCreateBook) / 네이버 검색(useNaverBookSearch)
   const createBookMutation = useCreateBook();
   const naverSearch = useNaverBookSearch();
-  const submitting = createBookMutation.isPending;
+  // 사진 업로드는 별도 단계 — createBook 직후 진행하므로 spinner 동안 같이 잠근다
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const submitting = createBookMutation.isPending || uploadingPhotos;
   const searching = naverSearch.isPending;
+
+  // 언마운트 시 blob URL 들 일괄 해제 (메모리 누수 방지)
+  useEffect(() => {
+    return () => {
+      photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    };
+    // photos 가 바뀔 때마다 정리하지 않음 — 각 항목 제거 시점에 개별 revoke 처리
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 파일 선택 — 한도/타입/크기 검증 후 photos 에 누적
+  const handleFilesPicked = (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const remaining = MAX_PHOTOS - photos.length;
+    const arr = Array.from(fileList).slice(0, remaining);
+    if (arr.length < fileList.length) {
+      toast?.show(`사진은 최대 ${MAX_PHOTOS}장까지 등록할 수 있어요`, "warning");
+    }
+    const accepted: { file: File; previewUrl: string }[] = [];
+    for (const f of arr) {
+      if (!f.type.startsWith("image/")) {
+        toast?.show("이미지 파일만 등록할 수 있어요", "warning");
+        continue;
+      }
+      if (f.size > MAX_FILE_SIZE) {
+        toast?.show(`${f.name} — 8MB 이하만 등록할 수 있어요`, "warning");
+        continue;
+      }
+      accepted.push({ file: f, previewUrl: URL.createObjectURL(f) });
+    }
+    if (accepted.length > 0) setPhotos((p) => [...p, ...accepted]);
+    // 같은 파일을 다시 선택할 수 있도록 input value 초기화
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removePhoto = (i: number) => {
+    setPhotos((arr) => {
+      const next = arr.filter((_, j) => j !== i);
+      const removed = arr[i];
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return next;
+    });
+  };
 
   // 검색 실행 — 결과 1건이면 자동 선택, 다건이면 리스트 표시
   const handleSearch = async () => {
@@ -105,7 +158,7 @@ export default function RegisterPage() {
     toast?.show("도서 정보를 가져왔어요");
   };
 
-  // 폼 검증 후 createBook 호출 → 성공 시 완료 페이지로 이동
+  // 폼 검증 후 createBook 호출 → 사진 업로드 → 완료 페이지로 이동
   const submit = async () => {
     if (submitting) return;
     if (!title.trim()) {
@@ -136,9 +189,24 @@ export default function RegisterPage() {
             ? "택배"
             : "직거래, 택배 가능",
       });
+      // 사진이 있으면 업로드 — 네이버 표지를 안 골랐을 때만 첫 사진을 cover_url 로
+      if (photos.length > 0) {
+        setUploadingPhotos(true);
+        const result = await uploadBookImages(
+          id,
+          photos.map((p) => p.file),
+          { setCoverIfMissing: !selected }
+        );
+        setUploadingPhotos(false);
+        // mock 모드(ok=false, urls=[]) 면 조용히 통과 — 등록 자체는 성공
+        if (result.ok && result.urls.length < photos.length) {
+          toast?.show("일부 사진은 업로드되지 않았어요", "warning");
+        }
+      }
       toast?.show("등록되었어요!");
       router.push(`/register/complete?id=${id}`);
     } catch (e) {
+      setUploadingPhotos(false);
       toast?.show("등록에 실패했어요. 다시 시도해주세요.", "error");
     }
   };
@@ -180,14 +248,26 @@ export default function RegisterPage() {
             className="no-scrollbar"
             sx={{ display: "flex", gap: 1, overflowX: "auto", pb: 0.5 }}
           >
-            {/* 사진 추가 박스 — 10장 한도 검사 후 placeholder 한 칸 추가 */}
+            {/* 숨김 파일 입력 — "사진 추가" 박스 클릭 시 트리거 */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => handleFilesPicked(e.target.files)}
+            />
+            {/* 사진 추가 박스 — 10장 한도 검사 후 파일 다이얼로그 오픈 */}
             <Box
               onClick={() => {
-                if (photos.length >= 10) {
-                  toast?.show("사진은 최대 10장까지 등록할 수 있어요", "warning");
+                if (photos.length >= MAX_PHOTOS) {
+                  toast?.show(
+                    `사진은 최대 ${MAX_PHOTOS}장까지 등록할 수 있어요`,
+                    "warning"
+                  );
                   return;
                 }
-                setPhotos((p) => [...p, p.length]);
+                fileInputRef.current?.click();
               }}
               sx={{
                 flexShrink: 0,
@@ -200,7 +280,7 @@ export default function RegisterPage() {
                 placeItems: "center",
                 cursor: "pointer",
                 color: palette.inkMute,
-                opacity: photos.length >= 10 ? 0.5 : 1,
+                opacity: photos.length >= MAX_PHOTOS ? 0.5 : 1,
               }}
             >
               <Stack alignItems="center" gap={0.25}>
@@ -211,9 +291,10 @@ export default function RegisterPage() {
               </Stack>
             </Box>
             {photos.map((p, i) => (
-              <Box key={i} sx={{ position: "relative", flexShrink: 0 }}>
+              <Box key={p.previewUrl} sx={{ position: "relative", flexShrink: 0 }}>
                 <BookImage
                   seed={`reg-${i}`}
+                  src={p.previewUrl}
                   width={92}
                   height={92}
                   radius={12}
@@ -241,9 +322,7 @@ export default function RegisterPage() {
                 )}
                 <IconButton
                   size="small"
-                  onClick={() =>
-                    setPhotos((arr) => arr.filter((_, j) => j !== i))
-                  }
+                  onClick={() => removePhoto(i)}
                   sx={{
                     position: "absolute",
                     top: -6,

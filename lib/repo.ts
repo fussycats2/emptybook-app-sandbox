@@ -28,8 +28,10 @@ import {
   mockGetProfile,
   mockListMessages,
   mockListReceivedReviews,
+  mockMarkRoomRead,
   mockSendMessage,
   mockToggleLike,
+  mockUnreadByRoom,
   mockUpdateAppPrefs,
   mockUpdateOrderStatus,
   mockUpdateProfile,
@@ -328,22 +330,37 @@ export async function searchBooks(opts: {
 }
 
 // 단일 도서 상세 조회 (도서 상세 페이지에서 호출)
+// book_images 도 함께 join 해서 storage_path → public URL 로 변환된 imageUrls 를 채운다
 export async function fetchBook(id: string): Promise<BookDetail | null> {
   const supabase = await tryClient();
   if (!supabase) return mockGetBook(id) ?? null;
   const { data } = await supabase
     .from("books")
-    .select("*")
+    .select("*, book_images(storage_path, sort_order)")
     .eq("id", id)
     .maybeSingle();
   if (!data) return mockGetBook(id) ?? null;
-  return rowToDetail(data as BookRow);
+  const detail = rowToDetail(data as BookRow);
+  // sort_order 오름차순으로 정렬해 캐러셀 슬라이드 순서 보장
+  const imgs = ((data as any).book_images ?? []) as {
+    storage_path: string;
+    sort_order: number;
+  }[];
+  if (imgs.length > 0) {
+    const sorted = [...imgs].sort((a, b) => a.sort_order - b.sort_order);
+    detail.imageUrls = sorted.map(
+      (r) =>
+        supabase.storage.from("book-images").getPublicUrl(r.storage_path).data
+          .publicUrl
+    );
+  }
+  return detail;
 }
 
 // 도서 등록(/register 화면에서 호출)
 // - 비로그인 또는 Supabase 미설정이면 mock 저장소로 저장
 // - DB insert 실패해도 화면 흐름이 끊기지 않도록 mock 으로 폴백
-// TODO: 이미지 업로드(book_images 테이블 + Storage 버킷) 연동 필요
+// - 사진 업로드는 호출자가 createBook 성공 후 uploadBookImages(id, files) 로 별도 호출
 export async function createBook(input: {
   title: string;
   author?: string;
@@ -427,6 +444,71 @@ export async function cancelBook(bookId: string): Promise<boolean> {
     .eq("id", bookId)
     .eq("seller_id", auth.user.id); // RLS와 별개로 클라이언트 가드
   return !error;
+}
+
+// 사진 업로드 — Storage book-images 버킷에 업로드 후 book_images INSERT
+// - 비로그인/Supabase 미설정/mock id 면 no-op (mock 모드는 사진을 영구 저장하지 않는다)
+// - 일부 파일이 실패해도 나머지는 그대로 진행 (멈추지 않음)
+// - opts.setCoverIfMissing: 첫 업로드 이미지 URL 을 books.cover_url 에 채움 (이미 값 있으면 유지)
+// 반환: 업로드된 파일들의 public URL 배열
+export async function uploadBookImages(
+  bookId: string,
+  files: File[],
+  opts?: { setCoverIfMissing?: boolean }
+): Promise<{ ok: boolean; urls: string[] }> {
+  if (files.length === 0) return { ok: true, urls: [] };
+  const supabase = await tryClient();
+  if (!supabase) return { ok: false, urls: [] };
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return { ok: false, urls: [] };
+  if (!isUuid(bookId)) return { ok: false, urls: [] };
+
+  const urls: string[] = [];
+  const insertRows: {
+    book_id: string;
+    storage_path: string;
+    sort_order: number;
+  }[] = [];
+  const stamp = Date.now();
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    // 확장자는 파일명에서 (없으면 mime 에서) 추출. 너무 긴 값은 안전하게 잘라낸다
+    const fromName = f.name.includes(".")
+      ? f.name.split(".").pop()
+      : undefined;
+    const fromMime = f.type.includes("/") ? f.type.split("/").pop() : undefined;
+    const ext = ((fromName || fromMime || "jpg") as string)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 5) || "jpg";
+    const path = `${bookId}/${stamp}-${i}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from("book-images")
+      .upload(path, f, { contentType: f.type || undefined, upsert: false });
+    if (upErr) {
+      console.error("[uploadBookImages] upload failed", path, upErr);
+      continue;
+    }
+    insertRows.push({ book_id: bookId, storage_path: path, sort_order: i });
+    urls.push(
+      supabase.storage.from("book-images").getPublicUrl(path).data.publicUrl
+    );
+  }
+  if (insertRows.length > 0) {
+    const { error: insErr } = await supabase
+      .from("book_images")
+      .insert(insertRows);
+    if (insErr) console.error("[uploadBookImages] insert failed", insErr);
+  }
+  // cover_url 이 비어 있을 때만 첫 사진 URL 로 채워준다 (네이버 표지 우선)
+  if (opts?.setCoverIfMissing && urls.length > 0) {
+    await supabase
+      .from("books")
+      .update({ cover_url: urls[0] })
+      .eq("id", bookId)
+      .is("cover_url", null);
+  }
+  return { ok: true, urls };
 }
 
 // 영구 삭제 — 책 행을 DELETE
@@ -604,19 +686,45 @@ export async function completeOrder(id: string) {
 // ---------- Chats (채팅) ----------
 
 // 내 채팅방 목록 — 마지막 메시지 시간 기준 내림차순
+// unread = 상대(sender_id != me)가 보낸 read_at IS NULL 메시지 수. 두 번째 쿼리로 집계
 export async function listChats(): Promise<ChatRow[]> {
   const supabase = await tryClient();
-  if (!supabase) return mockListChats();
+  if (!supabase) {
+    const list = mockListChats();
+    const map = mockUnreadByRoom();
+    return list.map((c) => ({ ...c, unread: map[c.id] ?? 0 }));
+  }
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
-  if (!uid) return mockListChats();
+  if (!uid) {
+    const list = mockListChats();
+    const map = mockUnreadByRoom();
+    return list.map((c) => ({ ...c, unread: map[c.id] ?? 0 }));
+  }
   const { data } = await supabase
     .from("chat_rooms")
     .select("*, books(title, status)")
     .or(`buyer_id.eq.${uid},seller_id.eq.${uid}`)
     .order("last_message_at", { ascending: false });
   if (!data) return mockListChats();
-  return data.map((r: any): ChatRow => ({
+
+  const rooms = data as any[];
+  // 미읽음 메시지를 한 번에 가져와 room_id 별로 카운트 — 방이 적을 때 충분히 빠르다
+  const roomIds = rooms.map((r) => r.id);
+  const unreadByRoom: Record<string, number> = {};
+  if (roomIds.length > 0) {
+    const { data: unread } = await supabase
+      .from("messages")
+      .select("room_id")
+      .in("room_id", roomIds)
+      .neq("sender_id", uid)
+      .is("read_at", null);
+    for (const m of (unread as { room_id: string }[] | null) ?? []) {
+      unreadByRoom[m.room_id] = (unreadByRoom[m.room_id] ?? 0) + 1;
+    }
+  }
+
+  return rooms.map((r): ChatRow => ({
     id: r.id,
     user: "상대방",
     book: r.books?.title ?? "",
@@ -628,7 +736,7 @@ export async function listChats(): Promise<ChatRow[]> {
           minute: "2-digit",
         })
       : "",
-    unread: 0,
+    unread: unreadByRoom[r.id] ?? 0,
     buying: r.buyer_id === uid,
     status:
       r.books?.status === "SOLD"
@@ -817,13 +925,37 @@ export async function sendMessage(
   return dbMsgToUI(data as any, uid);
 }
 
+// 채팅방 진입 시 — 상대(sender_id != me)가 보낸 메시지 중 read_at 이 NULL 인 것을 일괄 갱신
+// idempotent: 이미 읽음인 메시지는 read_at IS NULL 조건으로 자동 스킵
+// 반환: 갱신된 행 수 (호출자가 0 이면 캐시 invalidate 스킵 가능)
+export async function markRoomMessagesRead(roomId: string): Promise<number> {
+  const supabase = await tryClient();
+  if (!supabase) return mockMarkRoomRead(roomId);
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return mockMarkRoomRead(roomId);
+  if (!isUuid(roomId)) return mockMarkRoomRead(roomId);
+  const { data, error } = await supabase
+    .from("messages")
+    .update({ read_at: new Date().toISOString() })
+    .eq("room_id", roomId)
+    .neq("sender_id", uid)
+    .is("read_at", null)
+    .select("id");
+  if (error) {
+    console.error("[markRoomMessagesRead] failed", error);
+    return 0;
+  }
+  return (data as { id: string }[] | null)?.length ?? 0;
+}
+
 function mockMsgToUI(m: MockMessage): MessageRowUI {
   return {
     id: m.id,
     body: m.body,
     type: m.type,
     mine: m.mine,
-    read: false,
+    read: m.read,
     createdAt: m.createdAt,
   };
 }

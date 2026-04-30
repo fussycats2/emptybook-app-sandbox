@@ -13,6 +13,8 @@ import { useLikesStore } from "./likesStore";
 import { useNotificationsStore } from "./notificationsStore";
 import { useHydrateLikes, likeKeys } from "@/lib/query/likeHooks";
 import { queryKeys } from "@/lib/query/keys";
+import { useRealtimeChatList } from "@/lib/realtime/useRealtimeChatList";
+import { useRealtimeNotifications } from "@/lib/realtime/useRealtimeNotifications";
 
 export default function AppBootstrap() {
   const { user } = useAuth();
@@ -36,6 +38,10 @@ export default function AppBootstrap() {
 
   // 찜 ID 전역 hydrate
   useHydrateLikes();
+
+  // 채팅 목록 / 알림 Realtime 구독 — 로그인 상태일 때만 활성, 로그아웃 시 자동 cleanup
+  useRealtimeChatList();
+  useRealtimeNotifications();
 
   return null;
 }

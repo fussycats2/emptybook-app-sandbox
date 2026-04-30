@@ -13,7 +13,8 @@ interface Props {
   count?: number;
   seed?: string | number;
   height?: number | string;
-  coverUrl?: string; // 외부 표지 URL — 있으면 첫 슬라이드를 이 이미지로 채운다
+  coverUrl?: string; // 외부 표지 URL — imageUrls 가 비었을 때 첫 슬라이드로 폴백
+  imageUrls?: string[]; // 사용자가 업로드한 사진들 — 있으면 슬라이드별로 매핑
 }
 
 export default function ImageCarousel({
@@ -21,9 +22,18 @@ export default function ImageCarousel({
   seed,
   height = 380,
   coverUrl,
+  imageUrls,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [idx, setIdx] = useState(0);
+
+  // 우선순위: 업로드 이미지 → coverUrl 단일 슬라이드 → placeholder count
+  const slides: (string | undefined)[] =
+    imageUrls && imageUrls.length > 0
+      ? imageUrls
+      : coverUrl
+      ? [coverUrl]
+      : Array.from({ length: count }, () => undefined);
 
   useEffect(() => {
     const el = ref.current;
@@ -49,7 +59,7 @@ export default function ImageCarousel({
           scrollSnapType: "x mandatory",
         }}
       >
-        {Array.from({ length: count }).map((_, i) => (
+        {slides.map((src, i) => (
           <Box
             key={i}
             sx={{
@@ -59,9 +69,7 @@ export default function ImageCarousel({
           >
             <BookImage
               seed={`${seed}-${i}`}
-              // 첫 슬라이드만 표지로 채우고 나머지는 placeholder
-              // (사용자 실물 사진 업로드는 추후 구현 — 그땐 i 별로 다른 src 매핑)
-              src={i === 0 ? coverUrl : undefined}
+              src={src}
               height={height}
               radius={0}
             />
@@ -82,7 +90,7 @@ export default function ImageCarousel({
           fontWeight: 700,
         }}
       >
-        {idx + 1} / {count}
+        {idx + 1} / {slides.length}
       </Box>
       <Box
         sx={{
@@ -96,7 +104,7 @@ export default function ImageCarousel({
           pointerEvents: "none",
         }}
       >
-        {Array.from({ length: count }).map((_, i) => (
+        {slides.map((_, i) => (
           <Box
             key={i}
             sx={{

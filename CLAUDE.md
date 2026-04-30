@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-04-28
+> 최종 업데이트: 2026-04-30
 
 ## 프로젝트 개요
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 현재 구현 상태 (2026-04-28 기준)
+## 현재 구현 상태 (2026-04-30 기준)
 
 ### 완료된 것
 
@@ -24,7 +24,7 @@
 | **공용 UI 컴포넌트** | `components/ui/` 전체 (PhoneFrame, AppHeader, BottomTabNav, BookCard, BookImage, ImageCarousel, BottomSheet, ConfirmDialog, StatusBadge, MannerTemperature, LikeButton, LocationChip, Fab, EmptyState, Skeleton, ToastProvider, Section, ImgPlaceholder). 전 컴포넌트에 한글 주석 추가 완료 |
 | **MUI 테마** | `lib/theme.ts` 완성 — 색상 토큰, 라운드 스케일, 그림자 토큰 |
 | **Mock 데이터 계층** | `lib/mockData.ts` + `lib/repo.ts` — Supabase 없이도 전 화면 동작. likes/reviews 인메모리 저장 포함 |
-| **DB 스키마** | `0001_init.sql` 전체 + `0002_books_cover_url.sql` (cover_url 컬럼) + `0003_review_rating_trigger.sql` (reviews → profiles.rating_avg/trade_count 자동 갱신) + `0004_profiles_app_prefs.sql` (profiles.app_prefs jsonb). RLS·Realtime·Storage 포함 |
+| **DB 스키마** | `0001_init.sql` 전체 + `0002_books_cover_url.sql` + `0003_review_rating_trigger.sql` + `0004_profiles_app_prefs.sql` + `0005_likes_count_trigger.sql` + `0006_notification_triggers.sql`. RLS·Realtime·Storage 포함. ERD 와 트리거 상세는 [`ERD.md`](./ERD.md) |
 | **화면 UI** | 20개 화면 UI 골격 + 마이페이지 판매내역/찜한 책 화면 |
 | **거래 흐름 화면** | 도서 상세 → 결제 → 구매완료 → 거래확정 → 후기 작성 흐름 화면 |
 | **Supabase Auth** | 이메일/비번 로그인·회원가입·로그아웃, `AuthProvider` + `useAuth()` 훅 |
@@ -47,17 +47,21 @@
 | **mock id UUID 가드** | `isUuid()` 헬퍼 — `fetchChat`/`listMessages`/`sendMessage`/`useRealtimeChat`/`getOrCreateChatRoom` 모두 비-UUID id 면 Supabase 호출 스킵하고 mock 저장소로 라우팅. mock 시드 채팅(c-1 등)이 RLS/FK 에러를 내지 않게 함 |
 | **로그인 진입 흐름** | 스플래시 "카카오로 시작" → 카카오 OAuth(미구현 → 토스트), "이메일로 로그인" → /login. /login 은 이메일 폼이 메인, SNS 버튼은 하단 보조. 이미 로그인된 상태로 스플래시 로그인 버튼 누르면 자동 signOut 후 /login 진입(middleware 자동 리다이렉트 우회) |
 | **한글 IME Enter 가드** | `/chat/[id]`/`/login`/`/register`/`/search` 의 Enter 키 핸들러에 `e.nativeEvent.isComposing` 검사 추가 — 한글 조합 중 Enter(=글자 확정)에서 폼이 폭주하지 않게 함 |
+| **사용자 사진 업로드** | `/register` — `<input type=file accept=image/* multiple>` + blob 미리보기. `uploadBookImages(bookId, files, { setCoverIfMissing })` 가 Storage `book-images` 버킷에 업로드 후 `book_images` INSERT. 네이버 표지를 안 골랐으면 첫 사진을 `books.cover_url` 로 채움. `fetchBook` 이 `book_images` join → public URL 배열을 `imageUrls` 로 반환, `ImageCarousel` 이 슬라이드별로 표시 (개수 동적). 단일 8MB 한도 |
+| **메시지 읽음 처리** | `markRoomMessagesRead(roomId)` — 상대 메시지 중 `read_at IS NULL` 인 것을 일괄 UPDATE (idempotent). `/chat/[id]` 진입 직후 + 새 메시지 도착 시마다 호출, 갱신된 행 있으면 chat 목록 캐시 invalidate. `listChats` 가 두 번째 쿼리로 room_id 별 unread 집계 → 카드 배지/볼드 표기 |
+| **채팅 목록 Realtime** | `lib/realtime/useRealtimeChatList` — 내가 buyer·seller 인 `chat_rooms` INSERT/UPDATE + `messages` INSERT 이벤트를 구독해 `listChats` 캐시를 invalidate. `AppBootstrap` 에서 전역 1회 마운트 — `/chat` 페이지가 닫혀 있어도 다음 진입 시 최신 상태. postgres_changes 가 OR/!= 필터를 못 해서 buyer/seller 두 채널 분리, mount 마다 random topic suffix(Strict Mode 안전) |
+| **알림 Realtime** | `lib/realtime/useRealtimeNotifications` — `notifications` INSERT/UPDATE(`user_id=eq.me`) 구독 → 알림 목록 캐시 invalidate. `AppBootstrap` 마운트. 0006 트리거가 메시지/거래/후기 이벤트마다 `notifications` 행을 자동 INSERT 하므로 이 훅 하나로 전 도메인 알림이 실시간 반영. `useNotifications` 가 결과를 그리고 `notificationsStore` 의 unread 카운트도 자동 갱신 |
+| **알림 자동 생성 트리거** | `0006_notification_triggers.sql` — `messages` INSERT(상대), `transactions` INSERT(판매자, kind=TX_NEW)/UPDATE→COMPLETED(양쪽, kind=TX_COMPLETED), `reviews` INSERT(reviewee, kind=REVIEW). 모두 SECURITY DEFINER 로 RLS 우회. payload 는 `{ title, body, ...domain_ids }` 형태로 화면이 그대로 그림 |
+| **likes 카운트 트리거** | `0005_likes_count_trigger.sql` — `likes` INSERT/DELETE 시 `books.like_count` ±1 (SECURITY DEFINER). 클라이언트는 더 이상 `books` 를 직접 UPDATE 하지 않음. 마이그레이션 시점 1회 일괄 동기화 |
 
 ### 미완성 / 연결 안 된 것
 
 | 항목 | 상태 | 비고 |
 |------|------|------|
-| **사용자 실물 사진 업로드** | 미연동 | Storage 버킷 스키마는 있으나 업로드 UI/로직 없음. 표지(cover_url)와는 별개 |
 | **OAuth 로그인** | 미연동 | 카카오/네이버/Apple 버튼만 있음 (토스트로 "준비중") |
 | **이메일 인증 플로우** | 부분 | 가입 시 `data.session` 없으면 `/login`으로 안내. Supabase 대시보드 "Confirm email" 정책 확정 필요 |
 | **결제 PG** | Mock UI | 실제 PG 연동 없음, 트랜잭션은 PAID로 즉시 기록 |
-| **알림 푸시** | 없음 | 푸시 알림 Edge Functions 미작성. 단건/모두 읽음 서버 반영은 완료 |
-| **메시지 읽음 처리** | 없음 | `messages.read_at` 자동 업데이트 미구현. 채팅 들어가면 일괄 mark-as-read 필요 |
+| **알림 푸시(Push)** | 없음 | 인앱 알림은 트리거+Realtime 으로 완성. 디바이스 푸시(FCM/Web Push)는 Edge Functions 미작성 |
 | **최근 본 상품** | 진입점만 | view-history 추적 없음. 마이페이지 STATS "최근 본" + SECTIONS 메뉴 모두 "준비중" 처리 |
 | **쿠폰 / 공지 / 문의 / 약관** | 진입점만 | 마이페이지 SECTIONS 에 "준비중" 칩으로 노출. 정적 페이지/시스템 미구현 |
 
@@ -107,6 +111,8 @@ lib/
     AuthProvider.tsx              # 클라이언트 user/session Context + useAuth() 훅
   realtime/
     useRealtimeChat.ts            # 채팅방 메시지 Realtime 구독 + 송신 훅
+    useRealtimeChatList.ts        # 채팅 목록 Realtime — chat_rooms / messages 변경 시 캐시 invalidate
+    useRealtimeNotifications.ts   # 알림 목록 Realtime — notifications INSERT/UPDATE 구독
   supabase/
     client.ts                     # 브라우저 클라이언트
     server.ts                     # RSC 서버 클라이언트
@@ -120,6 +126,8 @@ supabase/migrations/
   0002_books_cover_url.sql            # books.cover_url 컬럼
   0003_review_rating_trigger.sql      # reviews → profiles.rating_avg/trade_count 자동 갱신
   0004_profiles_app_prefs.sql         # profiles.app_prefs jsonb 컬럼
+  0005_likes_count_trigger.sql        # likes → books.like_count 자동 갱신 (RLS 우회)
+  0006_notification_triggers.sql      # messages/transactions/reviews → notifications 자동 INSERT
 ```
 
 ---
@@ -141,6 +149,7 @@ supabase/migrations/
 | `listMyBooks()` | 내가 등록한 책 (`/mypage/selling`, 마이페이지 STATS) |
 | `cancelBook(bookId)` | 판매 취소 (status → HIDDEN) |
 | `deleteBook(bookId)` | 영구 삭제. 거래 이력으로 RESTRICT 막히면 호출자가 `cancelBook` 으로 폴백 |
+| `uploadBookImages(bookId, files, { setCoverIfMissing })` | Storage `book-images` 업로드 + `book_images` INSERT. setCoverIfMissing 시 `books.cover_url` 비어 있으면 첫 사진 URL 로 채움. mock/비로그인이면 no-op |
 | `listOrders()` | 주문 내역 — buyer/seller 양쪽 join 후 `side: "buy" \| "sell"` 채움 |
 | `fetchOrder(id)` | 주문 상세 |
 | `createOrder({ bookId })` | 결제 시점 호출 |
@@ -149,6 +158,7 @@ supabase/migrations/
 | `fetchChat(id)` | 채팅 상세 (chat_rooms + 책 + 양쪽 프로필 join, 상대방 자동 결정) |
 | `getOrCreateChatRoom(bookId)` | (book, 나, seller) chat_rooms 조회·생성 → "채팅" 버튼 진입점. 본인 책이면 `error:"self"` |
 | `listMessages(roomId)` / `sendMessage(roomId, body)` | 채팅 메시지 조회/전송 (전송 시 chat_rooms.last_message 동기화) |
+| `markRoomMessagesRead(roomId)` | 채팅방 진입 시 상대 메시지 일괄 read_at 갱신. 갱신된 행 수 반환 (0 이면 캐시 invalidate 스킵 가능) |
 | `useRealtimeChat(roomId)` *(훅)* | 초기 로드 + Realtime INSERT 구독 + send. dedupe by id, channel topic 에 random suffix (Strict Mode 안전) |
 | `isUuid(s)` | UUID 형식 검사 — mock 시드 id 가 Supabase 쿼리로 흘러가지 않게 가드 |
 | `listNotifications()` | 알림 |
@@ -184,10 +194,9 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 
 ## 다음 개발 단계 우선순위
 
-1. **이미지 업로드** — Storage `book-images` 버킷에 업로드 후 `book_images` insert (등록 폼)
-2. **메시지 읽음 처리** — `/chat/[id]` 진입 시 상대방 메시지 일괄 `read_at` UPDATE + 채팅 목록 unread 카운트
-3. **알림 푸시** — Supabase Edge Functions 로 푸시 발송
-4. **결제 PG 연동** — 현재 Mock UI를 토스/카카오페이 등으로 교체
+1. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker
+2. **결제 PG 연동** — 현재 Mock UI를 토스/카카오페이 등으로 교체
+3. **최근 본 상품** — `/books/[id]` 조회 시 view-history 기록 → 마이페이지 STATS "최근 본" 실데이터화 (localStorage 또는 DB 테이블)
 
 ---
 

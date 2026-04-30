@@ -27,6 +27,7 @@ export type MockBook = BookSummary & {
   priceNumber: number;
   region?: string;
   coverUrl?: string; // 외부(네이버 등) 표지 URL
+  imageUrls?: string[]; // 업로드된 사용자 사진 URL — 캐러셀에서 슬라이드별로 사용
 };
 
 export type MockOrder = {
@@ -71,6 +72,7 @@ export type MockMessage = {
   body: string;
   type: "text" | "system";
   mine: boolean; // mock 모드에선 reviewer/reviewee 구분처럼 단순화
+  read: boolean; // 상대 메시지가 내가 채팅방을 열어 읽혀졌는지
   createdAt: string;
 };
 
@@ -327,6 +329,8 @@ function seedMsg(roomId: string, body: string, mine: boolean, ageMin: number, ty
     body,
     type,
     mine,
+    // 시드 메시지는 처음 mock 진입 시 모두 미읽음 — /chat/[id] 진입 시 mark 호출로 전환됨
+    read: false,
     createdAt: new Date(Date.now() - ageMin * 60_000).toISOString(),
   };
 }
@@ -678,6 +682,8 @@ export function mockSendMessage(roomId: string, body: string): MockMessage {
     body,
     type: "text",
     mine: true,
+    // 내가 보낸 메시지는 read 의미가 없음 (상대가 읽었는지는 별도 신호) — true 로 둔다
+    read: true,
     createdAt: new Date().toISOString(),
   };
   s.messages = [...s.messages, msg];
@@ -688,6 +694,33 @@ export function mockSendMessage(roomId: string, body: string): MockMessage {
     room.time = "방금";
   }
   return msg;
+}
+
+// mock 모드 — 채팅방의 상대 메시지를 모두 읽음 처리. 갱신된 행 수 반환
+export function mockMarkRoomRead(roomId: string): number {
+  const s = getStore();
+  let n = 0;
+  for (const m of s.messages) {
+    if (m.roomId === roomId && !m.mine && !m.read) {
+      m.read = true;
+      n++;
+    }
+  }
+  // 채팅 목록의 unread 카운트도 0 으로 초기화
+  const room = s.chats.find((c) => c.id === roomId);
+  if (room) room.unread = 0;
+  return n;
+}
+
+// mock 모드 — 채팅방별 unread 카운트(=상대가 보낸 미읽음 메시지 수) 매핑
+export function mockUnreadByRoom(): Record<string, number> {
+  const s = getStore();
+  const map: Record<string, number> = {};
+  for (const m of s.messages) {
+    if (m.mine || m.read) continue;
+    map[m.roomId] = (map[m.roomId] ?? 0) + 1;
+  }
+  return map;
 }
 
 // ---------- Profile (내 프로필) ----------

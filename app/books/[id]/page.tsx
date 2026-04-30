@@ -219,7 +219,13 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
         sx={{ background: palette.surface }}
         onScroll={(e: any) => setScrolled(e.target.scrollTop > 200)}
       >
-        <ImageCarousel seed={book.id} count={4} height={380} coverUrl={book.coverUrl} />
+        <ImageCarousel
+          seed={book.id}
+          count={4}
+          height={380}
+          coverUrl={book.coverUrl}
+          imageUrls={book.imageUrls}
+        />
 
         <Box sx={{ p: 2 }}>
           <Stack

@@ -2,7 +2,8 @@
 
 // 채팅 목록 페이지 (/chat)
 // 전체/구매/판매 탭 + 대화방 검색 + 채팅방 카드 리스트
-// TODO: Realtime 구독으로 새 메시지 도착 시 미리보기/뱃지 자동 갱신 필요
+// Realtime: chat_rooms / messages INSERT·UPDATE 이벤트는 AppBootstrap 의
+// useRealtimeChatList 가 전역으로 구독해 listChats 캐시를 invalidate 한다.
 
 import {
   Box,

@@ -28,6 +28,9 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { useChat } from "@/lib/query/chatHooks";
 import { useBook } from "@/lib/query/bookHooks";
 import { useRealtimeChat } from "@/lib/realtime/useRealtimeChat";
+import { markRoomMessagesRead } from "@/lib/repo";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query/keys";
 
 const ACTIONS = [
   { key: "reserve", label: "예약하기" },
@@ -58,6 +61,22 @@ export default function ChatDetailPage({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [msgs.length]);
+
+  // 채팅방을 보고 있는 동안 상대 메시지를 읽음으로 마킹
+  // - 마운트 직후 1회 + 새 메시지가 도착할 때마다 호출 (read_at IS NULL 조건이라 idempotent)
+  // - 갱신된 행이 있으면 채팅 목록 unread 카운트 캐시도 무효화
+  const qc = useQueryClient();
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const n = await markRoomMessagesRead(params.id);
+      if (cancelled) return;
+      if (n > 0) qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id, msgs.length, qc]);
 
   // 메시지 전송 — 빈 문자열은 무시. send 결과는 훅이 state에 push
   const send = async () => {
