@@ -1,7 +1,7 @@
 # EmptyBook (책장비움) — 데이터베이스 ERD
 
-> 기준 마이그레이션: [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql) ~ [`0006_notification_triggers.sql`](./supabase/migrations/0006_notification_triggers.sql)
-> 최종 업데이트: 2026-04-30
+> 기준 마이그레이션: [`supabase/migrations/0001_init.sql`](./supabase/migrations/0001_init.sql) ~ [`0008_anonymize_notification_names.sql`](./supabase/migrations/0008_anonymize_notification_names.sql)
+> 최종 업데이트: 2026-04-30 (v2)
 
 ## 1. Mermaid ERD
 
@@ -180,6 +180,13 @@ erDiagram
 | `reviews_notify` | `reviews` AFTER INSERT | reviewee 에게 `notifications(kind='REVIEW')` INSERT | `0006_notification_triggers.sql` |
 
 > 모든 알림 트리거는 `SECURITY DEFINER` 로 동작해 `notifications` RLS 를 우회한다. payload 는 `{ title, body, ...domain_ids }` 형태로 화면이 그대로 그릴 수 있게 채워진다.
+> 0008 에서 `mask_display_name(text)` 헬퍼 함수가 추가되어 위 세 알림 트리거가 사용자 이름을 모두 마스킹한 형태(첫 글자 + `*`)로 payload 에 저장한다 — 회원가입 시 입력한 실명이 다른 사용자에게 노출되지 않게.
+
+## 4-2. 추가된 RLS 정책 (0007)
+
+| 테이블 | 정책 | 명령 | 조건 |
+|---|---|---|---|
+| `messages` | `messages_update_party` | UPDATE | 채팅방 참여자(buyer/seller) 만. 클라이언트는 read_at 갱신에만 사용 — `markRoomMessagesRead` 가 차단되던 버그 픽스 |
 
 ## 5. notifications.kind ↔ 화면 매핑
 

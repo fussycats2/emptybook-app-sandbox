@@ -172,6 +172,23 @@ export function isUuid(s: string | null | undefined): s is string {
   return !!s && UUID_RE.test(s);
 }
 
+// 다른 사용자에게 노출되는 이름을 마스킹한다 (회원가입 시 실명을 그대로 받기 때문).
+// 정책: 첫 글자만 남기고 나머지는 '*'. 빈 문자열/null 이면 fallback 반환.
+//   "김민주" → "김**"
+//   "kim"   → "k**"
+//   "A"     → "A"   (1글자는 마스킹 안 해도 정보 노출이 거의 없음)
+//   ""      → fallback
+// 이 함수는 화면에 노출되는 boundary 에서만 호출 (DB 에는 원본 그대로 저장).
+export function anonymizeName(
+  name: string | null | undefined,
+  fallback = "상대방"
+): string {
+  const s = (name ?? "").trim();
+  if (!s) return fallback;
+  if (s.length <= 1) return s;
+  return s[0] + "*".repeat(Math.max(1, s.length - 1));
+}
+
 // Supabase 클라이언트를 안전하게 가져오는 헬퍼
 // - 환경변수 없음 → null 반환 → 호출자는 mock 으로 폴백
 // - 클라이언트 생성 중 예외가 나도 null 로 떨어뜨려서 화면이 절대 깨지지 않게 한다
@@ -592,8 +609,8 @@ export async function listOrders(): Promise<OrderRow[]> {
       id: t.id,
       title: t.books?.title ?? "도서",
       info: isBuy
-        ? `판매자: ${t.books?.seller?.display_name ?? "-"}`
-        : `구매자: ${t.buyer?.display_name ?? "-"}`,
+        ? `판매자: ${anonymizeName(t.books?.seller?.display_name, "-")}`
+        : `구매자: ${anonymizeName(t.buyer?.display_name, "-")}`,
       price: `${num.toLocaleString()}원`,
       priceNumber: num,
       status:
@@ -631,7 +648,7 @@ export async function fetchOrder(id: string): Promise<OrderRow | null> {
   return {
     id: t.id,
     title: t.books?.title ?? "도서",
-    info: `판매자: ${t.books?.seller?.display_name ?? "-"}`,
+    info: `판매자: ${anonymizeName(t.books?.seller?.display_name, "-")}`,
     price: `${num.toLocaleString()}원`,
     priceNumber: num,
     status:
@@ -807,8 +824,10 @@ export async function fetchChat(id: string): Promise<ChatRow | null> {
   const r: any = data;
   const isBuying = r.buyer_id === uid;
   // 상대방 = 내가 buyer면 seller, 내가 seller면 buyer
-  const counterpartName =
-    (isBuying ? r.seller?.display_name : r.buyer?.display_name) ?? "상대방";
+  // 회원가입 시 실명을 그대로 display_name 에 저장하므로 마스킹해서 표시
+  const counterpartName = anonymizeName(
+    isBuying ? r.seller?.display_name : r.buyer?.display_name
+  );
   return {
     id: r.id,
     user: counterpartName,
@@ -1134,7 +1153,7 @@ export async function fetchReviewContext(
   if (!reviewee) return null;
 
   return {
-    revieweeName: reviewee.display_name ?? "상대방",
+    revieweeName: anonymizeName(reviewee.display_name),
     revieweeId: reviewee.id,
     bookTitle: t.books?.title ?? "도서",
     bookId: t.books?.id ?? "",
@@ -1222,7 +1241,8 @@ export async function listReceivedReviews(
 
   if (error || !data) return [];
   return (data as any[]).map((r): ReceivedReview => {
-    const reviewerName = r.reviewer?.display_name ?? "익명";
+    // 후기 작성자 이름은 다른 사용자에게 노출되므로 마스킹
+    const reviewerName = anonymizeName(r.reviewer?.display_name, "익명");
     const reviewerId = r.reviewer?.id ?? "anon";
     const book = r.transactions?.books;
     return {

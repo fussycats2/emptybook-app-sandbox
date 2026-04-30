@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-04-30
+> 최종 업데이트: 2026-04-30 (v2 — 실명 마스킹 + 채팅 읽음 RLS 픽스)
 
 ## 프로젝트 개요
 
@@ -24,7 +24,7 @@
 | **공용 UI 컴포넌트** | `components/ui/` 전체 (PhoneFrame, AppHeader, BottomTabNav, BookCard, BookImage, ImageCarousel, BottomSheet, ConfirmDialog, StatusBadge, MannerTemperature, LikeButton, LocationChip, Fab, EmptyState, Skeleton, ToastProvider, Section, ImgPlaceholder). 전 컴포넌트에 한글 주석 추가 완료 |
 | **MUI 테마** | `lib/theme.ts` 완성 — 색상 토큰, 라운드 스케일, 그림자 토큰 |
 | **Mock 데이터 계층** | `lib/mockData.ts` + `lib/repo.ts` — Supabase 없이도 전 화면 동작. likes/reviews 인메모리 저장 포함 |
-| **DB 스키마** | `0001_init.sql` 전체 + `0002_books_cover_url.sql` + `0003_review_rating_trigger.sql` + `0004_profiles_app_prefs.sql` + `0005_likes_count_trigger.sql` + `0006_notification_triggers.sql`. RLS·Realtime·Storage 포함. ERD 와 트리거 상세는 [`ERD.md`](./ERD.md) |
+| **DB 스키마** | `0001_init.sql` ~ `0008_anonymize_notification_names.sql`. RLS·Realtime·Storage 포함. ERD 와 트리거 상세는 [`ERD.md`](./ERD.md) |
 | **화면 UI** | 20개 화면 UI 골격 + 마이페이지 판매내역/찜한 책 화면 |
 | **거래 흐름 화면** | 도서 상세 → 결제 → 구매완료 → 거래확정 → 후기 작성 흐름 화면 |
 | **Supabase Auth** | 이메일/비번 로그인·회원가입·로그아웃, `AuthProvider` + `useAuth()` 훅 |
@@ -55,6 +55,8 @@
 | **likes 카운트 트리거** | `0005_likes_count_trigger.sql` — `likes` INSERT/DELETE 시 `books.like_count` ±1 (SECURITY DEFINER). 클라이언트는 더 이상 `books` 를 직접 UPDATE 하지 않음. 마이그레이션 시점 1회 일괄 동기화 |
 | **최근 본 상품** | `lib/store/recentlyViewedStore` — Zustand + localStorage persist (max 30, move-to-front, name `emptybook:recently-viewed`). `/books/[id]` 진입 시 `book.id` 로 push. `lib/repo.listBooksByIds(ids)` + `useBooksByIds(ids)` 가 입력 순서를 그대로 유지하며 Supabase/mock 양쪽에서 책을 가져옴. `/mypage/recent` 가 그리드로 표시 + "전체 삭제" 액션 + 사라진 책(HIDDEN/삭제) 은 결과에서 빠짐 + store 의 stale id 도 자동 정리. 마이페이지 STATS "최근 본" 도 store 길이 실시간 표시 |
 | **정적 페이지** | `lib/staticContent.ts` (NOTICES / TERMS_SECTIONS / SUPPORT_INFO) + `/notices` 목록 + `/notices/[id]` 상세 + `/terms` 약관 + `/help` 1:1 문의(폼 → mailto: 메일 앱 호출) + `/mypage/coupons` 쿠폰함(빈 상태 안내). 마이페이지 SECTIONS 의 "준비중" 칩 4종을 모두 실링크로 교체 |
+| **실명 마스킹** | 회원가입 시 입력한 실명이 그대로 `profiles.display_name` 에 저장돼 다른 사용자 화면에 노출되던 버그 픽스. `anonymizeName(name)` 헬퍼(첫 글자만 노출, 나머지는 `*`. "김민주" → "김**") 추가 + `fetchChat`/`listOrders`/`fetchOrder`/`fetchReviewContext`/`listReceivedReviews` 모두 적용. DB 트리거(`notify_on_message`/`notify_on_transaction_insert`/`notify_on_review`) 도 0008 에서 `mask_display_name(text)` SQL 함수로 마스킹 + 기존 알림 행 backfill |
+| **채팅 읽음 RLS 픽스** | 0001 에 `messages` UPDATE RLS 정책이 빠져 있어 `markRoomMessagesRead` 의 read_at UPDATE 가 조용히 차단(0행 영향) → 채팅방 들어가서 읽어도 unread 배지가 안 사라지던 버그. 0007 에서 채팅방 참여자(buyer/seller) 가 `messages` UPDATE 가능하도록 정책 추가 |
 
 ### 미완성 / 연결 안 된 것
 
@@ -130,12 +132,14 @@ lib/
 middleware.ts                     # 보호 라우트 가드 + 인증 페이지 리다이렉트
 
 supabase/migrations/
-  0001_init.sql                       # 전체 스키마 + RLS + Realtime + Storage
-  0002_books_cover_url.sql            # books.cover_url 컬럼
-  0003_review_rating_trigger.sql      # reviews → profiles.rating_avg/trade_count 자동 갱신
-  0004_profiles_app_prefs.sql         # profiles.app_prefs jsonb 컬럼
-  0005_likes_count_trigger.sql        # likes → books.like_count 자동 갱신 (RLS 우회)
-  0006_notification_triggers.sql      # messages/transactions/reviews → notifications 자동 INSERT
+  0001_init.sql                            # 전체 스키마 + RLS + Realtime + Storage
+  0002_books_cover_url.sql                 # books.cover_url 컬럼
+  0003_review_rating_trigger.sql           # reviews → profiles.rating_avg/trade_count 자동 갱신
+  0004_profiles_app_prefs.sql              # profiles.app_prefs jsonb 컬럼
+  0005_likes_count_trigger.sql             # likes → books.like_count 자동 갱신 (RLS 우회)
+  0006_notification_triggers.sql           # messages/transactions/reviews → notifications 자동 INSERT
+  0007_messages_update_policy.sql          # messages UPDATE RLS — 읽음(read_at) 처리 가능하게
+  0008_anonymize_notification_names.sql    # 알림 트리거 + 기존 행 백필에서 display_name 마스킹
 ```
 
 ---
@@ -170,6 +174,7 @@ supabase/migrations/
 | `markRoomMessagesRead(roomId)` | 채팅방 진입 시 상대 메시지 일괄 read_at 갱신. 갱신된 행 수 반환 (0 이면 캐시 invalidate 스킵 가능) |
 | `useRealtimeChat(roomId)` *(훅)* | 초기 로드 + Realtime INSERT 구독 + send. dedupe by id, channel topic 에 random suffix (Strict Mode 안전) |
 | `isUuid(s)` | UUID 형식 검사 — mock 시드 id 가 Supabase 쿼리로 흘러가지 않게 가드 |
+| `anonymizeName(name, fallback?)` | 다른 사용자에게 노출되는 이름 마스킹. 첫 글자만 남기고 나머지는 `*`. 빈 값이면 fallback ("상대방") 반환 |
 | `listNotifications()` | 알림 |
 | `markNotificationRead(id)` / `markAllNotificationsRead()` | 알림 read_at 단건/일괄 갱신 |
 | `isLiked(bookId)` / `listLikedBookIds()` / `listLikedBooks()` / `toggleLike(bookId)` | 찜 |
