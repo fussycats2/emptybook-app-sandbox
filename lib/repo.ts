@@ -329,6 +329,42 @@ export async function searchBooks(opts: {
   return (data as BookRow[]).map(rowToSummary);
 }
 
+// 주어진 id 배열로 BookSummary 들을 한 번에 가져온다 — 입력 순서를 그대로 유지
+// (최근 본 상품처럼 "내가 정한 순서" 가 의미를 갖는 경우용. created_at 정렬을 강제하지 않는다)
+// - 사라진 책(HIDDEN/삭제) 은 결과에서 자연스럽게 빠진다
+// - mock id 와 UUID 가 섞여 있으면 UUID 만 Supabase 에 보내고 나머지는 mock 에서 채운다
+export async function listBooksByIds(ids: string[]): Promise<BookSummary[]> {
+  if (ids.length === 0) return [];
+  const supabase = await tryClient();
+  if (!supabase) {
+    const map = new Map<string, BookSummary>(
+      mockListBooks().map((b) => [b.id, b as BookSummary])
+    );
+    return ids
+      .map((id) => map.get(id))
+      .filter((b): b is BookSummary => !!b);
+  }
+  const uuidIds = ids.filter((id) => isUuid(id));
+  let dbMap = new Map<string, BookSummary>();
+  if (uuidIds.length > 0) {
+    const { data } = await supabase
+      .from("books")
+      .select("*")
+      .in("id", uuidIds)
+      .neq("status", "HIDDEN");
+    for (const row of (data as BookRow[] | null) ?? []) {
+      dbMap.set(row.id, rowToSummary(row));
+    }
+  }
+  // mock id 가 끼어 있으면 mock 에서도 보충 (Supabase 쿼리 결과와 합쳐 입력 순서 유지)
+  const mockMap = new Map<string, BookSummary>(
+    mockListBooks().map((b) => [b.id, b as BookSummary])
+  );
+  return ids
+    .map((id) => dbMap.get(id) ?? mockMap.get(id))
+    .filter((b): b is BookSummary => !!b);
+}
+
 // 단일 도서 상세 조회 (도서 상세 페이지에서 호출)
 // book_images 도 함께 join 해서 storage_path → public URL 로 변환된 imageUrls 를 채운다
 export async function fetchBook(id: string): Promise<BookDetail | null> {

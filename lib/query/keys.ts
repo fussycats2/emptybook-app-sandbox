@@ -11,6 +11,8 @@ export const queryKeys = {
     search: (params: { q?: string; category?: string; state?: string }) =>
       [...queryKeys.book.lists(), "search", params] as const,
     mine: () => [...queryKeys.book.lists(), "mine"] as const,
+    // ids 입력 순서가 결과 순서를 좌우하므로 키 자체에도 그대로 포함 (정렬 X)
+    byIds: (ids: string[]) => [...queryKeys.book.lists(), "byIds", ids] as const,
     detail: (id: string) => [...queryKeys.book.all, "detail", id] as const,
   },
   order: {

@@ -53,6 +53,8 @@
 | **알림 Realtime** | `lib/realtime/useRealtimeNotifications` — `notifications` INSERT/UPDATE(`user_id=eq.me`) 구독 → 알림 목록 캐시 invalidate. `AppBootstrap` 마운트. 0006 트리거가 메시지/거래/후기 이벤트마다 `notifications` 행을 자동 INSERT 하므로 이 훅 하나로 전 도메인 알림이 실시간 반영. `useNotifications` 가 결과를 그리고 `notificationsStore` 의 unread 카운트도 자동 갱신 |
 | **알림 자동 생성 트리거** | `0006_notification_triggers.sql` — `messages` INSERT(상대), `transactions` INSERT(판매자, kind=TX_NEW)/UPDATE→COMPLETED(양쪽, kind=TX_COMPLETED), `reviews` INSERT(reviewee, kind=REVIEW). 모두 SECURITY DEFINER 로 RLS 우회. payload 는 `{ title, body, ...domain_ids }` 형태로 화면이 그대로 그림 |
 | **likes 카운트 트리거** | `0005_likes_count_trigger.sql` — `likes` INSERT/DELETE 시 `books.like_count` ±1 (SECURITY DEFINER). 클라이언트는 더 이상 `books` 를 직접 UPDATE 하지 않음. 마이그레이션 시점 1회 일괄 동기화 |
+| **최근 본 상품** | `lib/store/recentlyViewedStore` — Zustand + localStorage persist (max 30, move-to-front, name `emptybook:recently-viewed`). `/books/[id]` 진입 시 `book.id` 로 push. `lib/repo.listBooksByIds(ids)` + `useBooksByIds(ids)` 가 입력 순서를 그대로 유지하며 Supabase/mock 양쪽에서 책을 가져옴. `/mypage/recent` 가 그리드로 표시 + "전체 삭제" 액션 + 사라진 책(HIDDEN/삭제) 은 결과에서 빠짐 + store 의 stale id 도 자동 정리. 마이페이지 STATS "최근 본" 도 store 길이 실시간 표시 |
+| **정적 페이지** | `lib/staticContent.ts` (NOTICES / TERMS_SECTIONS / SUPPORT_INFO) + `/notices` 목록 + `/notices/[id]` 상세 + `/terms` 약관 + `/help` 1:1 문의(폼 → mailto: 메일 앱 호출) + `/mypage/coupons` 쿠폰함(빈 상태 안내). 마이페이지 SECTIONS 의 "준비중" 칩 4종을 모두 실링크로 교체 |
 
 ### 미완성 / 연결 안 된 것
 
@@ -62,8 +64,7 @@
 | **이메일 인증 플로우** | 부분 | 가입 시 `data.session` 없으면 `/login`으로 안내. Supabase 대시보드 "Confirm email" 정책 확정 필요 |
 | **결제 PG** | Mock UI | 실제 PG 연동 없음, 트랜잭션은 PAID로 즉시 기록 |
 | **알림 푸시(Push)** | 없음 | 인앱 알림은 트리거+Realtime 으로 완성. 디바이스 푸시(FCM/Web Push)는 Edge Functions 미작성 |
-| **최근 본 상품** | 진입점만 | view-history 추적 없음. 마이페이지 STATS "최근 본" + SECTIONS 메뉴 모두 "준비중" 처리 |
-| **쿠폰 / 공지 / 문의 / 약관** | 진입점만 | 마이페이지 SECTIONS 에 "준비중" 칩으로 노출. 정적 페이지/시스템 미구현 |
+| **쿠폰 / 공지 / 문의 / 약관** | 정적 페이지 | UI 는 모두 연결됨. 쿠폰 발급·사용 시스템 + 공지 CMS 는 미구현 (현재 staticContent.ts 의 더미 데이터) |
 
 ---
 
@@ -94,9 +95,15 @@ app/                              # 화면 라우트
   mypage/orders/page.tsx          # /mypage/orders — 거래 트랜잭션 내역
   mypage/selling/page.tsx         # /mypage/selling — 내가 등록한 책
   mypage/likes/page.tsx           # /mypage/likes — 찜한 책
+  mypage/recent/page.tsx          # /mypage/recent — 최근 본 책 (localStorage 기반)
   mypage/reviews/page.tsx         # /mypage/reviews — 받은 후기
   mypage/settings/page.tsx        # /mypage/settings — 프로필/알림/개인정보
+  mypage/coupons/page.tsx         # /mypage/coupons — 쿠폰함 (빈 상태)
   notifications/page.tsx          # /notifications
+  notices/page.tsx                # /notices — 공지사항 목록
+  notices/[id]/page.tsx           # /notices/[id] — 공지사항 상세
+  help/page.tsx                   # /help — 1:1 문의 (mailto)
+  terms/page.tsx                  # /terms — 이용 약관
 
 components/
   ui/                             # 공용 UI (상단 표 참고)
@@ -107,6 +114,7 @@ lib/
   mockData.ts                     # 더미 데이터 + in-memory store (likes/reviews/messages/profile)
   repo.ts                         # 데이터 계층 — Supabase/Mock 자동 분기
   categoryMap.ts                  # 제목/설명 → 8개 카테고리 추정 휴리스틱
+  staticContent.ts                # 공지/약관/지원 안내 — 정적 컨텐츠
   auth/
     AuthProvider.tsx              # 클라이언트 user/session Context + useAuth() 훅
   realtime/
@@ -149,6 +157,7 @@ supabase/migrations/
 | `listMyBooks()` | 내가 등록한 책 (`/mypage/selling`, 마이페이지 STATS) |
 | `cancelBook(bookId)` | 판매 취소 (status → HIDDEN) |
 | `deleteBook(bookId)` | 영구 삭제. 거래 이력으로 RESTRICT 막히면 호출자가 `cancelBook` 으로 폴백 |
+| `listBooksByIds(ids)` | id 배열로 책 일괄 조회 — 입력 순서 유지, HIDDEN/없는 책은 자동 skip. 최근 본 상품용 |
 | `uploadBookImages(bookId, files, { setCoverIfMissing })` | Storage `book-images` 업로드 + `book_images` INSERT. setCoverIfMissing 시 `books.cover_url` 비어 있으면 첫 사진 URL 로 채움. mock/비로그인이면 no-op |
 | `listOrders()` | 주문 내역 — buyer/seller 양쪽 join 후 `side: "buy" \| "sell"` 채움 |
 | `fetchOrder(id)` | 주문 상세 |
@@ -194,9 +203,12 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 
 ## 다음 개발 단계 우선순위
 
+> 남은 항목은 모두 외부 키/계약/콘솔 작업이 필요한 통합 작업이다.
+
 1. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker
 2. **결제 PG 연동** — 현재 Mock UI를 토스/카카오페이 등으로 교체
-3. **최근 본 상품** — `/books/[id]` 조회 시 view-history 기록 → 마이페이지 STATS "최근 본" 실데이터화 (localStorage 또는 DB 테이블)
+3. **OAuth 로그인** — 카카오/네이버/Apple 실연동 (현재는 토스트로 "준비중")
+4. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
 
 ---
 

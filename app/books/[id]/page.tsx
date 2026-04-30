@@ -44,6 +44,7 @@ import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLikesStore, selectLikeCount } from "@/lib/store/likesStore";
+import { useRecentlyViewedStore } from "@/lib/store/recentlyViewedStore";
 
 export default function BookDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -90,6 +91,13 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
       setLikeCountInStore(id, book.likes ?? 0);
     }
   }, [book, id, setLikeCountInStore]);
+
+  // "최근 본 상품" 추적 — 책이 실제로 로드된 시점에만 push (404/null 이면 기록 X)
+  // book 객체 참조가 바뀔 때마다 push 가 호출되지만, store 가 같은 id 면 move-to-front 로 처리
+  const pushRecent = useRecentlyViewedStore((s) => s.push);
+  useEffect(() => {
+    if (book?.id) pushRecent(book.id);
+  }, [book?.id, pushRecent]);
 
   if (!book) {
     return (

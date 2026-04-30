@@ -27,6 +27,7 @@ import { useMyBooks } from "@/lib/query/bookHooks";
 import { useOrders } from "@/lib/query/orderHooks";
 import { useMyProfile } from "@/lib/query/profileHooks";
 import { useLikesStore } from "@/lib/store/likesStore";
+import { useRecentlyViewedStore } from "@/lib/store/recentlyViewedStore";
 
 // 메뉴 항목 정의 — href 가 있으면 라우팅, comingSoon 이면 "준비중" 칩 + 토스트로 안내
 type MenuItem = {
@@ -49,22 +50,22 @@ const SECTIONS: { title: string; items: MenuItem[] }[] = [
     title: "내 활동",
     items: [
       { label: "찜한 상품", href: "/mypage/likes", icon: <FavoriteRoundedIcon /> },
-      { label: "최근 본 상품", icon: <HistoryRoundedIcon />, comingSoon: true },
+      { label: "최근 본 상품", href: "/mypage/recent", icon: <HistoryRoundedIcon /> },
       { label: "내 채팅", href: "/chat", icon: <ChatBubbleRoundedIcon /> },
     ],
   },
   {
     title: "혜택",
     items: [
-      { label: "쿠폰함", icon: <LocalActivityRoundedIcon />, comingSoon: true },
+      { label: "쿠폰함", href: "/mypage/coupons", icon: <LocalActivityRoundedIcon /> },
     ],
   },
   {
     title: "고객 지원",
     items: [
-      { label: "공지사항", icon: <HelpOutlineRoundedIcon />, comingSoon: true },
-      { label: "1:1 문의", icon: <HelpOutlineRoundedIcon />, comingSoon: true },
-      { label: "이용 약관", icon: <HelpOutlineRoundedIcon />, comingSoon: true },
+      { label: "공지사항", href: "/notices", icon: <HelpOutlineRoundedIcon /> },
+      { label: "1:1 문의", href: "/help", icon: <HelpOutlineRoundedIcon /> },
+      { label: "이용 약관", href: "/terms", icon: <HelpOutlineRoundedIcon /> },
     ],
   },
 ];
@@ -81,6 +82,8 @@ export default function MyPage() {
   const { data: orders } = useOrders();
   const { data: profile } = useMyProfile();
   const likeCount = useLikesStore((s) => s.liked.size);
+  // 최근 본 책 개수 — localStorage persist 라 첫 프레임은 0 일 수 있다 (SSR/hydration 안전)
+  const recentCount = useRecentlyViewedStore((s) => s.items.length);
 
   const sellingCount = myBooks
     ? myBooks.filter((b) => {
@@ -227,12 +230,11 @@ export default function MyPage() {
                   icon: <FavoriteRoundedIcon />,
                   href: "/mypage/likes",
                 },
-                // "최근 본"은 view-history 추적이 아직 없어 placeholder. 클릭 시 토스트로 안내
                 {
                   label: "최근 본",
-                  val: null,
+                  val: recentCount,
                   icon: <HistoryRoundedIcon />,
-                  comingSoon: true,
+                  href: "/mypage/recent",
                 },
               ] as {
                 label: string;

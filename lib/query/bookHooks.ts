@@ -11,6 +11,7 @@ import {
   createBook,
   deleteBook,
   fetchBook,
+  listBooksByIds,
   listMyBooks,
   listRecentBooks,
   searchBooks,
@@ -36,6 +37,16 @@ export function useSearchBooks(params: {
     queryKey: queryKeys.book.search(params),
     queryFn: () => searchBooks(params),
     enabled,
+  });
+}
+
+// 주어진 id 배열로 책을 한 번에 가져온다 — 입력 순서 유지 (최근 본 상품 등에 사용)
+export function useBooksByIds(ids: string[]) {
+  return useQuery({
+    queryKey: queryKeys.book.byIds(ids),
+    queryFn: () => listBooksByIds(ids),
+    // 빈 배열일 땐 호출 자체를 skip
+    enabled: ids.length > 0,
   });
 }
 
