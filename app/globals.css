@@ -3,8 +3,8 @@ html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: #efece6;
-  color: #1A2B22;
+  background: #ECE7DA;
+  color: #1A2620;
   overflow: hidden;
   overscroll-behavior: none;
 }
@@ -13,6 +13,7 @@ body {
     "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 a { color: inherit; text-decoration: none; }
 input, textarea, button { font-family: inherit; }
@@ -36,8 +37,39 @@ button { -webkit-tap-highlight-color: transparent; }
   100% { background-position: 400px 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #f2efe8 0%, #e8e4dc 50%, #f2efe8 100%);
+  background: linear-gradient(90deg, #F1EDE4 0%, #E5E1D7 50%, #F1EDE4 100%);
   background-size: 800px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
   border-radius: 8px;
 }
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up { animation: fadeInUp 220ms ease-out both; }
+
+@keyframes splashRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.splash-rise { animation: splashRise 720ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes splashFloat {
+  0%   { transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg)); }
+  50%  { transform: translate3d(0, -10px, 0) rotate(var(--rot, 0deg)); }
+  100% { transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg)); }
+}
+.splash-float { animation: splashFloat 6.5s ease-in-out infinite; will-change: transform; }
+
+@keyframes splashGlow {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50%      { opacity: 0.7;  transform: scale(1.08); }
+}
+.splash-glow { animation: splashGlow 4.5s ease-in-out infinite; }
+
+@keyframes splashShimmer {
+  0%   { transform: translateX(-120%) skewX(-12deg); }
+  100% { transform: translateX(220%)  skewX(-12deg); }
+}
+.splash-shimmer { animation: splashShimmer 5.5s ease-in-out infinite; }

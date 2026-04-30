@@ -14,16 +14,16 @@ export type SaleStatus =
   | "free"
   | "canceled";
 
-// 상태별 라벨 + 배경/전경 색상 매핑
+// 상태별 라벨 + 배경/전경 색상 매핑 — 모두 palette 토큰에서 파생
 const MAP: Record<
   SaleStatus,
   { label: string; bg: string; fg: string }
 > = {
   selling: { label: "판매중", bg: palette.primarySoft, fg: palette.primary },
-  reserved: { label: "예약중", bg: "#FFF1E0", fg: "#B16A00" },
-  sold: { label: "거래완료", bg: "#EEEDE9", fg: palette.inkMute },
-  free: { label: "무료나눔", bg: "#FCE8E5", fg: palette.accent },
-  canceled: { label: "취소", bg: "#F5EEEE", fg: "#9A7A7A" },
+  reserved: { label: "예약중", bg: palette.warnSoft, fg: palette.warn },
+  sold: { label: "거래완료", bg: palette.lineSoft, fg: palette.inkMute },
+  free: { label: "무료나눔", bg: palette.accentSoft, fg: palette.accent },
+  canceled: { label: "취소", bg: palette.lineSoft, fg: palette.inkSubtle },
 };
 
 export default function StatusBadge({

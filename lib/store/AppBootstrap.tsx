@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLikesStore } from "./likesStore";
 import { useNotificationsStore } from "./notificationsStore";
 import { useHydrateLikes, likeKeys } from "@/lib/query/likeHooks";
+import { useNotifications } from "@/lib/query/notificationHooks";
 import { queryKeys } from "@/lib/query/keys";
 import { useRealtimeChatList } from "@/lib/realtime/useRealtimeChatList";
 import { useRealtimeNotifications } from "@/lib/realtime/useRealtimeNotifications";
@@ -38,6 +39,10 @@ export default function AppBootstrap() {
 
   // 찜 ID 전역 hydrate
   useHydrateLikes();
+
+  // 알림 목록 hydrate — 결과의 unread 개수가 자동으로 notificationsStore 에 반영됨
+  // (홈 헤더 Badge 등 어디서나 store 만 구독하면 끝)
+  useNotifications();
 
   // 채팅 목록 / 알림 Realtime 구독 — 로그인 상태일 때만 활성, 로그아웃 시 자동 cleanup
   useRealtimeChatList();

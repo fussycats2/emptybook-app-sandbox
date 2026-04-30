@@ -21,14 +21,15 @@ interface Props {
   overlay?: React.ReactNode;
 }
 
-// 자리 표시용 색상 팔레트 (배경색, 전경색) 쌍 6개
+// 자리 표시용 색상 팔레트 (배경색, 전경색) 쌍 — 새 테마와 맞춘 차분한 6색
+// 톤: sage green / terracotta / dusty plum / honey / steel blue / warm gray
 const PALETTES = [
-  ["#E8F2EC", "#1F6F4E"],
-  ["#FCEFE9", "#C44A3C"],
-  ["#EEEAF7", "#5B47B6"],
-  ["#FBF4DC", "#A0791E"],
-  ["#E5EEF7", "#225089"],
-  ["#F2EFE8", "#5A6B62"],
+  ["#E6EFEA", "#2D5F4A"],
+  ["#F6E6E1", "#A04A3D"],
+  ["#ECE5E8", "#6B5060"],
+  ["#F4ECD9", "#8C6B26"],
+  ["#E5ECEF", "#3F5C70"],
+  ["#EFEBE3", "#5C6B63"],
 ];
 
 // seed 값을 해싱해 항상 같은 책이면 같은 색이 나오도록 함
@@ -110,7 +111,7 @@ export default function BookImage({
           position: "absolute",
           inset: 0,
           borderRadius: `${radius}px`,
-          boxShadow: "inset 0 0 0 1px rgba(26,43,34,0.04)",
+          boxShadow: "inset 0 0 0 1px rgba(26,38,32,0.05)",
           pointerEvents: "none",
         }}
       />

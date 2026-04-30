@@ -15,7 +15,7 @@ import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import PersonOutlineRoundedIcon from "@mui/icons-material/PersonOutlineRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { usePathname, useRouter } from "next/navigation";
-import { palette } from "@/lib/theme";
+import { palette, shadow } from "@/lib/theme";
 
 // 탭 정의: 활성 시(on) / 비활성 시(off) 아이콘을 분리해 시각적 강조 차이를 둔다
 // primary: true 는 가운데 강조 등록 버튼 표시용 플래그
@@ -79,20 +79,20 @@ export default function BottomTabNav() {
             >
               <Box
                 sx={{
-                  width: 48,
-                  height: 48,
+                  width: 52,
+                  height: 52,
                   borderRadius: "50%",
-                  background: palette.primary,
+                  background: `linear-gradient(160deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
                   color: "#fff",
                   display: "grid",
                   placeItems: "center",
-                  boxShadow: "0 6px 16px rgba(31, 111, 78, 0.35)",
-                  transform: "translateY(-10px)",
-                  transition: "transform 120ms ease",
-                  "&:active": { transform: "translateY(-10px) scale(0.95)" },
+                  boxShadow: shadow.pop,
+                  transform: "translateY(-12px)",
+                  transition: "transform 140ms ease, box-shadow 140ms ease",
+                  "&:active": { transform: "translateY(-12px) scale(0.94)" },
                 }}
               >
-                <AddRoundedIcon />
+                <AddRoundedIcon sx={{ fontSize: 26 }} />
               </Box>
             </Box>
           );
@@ -110,7 +110,7 @@ export default function BottomTabNav() {
               gap: 0.25,
               cursor: "pointer",
               color,
-              transition: "color 100ms",
+              transition: "color 120ms ease",
             }}
           >
             <Icon sx={{ fontSize: 24 }} />

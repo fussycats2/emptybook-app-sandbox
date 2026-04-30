@@ -17,15 +17,15 @@ export default function MannerTemperature({
   const min = 30;
   const max = 50;
   const pct = Math.max(0, Math.min(1, (value - min) / (max - min)));
-  // 온도 구간별 색상: 42 이상 빨강, 38 이상 주황, 36 이상 그린, 그 아래 회색
+  // 온도 구간별 색상: 42 이상 코랄, 38 이상 머스타드, 36 이상 그린, 그 아래 차가운 회색
   const color =
     value >= 42
-      ? "#FF6B5E"
+      ? palette.accent
       : value >= 38
-      ? "#F08A2A"
+      ? palette.warn
       : value >= 36
       ? palette.primary
-      : "#7A8FB0";
+      : palette.inkSubtle;
 
   const fontSize = size === "lg" ? 22 : size === "sm" ? 13 : 16;
   const labelSize = size === "lg" ? 12 : 10.5;

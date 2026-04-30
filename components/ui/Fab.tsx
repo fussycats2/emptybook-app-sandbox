@@ -6,7 +6,7 @@
 import { Fab as MuiFab } from "@mui/material";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { useRouter } from "next/navigation";
-import { palette } from "@/lib/theme";
+import { palette, shadow } from "@/lib/theme";
 
 export default function Fab({
   href = "/register",
@@ -27,10 +27,10 @@ export default function Fab({
         right: 16,
         bottom,
         zIndex: 9,
-        background: palette.primary,
+        background: `linear-gradient(160deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
         color: "#fff",
         fontWeight: 800,
-        boxShadow: "0 12px 24px rgba(31,111,78,0.35)",
+        boxShadow: shadow.pop,
         height: 48,
         px: 2.25,
         "&:hover": { background: palette.primaryDark },

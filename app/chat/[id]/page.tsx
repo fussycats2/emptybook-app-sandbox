@@ -211,6 +211,19 @@ export default function ChatDetailPage({
               </Box>
             );
           }
+          // 말풍선 공통 스타일 — 텍스트 줄바꿈 규칙(Korean 안전)
+          const bubbleBase = {
+            p: "9px 13px",
+            fontSize: 13.5,
+            lineHeight: 1.55,
+            whiteSpace: "pre-wrap" as const,
+            wordBreak: "break-word" as const,
+            overflowWrap: "anywhere" as const,
+          };
+          // 말풍선 너비 제어:
+          //  - 외부 wrapper 가 maxWidth(75%) + minWidth:0 을 가짐 → flex 안에서 수축 가능
+          //  - 내부 bubble 은 width:auto 라 짧은 글에서는 콘텐츠 크기, 길어지면 wrapper 까지 채움
+          //  - 이전 구조는 wrapper 가 콘텐츠 기반으로 줄어들면서 70% 가 글자 한 자 너비로 깎이는 버그가 있었음
           return m.mine ? (
             <Stack
               key={m.id}
@@ -220,26 +233,29 @@ export default function ChatDetailPage({
               justifyContent="flex-end"
               sx={{ pl: 6 }}
             >
-              <Box sx={{ fontSize: 10.5, color: palette.inkSubtle }}>
+              <Box sx={{ fontSize: 10.5, color: palette.inkSubtle, flexShrink: 0 }}>
                 {m.read ? "읽음 · " : ""}
                 {time}
               </Box>
-              <Box
+              <Stack
                 sx={{
-                  maxWidth: "70%",
-                  background: palette.primary,
-                  color: "#fff",
-                  borderRadius: "16px 16px 4px 16px",
-                  p: "9px 13px",
-                  fontSize: 13.5,
-                  lineHeight: 1.5,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  overflowWrap: "anywhere",
+                  minWidth: 0,
+                  maxWidth: "75%",
+                  alignItems: "flex-end",
                 }}
               >
-                {m.body}
-              </Box>
+                <Box
+                  sx={{
+                    ...bubbleBase,
+                    background: palette.primary,
+                    color: "#fff",
+                    borderRadius: "16px 16px 4px 16px",
+                    maxWidth: "100%",
+                  }}
+                >
+                  {m.body}
+                </Box>
+              </Stack>
             </Stack>
           ) : (
             <Stack
@@ -255,25 +271,29 @@ export default function ChatDetailPage({
                 height={28}
                 radius={999}
               />
-              <Box>
+              <Stack
+                sx={{
+                  minWidth: 0,
+                  maxWidth: "75%",
+                  alignItems: "flex-start",
+                  gap: 0.25,
+                }}
+              >
                 <Box
                   sx={{
-                    maxWidth: "70%",
+                    ...bubbleBase,
                     background: palette.surface,
                     borderRadius: "16px 16px 16px 4px",
-                    p: "9px 13px",
-                    fontSize: 13.5,
-                    lineHeight: 1.5,
                     border: `1px solid ${palette.line}`,
-                    whiteSpace: "pre-wrap",
+                    maxWidth: "100%",
                   }}
                 >
                   {m.body}
                 </Box>
-                <Box sx={{ fontSize: 10.5, color: palette.inkSubtle, mt: 0.25 }}>
+                <Box sx={{ fontSize: 10.5, color: palette.inkSubtle }}>
                   {time}
                 </Box>
-              </Box>
+              </Stack>
             </Stack>
           );
         })}

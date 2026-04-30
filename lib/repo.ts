@@ -23,6 +23,8 @@ import {
   mockListChats,
   mockListLikedIds,
   mockListNotifications,
+  mockMarkAllNotificationsRead,
+  mockMarkNotificationRead,
   mockListOrders,
   mockGetOrCreateChatRoomByBook,
   mockGetProfile,
@@ -1070,16 +1072,27 @@ export async function listNotifications(): Promise<NotificationRow[]> {
     body: n.payload?.body ?? "",
     time: new Date(n.created_at).toLocaleString("ko-KR"),
     unread: !n.read_at,
+    // 라우팅용 도메인 id — 0006 트리거 payload 의 키 이름과 일치
+    roomId: n.payload?.room_id ?? undefined,
+    transactionId: n.payload?.transaction_id ?? undefined,
+    bookId: n.payload?.book_id ?? undefined,
   }));
 }
 
 // 알림 단건 읽음 처리 — 사용자가 알림 항목을 클릭했을 때 호출
-// 비로그인/Supabase 미설정이면 no-op (UI는 이미 클라 상태로 토글된 상태)
+// Supabase 미설정/비로그인이면 mock store 의 해당 항목 unread 를 false 로 토글
+// (그렇지 않으면 다음 refetch 때 다시 unread:true 로 돌아와 빨간점이 안 사라짐)
 export async function markNotificationRead(id: string): Promise<void> {
   const supabase = await tryClient();
-  if (!supabase) return;
+  if (!supabase) {
+    mockMarkNotificationRead(id);
+    return;
+  }
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return;
+  if (!auth.user) {
+    mockMarkNotificationRead(id);
+    return;
+  }
   await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
@@ -1091,9 +1104,15 @@ export async function markNotificationRead(id: string): Promise<void> {
 // 내 알림 전부 읽음 처리 — 헤더 "모두 읽음" 버튼에서 호출
 export async function markAllNotificationsRead(): Promise<void> {
   const supabase = await tryClient();
-  if (!supabase) return;
+  if (!supabase) {
+    mockMarkAllNotificationsRead();
+    return;
+  }
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return;
+  if (!auth.user) {
+    mockMarkAllNotificationsRead();
+    return;
+  }
   await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })

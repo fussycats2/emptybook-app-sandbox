@@ -63,6 +63,11 @@ export type MockNotification = {
   body: string;
   time: string;
   unread: boolean;
+  // 라우팅용 도메인 id — 알림 카드 클릭 시 적절한 화면으로 이동시키기 위함.
+  // 트리거 payload(0006_notification_triggers.sql)와 키 매핑이 일치한다.
+  roomId?: string;
+  transactionId?: string;
+  bookId?: string;
 };
 
 // 채팅 메시지 한 건 — 화면 말풍선(my/their/system)으로 그릴 수 있는 최소 정보
@@ -302,6 +307,7 @@ const SEED_NOTIFICATIONS: MockNotification[] = [
     body: "‘채식주의자’ 결제가 완료되었습니다. 운송장이 등록되면 알려드릴게요.",
     time: "방금",
     unread: true,
+    bookId: "1",
   },
   {
     id: "n-2",
@@ -310,6 +316,7 @@ const SEED_NOTIFICATIONS: MockNotification[] = [
     body: "네 좋아요! 내일 2시에 합정역에서 만나요",
     time: "10분 전",
     unread: true,
+    roomId: "c-1",
   },
   {
     id: "n-3",
@@ -318,6 +325,7 @@ const SEED_NOTIFICATIONS: MockNotification[] = [
     body: "‘아몬드’가 8,000원 → 7,000원으로 변경되었어요.",
     time: "어제",
     unread: false,
+    bookId: "3",
   },
 ];
 
@@ -791,6 +799,20 @@ export function mockGetOrCreateChatRoomByBook(bookId: string): string {
 
 export function mockListNotifications(): MockNotification[] {
   return [...getStore().notifications];
+}
+
+// 알림 단건 읽음 처리 — mock store 의 해당 항목 unread → false
+export function mockMarkNotificationRead(id: string) {
+  const s = getStore();
+  s.notifications = s.notifications.map((n) =>
+    n.id === id ? { ...n, unread: false } : n
+  );
+}
+
+// 모두 읽음 처리 — mock store 전체 unread → false
+export function mockMarkAllNotificationsRead() {
+  const s = getStore();
+  s.notifications = s.notifications.map((n) => ({ ...n, unread: false }));
 }
 
 // 정적 메타데이터 (자주 바뀌지 않는 표시용 데이터)

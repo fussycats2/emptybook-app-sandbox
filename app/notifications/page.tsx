@@ -18,6 +18,7 @@ import ChatBubbleRoundedIcon from "@mui/icons-material/ChatBubbleRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 import NotificationsOffRoundedIcon from "@mui/icons-material/NotificationsOffRounded";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
 import EmptyState from "@/components/ui/EmptyState";
@@ -29,6 +30,7 @@ import {
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import type { NotificationRow } from "@/lib/repo";
 
 const TYPES = [
   { key: "all", label: "전체" },
@@ -44,11 +46,16 @@ const ICONS: Record<string, { icon: React.ReactNode; bg: string; fg: string }> =
     bg: palette.primarySoft,
     fg: palette.primary,
   },
-  chat: { icon: <ChatBubbleRoundedIcon />, bg: "#FFF1E0", fg: "#B16A00" },
-  system: { icon: <CampaignRoundedIcon />, bg: "#FCE8E5", fg: palette.accent },
+  chat: { icon: <ChatBubbleRoundedIcon />, bg: palette.warnSoft, fg: palette.warn },
+  system: {
+    icon: <CampaignRoundedIcon />,
+    bg: palette.accentSoft,
+    fg: palette.accent,
+  },
 };
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const toast = useToast();
   const [type, setType] = useState("all");
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -56,6 +63,28 @@ export default function NotificationsPage() {
   const { data: items, isLoading } = useNotifications();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
+
+  // 알림 클릭 → (1) 읽음 처리(optimistic) (2) 종류별로 적절한 화면으로 이동
+  // - chat   : roomId 있으면 채팅방으로
+  // - trade  : transactionId 있으면 주문 상세, 없으면 거래 내역, 그 외 bookId 폴백
+  // - system : bookId 있으면 책 상세, 없으면 공지
+  const handleClick = (n: NotificationRow) => {
+    if (n.unread) markRead.mutate(n.id);
+    if (n.type === "chat") {
+      if (n.roomId) router.push(`/chat/${n.roomId}`);
+      else router.push("/chat");
+      return;
+    }
+    if (n.type === "trade") {
+      if (n.transactionId) router.push(`/orders/${n.transactionId}`);
+      else if (n.bookId) router.push(`/books/${n.bookId}`);
+      else router.push("/mypage/orders");
+      return;
+    }
+    // system
+    if (n.bookId) router.push(`/books/${n.bookId}`);
+    else router.push("/notices");
+  };
 
   // 종류 필터 + 안읽음 필터 동시 적용
   const list = (items ?? []).filter((n) => {
@@ -157,10 +186,8 @@ export default function NotificationsPage() {
                 background: n.unread ? palette.surface : "transparent",
                 cursor: "pointer",
               }}
-              // 클릭 → mutation 이 optimistic 으로 캐시 갱신 + 서버 UPDATE
-              onClick={() => {
-                if (n.unread) markRead.mutate(n.id);
-              }}
+              // 클릭 → 읽음 처리 + 종류별 화면으로 이동
+              onClick={() => handleClick(n)}
             >
               <Box
                 sx={{

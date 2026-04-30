@@ -83,12 +83,30 @@ function LoginPageInner() {
       <AppHeader title="" left="back" bordered={false} />
       <Box sx={{ p: 3, pt: 1, display: "flex", flexDirection: "column", flex: 1 }}>
         <Box>
-          <Typography sx={{ fontSize: 26, fontWeight: 800, lineHeight: 1.3 }}>
+          <Typography
+            sx={{
+              fontSize: 11.5,
+              fontWeight: 800,
+              letterSpacing: "0.18em",
+              color: palette.primary,
+              mb: 1.25,
+            }}
+          >
+            WELCOME BACK
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: 26,
+              fontWeight: 800,
+              lineHeight: 1.3,
+              letterSpacing: "-0.02em",
+            }}
+          >
             다시 오신 걸
             <br />
-            환영해요 👋
+            환영해요.
           </Typography>
-          <Typography sx={{ fontSize: 14, color: palette.inkMute, mt: 1 }}>
+          <Typography sx={{ fontSize: 14, color: palette.inkMute, mt: 1.25 }}>
             이메일과 비밀번호를 입력해주세요.
           </Typography>
         </Box>

@@ -1,13 +1,13 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-04-30 (v2 — 실명 마스킹 + 채팅 읽음 RLS 픽스)
+> 최종 업데이트: 2026-04-30 (v3 — UI 테마 리프레시 + 채팅 말풍선/알림 라우팅 픽스 + 스플래시 리디자인)
 
 ## 프로젝트 개요
 
 중고 도서 거래 모바일 웹 플랫폼. 책장의 책을 이웃과 사고파는 당근마켓 스타일 앱.
 
 - **기술 스택**: Next.js 14 (App Router, TypeScript) · MUI 6 · Supabase · Vercel
-- **디자인**: "도서관 그린" 테마 (`primary: #1F6F4E`), Pretendard Variable
+- **디자인**: "라이브러리 / 매거진" 톤 (`primary: #2D5F4A` deep sage, bg `#F7F4ED` warm cream, accent `#D9695A` terracotta), Pretendard Variable
 - **레이아웃**: 모바일 퍼스트 + 데스크톱 어댑티브 (좌측 브랜드 패널 + 우측 420px 앱 카드)
 
 자세한 기획은 [`개발기획서.md`](./개발기획서.md), 사용법은 [`README.md`](./README.md), DB 구조는 [`ERD.md`](./ERD.md), 최근 UI·코드 점검 이력은 [`디자인점검노트.md`](./디자인점검노트.md) 참고.
@@ -57,6 +57,16 @@
 | **정적 페이지** | `lib/staticContent.ts` (NOTICES / TERMS_SECTIONS / SUPPORT_INFO) + `/notices` 목록 + `/notices/[id]` 상세 + `/terms` 약관 + `/help` 1:1 문의(폼 → mailto: 메일 앱 호출) + `/mypage/coupons` 쿠폰함(빈 상태 안내). 마이페이지 SECTIONS 의 "준비중" 칩 4종을 모두 실링크로 교체 |
 | **실명 마스킹** | 회원가입 시 입력한 실명이 그대로 `profiles.display_name` 에 저장돼 다른 사용자 화면에 노출되던 버그 픽스. `anonymizeName(name)` 헬퍼(첫 글자만 노출, 나머지는 `*`. "김민주" → "김**") 추가 + `fetchChat`/`listOrders`/`fetchOrder`/`fetchReviewContext`/`listReceivedReviews` 모두 적용. DB 트리거(`notify_on_message`/`notify_on_transaction_insert`/`notify_on_review`) 도 0008 에서 `mask_display_name(text)` SQL 함수로 마스킹 + 기존 알림 행 backfill |
 | **채팅 읽음 RLS 픽스** | 0001 에 `messages` UPDATE RLS 정책이 빠져 있어 `markRoomMessagesRead` 의 read_at UPDATE 가 조용히 차단(0행 영향) → 채팅방 들어가서 읽어도 unread 배지가 안 사라지던 버그. 0007 에서 채팅방 참여자(buyer/seller) 가 `messages` UPDATE 가능하도록 정책 추가 |
+| **UI 테마 리프레시 (v3)** | `lib/theme.ts` 의 `palette` / `radius` / `shadow` 토큰을 새 톤으로 일괄 교체 — primary `#1F6F4E → #2D5F4A` (sage), bg `#FAF7F2 → #F7F4ED` (warm cream), accent `#FF6B5E → #D9695A` (terracotta). 새 토큰 추가: `primaryTint`, `surfaceAlt`, `accentSoft`, `warn` / `warnSoft`, `radius.xl`, `shadow.pop`. 버튼/Input/Switch/Card 기본 hover·focus·disabled 정리. `globals.css` 의 body bg, skeleton 색도 새 라인에 맞춰 정리. 컴포넌트(`StatusBadge`, `MannerTemperature`, `BookCard`, `BookImage` 자리표시 6색, `app/notifications` 아이콘 매핑)에 박혀 있던 직접 hex 도 모두 토큰으로 치환 |
+| **스플래시 페이지 리디자인** | `app/page.tsx` — 떠다니는 책 표지 데코 3장(채식주의자/코스모스/아몬드)을 인라인 SVG 아트워크로 그려 넣음. 잎·행성+별·아몬드 형태. 각 표지 좌측 책등(spine) 음영 + inset highlight + shimmer 슬라이드 + `clipPath: inset(0 round 8px)` 로 라운드 클리핑 (rotate 부모 + skew 자식 조합에서 overflow:hidden 이 새는 이슈 회피). 로고 글로우 링, "EMPTY · YOUR · SHELF" 키커, 라이브 활동 칩 ("3,250명이 책장을 비우고 있어요"), stagger 페이드인. 키프레임 `splashRise` / `splashFloat` / `splashGlow` / `splashShimmer` 신규 (globals.css) |
+| **PhoneFrame 데스크톱 패널 리프레시** | `components/ui/PhoneFrame.tsx` — 라디얼 그라데이션 배경 + 글래스 통계 박스(borders + backdrop-blur), 카드 라운드 28 → `radius.xl`, EYEBROW 키커 추가 |
+| **홈 비주얼 다듬기** | 이벤트 배너의 거대 📚 이모지 제거 → 추상 라디얼/링 데코로 교체. 카테고리 칩 hover lift, 인기 판매자 카드 hover 정리. **중복되던 등록 Fab 제거** — `BottomTabNav` 가운데 + 버튼과 동일 동작이라 두 번 떠 있던 문제. 헤더 알림 Badge 의 `invisible={unreadCount === 0}` 연결 |
+| **하단 탭 강조 버튼** | `components/ui/BottomTabNav.tsx` 가운데 + 버튼: 그라데이션 + `shadow.pop`, 52px 로 살짝 키움 |
+| **채팅 말풍선 너비 버그 픽스** | `app/chat/[id]/page.tsx` — 상대 메시지 쪽에서 `maxWidth: "70%"` 가 wrapper Box(시간 포함)의 콘텐츠 너비 기반으로 깎이는 순환 구조였음. "안녕하세요" 같은 짧은 글이 한 글자 폭으로 깨지던 원인. wrapper 를 column Stack 으로 만들고 `maxWidth: "75%"` + `minWidth: 0` + `alignItems` 를 wrapper 로 hoist, bubble 은 `maxWidth: 100%`. mine/!mine 양쪽 통일 + `wordBreak: break-word` / `overflowWrap: anywhere` / `pre-wrap` 일관 적용 |
+| **알림 → 라우팅 + 읽음 처리** | `NotificationRow` 에 `roomId` / `transactionId` / `bookId` 노출 (0006 트리거 payload key 와 매핑: `room_id` / `transaction_id` / `book_id`). `app/notifications/page.tsx` 에 `handleClick` — 종류별로 `/chat/{roomId}` · `/orders/{transactionId}` · `/books/{bookId}` · `/mypage/orders` · `/notices` 폴백 라우팅. mock seed (n-1: bookId=1, n-2: roomId=c-1, n-3: bookId=3) 도 라우팅 가능하게 채움 |
+| **알림 빨간점 안 사라짐 픽스** | (1) mock 모드의 `markNotificationRead` / `markAllNotificationsRead` 가 no-op 이라 옵티미스틱 업데이트가 다음 refetch 에 덮였음 → `mockMarkNotificationRead` / `mockMarkAllNotificationsRead` 추가. (2) `AppBootstrap` 이 `useNotifications()` 를 호출하지 않아 알림 페이지에 들어가기 전엔 `notificationsStore.unreadCount` 가 0 이었음 → 부트스트랩에서 알림 목록을 hydrate 하도록 추가. (3) 홈 헤더의 `<Badge variant="dot">` 에 `invisible` 조건 누락 → 항상 켜져 있던 빨간점을 store 와 연결 |
+| **로그인 페이지 정리** | `app/login/page.tsx` — 👋 이모지 제거, "WELCOME BACK" eyebrow + 위계 정리 |
+| **마이페이지 디테일** | 프로필 ✓ 체크마크 → `VerifiedRoundedIcon`, 통계 카드 hover 시 `primaryTint` |
 
 ### 미완성 / 연결 안 된 것
 

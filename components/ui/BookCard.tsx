@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import BookImage from "./BookImage";
 import StatusBadge, { type SaleStatus } from "./StatusBadge";
 import LikeButton from "./LikeButton";
-import { palette } from "@/lib/theme";
+import { palette, radius } from "@/lib/theme";
 
 // 카드에 필요한 최소 정보 — repo.ts 의 변환 함수가 이 형태로 데이터를 만들어 넘김
 export interface BookSummary {
@@ -53,8 +53,8 @@ export function BookFeedItem({ book }: { book: BookSummary }) {
         px: 2,
         borderBottom: `1px solid ${palette.line}`,
         cursor: "pointer",
-        transition: "background 100ms",
-        "&:hover": { background: palette.lineSoft },
+        transition: "background 120ms ease",
+        "&:hover": { background: palette.surfaceAlt },
         "&:active": { background: palette.lineSoft },
       }}
     >
@@ -145,11 +145,12 @@ export function BookGridCard({ book }: { book: BookSummary }) {
       sx={{
         cursor: "pointer",
         background: palette.surface,
-        borderRadius: 3,
+        borderRadius: `${radius.md}px`,
         overflow: "hidden",
         border: `1px solid ${palette.line}`,
-        transition: "transform 120ms",
-        "&:active": { transform: "scale(0.98)" },
+        transition: "transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease",
+        "&:hover": { borderColor: palette.primary },
+        "&:active": { transform: "scale(0.985)" },
       }}
     >
       <Box sx={{ position: "relative" }}>
@@ -228,11 +229,12 @@ export function BookListRow({ book }: { book: BookSummary }) {
             sx={{
               fontSize: 10.5,
               border: `1px solid ${palette.line}`,
-              px: 0.75,
+              background: palette.lineSoft,
+              px: 0.85,
               py: 0.25,
               borderRadius: 999,
               color: palette.inkMute,
-              fontWeight: 600,
+              fontWeight: 700,
             }}
           >
             {book.state}

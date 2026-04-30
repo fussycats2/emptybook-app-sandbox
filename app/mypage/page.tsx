@@ -14,6 +14,7 @@ import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import LocalActivityRoundedIcon from "@mui/icons-material/LocalActivityRounded";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
+import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/ui/AppHeader";
 import BottomTabNav from "@/components/ui/BottomTabNav";
@@ -150,11 +151,10 @@ export default function MyPage() {
                   color: "#fff",
                   display: "grid",
                   placeItems: "center",
-                  fontSize: 11,
                   border: `2px solid ${palette.surface}`,
                 }}
               >
-                ✓
+                <VerifiedRoundedIcon sx={{ fontSize: 14 }} />
               </Box>
             </Box>
             <Box sx={{ flex: 1 }}>
@@ -261,7 +261,13 @@ export default function MyPage() {
                     alignItems: "center",
                     gap: 1.25,
                     cursor: clickable ? "pointer" : "default",
-                    "&:hover": clickable ? { background: palette.lineSoft } : {},
+                    transition: "border-color 120ms ease, background 120ms ease",
+                    "&:hover": clickable
+                      ? {
+                          borderColor: palette.primary,
+                          background: palette.primaryTint,
+                        }
+                      : {},
                   }}
                 >
                   <Box
