@@ -36,11 +36,12 @@ export function useCreateOrder() {
     mutationFn: (input: { bookId: string }) => createOrder(input),
     onSuccess: (_res, input) => {
       qc.invalidateQueries({ queryKey: queryKeys.order.list() });
-      // 책 status 가 SOLD 로 바뀌므로 도서 리스트/상세 캐시도 무효화
+      // 책 status 가 SOLD 로 바뀌므로 도서 리스트/상세 + 채팅 목록(책 배지) 갱신
       qc.invalidateQueries({ queryKey: queryKeys.book.lists() });
       qc.invalidateQueries({
         queryKey: queryKeys.book.detail(input.bookId),
       });
+      qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
     },
   });
 }

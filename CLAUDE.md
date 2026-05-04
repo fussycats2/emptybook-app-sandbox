@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-04-30 (v3 — UI 테마 리프레시 + 채팅 말풍선/알림 라우팅 픽스 + 스플래시 리디자인)
+> 최종 업데이트: 2026-05-04 (v4 — 데이터 정합성 정리 + transactions FSM + 활성 채팅방 알림 자동 read)
 
 ## 프로젝트 개요
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 현재 구현 상태 (2026-04-30 기준)
+## 현재 구현 상태 (2026-05-04 기준)
 
 ### 완료된 것
 
@@ -67,6 +67,14 @@
 | **알림 빨간점 안 사라짐 픽스** | (1) mock 모드의 `markNotificationRead` / `markAllNotificationsRead` 가 no-op 이라 옵티미스틱 업데이트가 다음 refetch 에 덮였음 → `mockMarkNotificationRead` / `mockMarkAllNotificationsRead` 추가. (2) `AppBootstrap` 이 `useNotifications()` 를 호출하지 않아 알림 페이지에 들어가기 전엔 `notificationsStore.unreadCount` 가 0 이었음 → 부트스트랩에서 알림 목록을 hydrate 하도록 추가. (3) 홈 헤더의 `<Badge variant="dot">` 에 `invisible` 조건 누락 → 항상 켜져 있던 빨간점을 store 와 연결 |
 | **로그인 페이지 정리** | `app/login/page.tsx` — 👋 이모지 제거, "WELCOME BACK" eyebrow + 위계 정리 |
 | **마이페이지 디테일** | 프로필 ✓ 체크마크 → `VerifiedRoundedIcon`, 통계 카드 hover 시 `primaryTint` |
+| **HIDDEN 책 일관성 픽스 (v4)** | `bookStatusToUI(status, {free})` 헬퍼 신설(`lib/repo.ts`). `rowToSummary` / `rowToDetail` / `listChats` / `fetchChat` 가 모두 같은 매핑 — DB의 HIDDEN 이 UI 의 "canceled" 로 정상 변환. 기존엔 매핑이 빠져 "selling" 으로 폴백 → 홈에선 `.neq("status","HIDDEN")` 으로 빠지지만 마이페이지·찜·채팅·도서 상세에서는 "판매중"으로 잘못 표기되던 버그. mock 폴백(`listRecentBooks` / `searchBooks` / `listBooksByIds` / `listLikedBooks`) 도 `status === "canceled"` 인 책을 공개 목록에서 제외. `mockCancelBook` 이 "sold" 위장 → "canceled" 로 정상화. `/mypage/selling` 에 "취소됨" 필터 칩 추가. `/books/[id]` 와 `/checkout/[id]` 가 취소된 책의 CTA 비활성 + 안내 라벨 ("판매 종료") |
+| **거래 status PAID 매핑 (v4)** | `listOrders` / `fetchOrder` 가 DB의 PAID 도 "배송중"으로 묶음 — 결제 직후 마이페이지에서 "거래중"으로 잘못 표시되던 버그 픽스. mock 의 createOrder 가 "배송중"으로 만드는 동작과 일치 |
+| **React Query 캐시 파급 보강 (v4)** | `useCancelBook` / `useDeleteBook` 가 chat 목록·찜 목록 캐시도 invalidate (이전엔 book 캐시만). `useCreateOrder` 가 chat 목록도 invalidate — 책 status 가 SOLD 로 바뀌면 채팅 목록 카드의 책 배지도 갱신돼야 함 |
+| **검색 wildcard 이스케이프 (v4)** | `searchBooks` 의 ilike 입력에서 `%` / `_` / `\` 이스케이프 — "50%" 같은 입력이 모든 책에 매칭되던 잠재 버그 차단 |
+| **알림 페이지 useMemo (v4)** | 종류 필터 + 안읽음 필터 결과를 useMemo 로 캐시 — 토글마다 새 배열을 만들던 부분 정리 |
+| **books / profiles UPDATE WITH CHECK (v4)** | `0009_update_with_check.sql` — RLS UPDATE 정책에 `with check` 절 추가. 기존엔 USING 만 있어 셀러가 자기 책의 `seller_id` 를 다른 사용자로 변경(=양도) 가능한 형식적 빈틈이 있었음. profiles.id 도 동일. 양도 기능을 추후 도입하면 SECURITY DEFINER RPC 로 우회 |
+| **transactions 상태 머신 (v4)** | `0010_transactions_fsm.sql` — BEFORE UPDATE 트리거 `enforce_transaction_status` 로 FSM 강제. 허용 전이는 **PAID → COMPLETED, buyer 만**. CANCELED 직행 / 종결 상태(COMPLETED·CANCELED) 변경 / seller 의 거래 확정 모두 RAISE EXCEPTION 으로 차단. INSERT 도 RLS 의 with check 로 `status='PAID'` 강제. `completeOrder` 가 에러 무시 → throw 로 변경, `/orders/[id]` 가 try/catch 로 실패 토스트. 환불 PG 도입 전엔 사용자가 직접 CANCELED 만들 수 없게 잠금 |
+| **활성 채팅방 알림 자동 read (v4)** | `markRoomChatNotificationsRead(roomId)` repo 추가 — `payload->>room_id` 로 그 방의 MESSAGE kind 알림만 일괄 read_at 갱신. `/chat/[id]` 가 `markRoomMessagesRead` 와 병렬 호출. 사용자가 채팅방을 보고 있는 동안엔 알림 목록 빨간점이 다시 켜지지 않음. mock 동등 구현 `mockMarkRoomChatNotificationsRead`. presence 테이블이나 heartbeat 없는 단순 해법 — 추후 디바이스 푸시(FCM) 도입 시 presence 기반 옵션으로 업그레이드 가능 |
 
 ### 미완성 / 연결 안 된 것
 
@@ -74,7 +82,7 @@
 |------|------|------|
 | **OAuth 로그인** | 미연동 | 카카오/네이버/Apple 버튼만 있음 (토스트로 "준비중") |
 | **이메일 인증 플로우** | 부분 | 가입 시 `data.session` 없으면 `/login`으로 안내. Supabase 대시보드 "Confirm email" 정책 확정 필요 |
-| **결제 PG** | Mock UI | 실제 PG 연동 없음, 트랜잭션은 PAID로 즉시 기록 |
+| **결제 PG** | Mock UI | 실제 PG 연동 없음, 트랜잭션은 PAID로 즉시 기록. 0010 FSM 트리거가 현재 PAID→COMPLETED 만 허용하고 CANCELED 진입을 차단 — 환불 PG 도입 시 트리거에 `PAID → CANCELED` 전이(권한 정책 포함)를 추가해야 함 |
 | **알림 푸시(Push)** | 없음 | 인앱 알림은 트리거+Realtime 으로 완성. 디바이스 푸시(FCM/Web Push)는 Edge Functions 미작성 |
 | **쿠폰 / 공지 / 문의 / 약관** | 정적 페이지 | UI 는 모두 연결됨. 쿠폰 발급·사용 시스템 + 공지 CMS 는 미구현 (현재 staticContent.ts 의 더미 데이터) |
 
@@ -150,6 +158,8 @@ supabase/migrations/
   0006_notification_triggers.sql           # messages/transactions/reviews → notifications 자동 INSERT
   0007_messages_update_policy.sql          # messages UPDATE RLS — 읽음(read_at) 처리 가능하게
   0008_anonymize_notification_names.sql    # 알림 트리거 + 기존 행 백필에서 display_name 마스킹
+  0009_update_with_check.sql               # books/profiles UPDATE 정책에 with check 추가 (양도 차단)
+  0010_transactions_fsm.sql                # transactions 상태 머신 (PAID→COMPLETED, buyer 만 / CANCELED 차단)
 ```
 
 ---
@@ -169,19 +179,21 @@ supabase/migrations/
 | `fetchBook(id)` | 도서 상세 |
 | `createBook(input)` | 도서 등록 (coverUrl 포함) |
 | `listMyBooks()` | 내가 등록한 책 (`/mypage/selling`, 마이페이지 STATS) |
-| `cancelBook(bookId)` | 판매 취소 (status → HIDDEN) |
+| `cancelBook(bookId)` | 판매 취소 (status → HIDDEN). UI 에서는 "취소" 배지로 표시 |
 | `deleteBook(bookId)` | 영구 삭제. 거래 이력으로 RESTRICT 막히면 호출자가 `cancelBook` 으로 폴백 |
 | `listBooksByIds(ids)` | id 배열로 책 일괄 조회 — 입력 순서 유지, HIDDEN/없는 책은 자동 skip. 최근 본 상품용 |
+| `bookStatusToUI(status, {free?})` | DB의 `BookStatus` + 무료나눔 여부 → UI 의 `SaleStatus` 매핑. HIDDEN → "canceled" 우선. rowToSummary/rowToDetail/listChats/fetchChat 가 전부 사용 |
 | `uploadBookImages(bookId, files, { setCoverIfMissing })` | Storage `book-images` 업로드 + `book_images` INSERT. setCoverIfMissing 시 `books.cover_url` 비어 있으면 첫 사진 URL 로 채움. mock/비로그인이면 no-op |
 | `listOrders()` | 주문 내역 — buyer/seller 양쪽 join 후 `side: "buy" \| "sell"` 채움 |
 | `fetchOrder(id)` | 주문 상세 |
 | `createOrder({ bookId })` | 결제 시점 호출 |
-| `completeOrder(id)` | 거래 확정 |
+| `completeOrder(id)` | 거래 확정. 0010 FSM 트리거 위반 시 에러를 throw — 호출자가 try/catch 로 처리 |
 | `listChats()` | 채팅 목록 |
 | `fetchChat(id)` | 채팅 상세 (chat_rooms + 책 + 양쪽 프로필 join, 상대방 자동 결정) |
 | `getOrCreateChatRoom(bookId)` | (book, 나, seller) chat_rooms 조회·생성 → "채팅" 버튼 진입점. 본인 책이면 `error:"self"` |
 | `listMessages(roomId)` / `sendMessage(roomId, body)` | 채팅 메시지 조회/전송 (전송 시 chat_rooms.last_message 동기화) |
 | `markRoomMessagesRead(roomId)` | 채팅방 진입 시 상대 메시지 일괄 read_at 갱신. 갱신된 행 수 반환 (0 이면 캐시 invalidate 스킵 가능) |
+| `markRoomChatNotificationsRead(roomId)` | 그 방의 MESSAGE kind 알림(`payload->>room_id = roomId`) 일괄 read_at 갱신 — 채팅방을 보고 있는 동안 빨간점이 안 켜지게. `markRoomMessagesRead` 와 짝 |
 | `useRealtimeChat(roomId)` *(훅)* | 초기 로드 + Realtime INSERT 구독 + send. dedupe by id, channel topic 에 random suffix (Strict Mode 안전) |
 | `isUuid(s)` | UUID 형식 검사 — mock 시드 id 가 Supabase 쿼리로 흘러가지 않게 가드 |
 | `anonymizeName(name, fallback?)` | 다른 사용자에게 노출되는 이름 마스킹. 첫 글자만 남기고 나머지는 `*`. 빈 값이면 fallback ("상대방") 반환 |
@@ -220,8 +232,8 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 
 > 남은 항목은 모두 외부 키/계약/콘솔 작업이 필요한 통합 작업이다.
 
-1. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker
-2. **결제 PG 연동** — 현재 Mock UI를 토스/카카오페이 등으로 교체
+1. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
+2. **결제 PG 연동** — 현재 Mock UI를 토스/카카오페이 등으로 교체. 환불 흐름 추가 시 `0010_transactions_fsm.sql` 의 `enforce_transaction_status` 함수에 `PAID → CANCELED` 전이 + 권한 정책(seller? buyer? admin?) 결정 필요
 3. **OAuth 로그인** — 카카오/네이버/Apple 실연동 (현재는 토스트로 "준비중")
 4. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
 

@@ -121,7 +121,9 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
     ? !!user && book.sellerId === user.id
     : book.seller === "나";
   const isSold = status === "sold";
-  const ctaDisabled = isMine || isSold;
+  const isCanceled = status === "canceled";
+  // 거래완료/취소된 책은 본인이 아니어도 구매 불가
+  const ctaDisabled = isMine || isSold || isCanceled;
 
   // "판매 취소" — books.status → HIDDEN. 매물 목록/검색에서 사라지지만 데이터는 보존
   const handleCancel = async () => {
@@ -465,7 +467,15 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
             disabled={ctaDisabled}
             onClick={() => router.push(`/checkout/${book.id}`)}
           >
-            {isSold ? "거래완료" : isMine ? "내 책" : book.free ? "신청하기" : "구매하기"}
+            {isCanceled
+              ? "판매 종료"
+              : isSold
+              ? "거래완료"
+              : isMine
+              ? "내 책"
+              : book.free
+              ? "신청하기"
+              : "구매하기"}
           </Button>
         </Stack>
       </FixedFooter>

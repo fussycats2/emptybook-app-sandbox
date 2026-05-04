@@ -232,9 +232,15 @@ export default function OrderConfirmPage({
         onCancel={() => setConfirm(false)}
         onConfirm={async () => {
           setConfirm(false);
-          await completeMutation.mutateAsync(params.id);
-          toast?.show("거래가 확정됐어요");
-          router.push(`/orders/${params.id}/review`);
+          // FSM 트리거(0010) 가 권한/상태 위반을 RAISE EXCEPTION 으로 막을 수 있어서
+          // try/catch 로 사용자에게 실패를 명확히 알린다 (이미 완료된 거래에 다시 누른 경우 등)
+          try {
+            await completeMutation.mutateAsync(params.id);
+            toast?.show("거래가 확정됐어요");
+            router.push(`/orders/${params.id}/review`);
+          } catch {
+            toast?.show("거래 확정에 실패했어요", "error");
+          }
         }}
         title="거래를 확정할까요?"
         description="확정하면 후기를 작성할 수 있어요. 환불은 어렵습니다."

@@ -17,6 +17,7 @@ import {
   searchBooks,
 } from "@/lib/repo";
 import { queryKeys } from "./keys";
+import { likeKeys } from "./likeHooks";
 
 // 홈 피드 — 최근 등록 도서
 export function useRecentBooks(limit = 10) {
@@ -78,7 +79,9 @@ export function useCreateBook() {
   });
 }
 
-// 판매 취소
+// 판매 취소 — 책의 status 가 HIDDEN 으로 바뀌면 다음 화면들도 영향:
+//   - 채팅 목록(`listChats`): 책 status 가 join 으로 같이 들어가 배지가 변함
+//   - 찜 목록(`listLikedBooks`): HIDDEN 책은 결과에서 빠짐
 export function useCancelBook() {
   const qc = useQueryClient();
   return useMutation({
@@ -86,11 +89,13 @@ export function useCancelBook() {
     onSuccess: (_ok, bookId) => {
       qc.invalidateQueries({ queryKey: queryKeys.book.lists() });
       qc.invalidateQueries({ queryKey: queryKeys.book.detail(bookId) });
+      qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
+      qc.invalidateQueries({ queryKey: likeKeys.list() });
     },
   });
 }
 
-// 영구 삭제
+// 영구 삭제 — cancel 과 동일한 파급 (chat/likes 도 갱신)
 export function useDeleteBook() {
   const qc = useQueryClient();
   return useMutation({
@@ -98,6 +103,8 @@ export function useDeleteBook() {
     onSuccess: (_ok, bookId) => {
       qc.invalidateQueries({ queryKey: queryKeys.book.lists() });
       qc.invalidateQueries({ queryKey: queryKeys.book.detail(bookId) });
+      qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
+      qc.invalidateQueries({ queryKey: likeKeys.list() });
     },
   });
 }

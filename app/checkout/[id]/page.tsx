@@ -62,6 +62,15 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
   const coupon = book?.free ? 0 : 1000;
   const total = Math.max(0, goods + ship - coupon);
 
+  // 거래 불가 상태인 책은 결제로 진행 못 하게 — sold/canceled 일 때 버튼 비활성
+  // (도서 상세에서 이미 막혀 있지만, 직접 URL 진입 / 캐시 갱신 늦은 경우의 안전망)
+  const unavailableLabel =
+    book?.status === "sold"
+      ? "이미 거래된 책이에요"
+      : book?.status === "canceled"
+      ? "판매가 종료된 책이에요"
+      : null;
+
   if (!book) {
     return (
       <>
@@ -325,17 +334,20 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
       <FixedFooter>
         <Button
           fullWidth
-          disabled={!agreed || submitting}
+          disabled={!agreed || submitting || !!unavailableLabel}
           onClick={submit}
           sx={{
-            ...(pay === "kakao" && {
-              background: "#FEE500",
-              color: "#3C1E1E",
-              "&:hover": { background: "#FFE000" },
-            }),
+            ...(pay === "kakao" &&
+              !unavailableLabel && {
+                background: "#FEE500",
+                color: "#3C1E1E",
+                "&:hover": { background: "#FFE000" },
+              }),
           }}
         >
-          {book.free
+          {unavailableLabel
+            ? unavailableLabel
+            : book.free
             ? "무료나눔 신청하기"
             : `${total.toLocaleString()}원 결제하기`}
         </Button>

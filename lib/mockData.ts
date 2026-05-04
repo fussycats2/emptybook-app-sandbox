@@ -507,12 +507,13 @@ export function mockCreateBook(input: {
   return book;
 }
 
-// 등록 취소 — 책을 HIDDEN 상태로(목록에서 사라짐, 데이터는 남김)
+// 등록 취소 — 책을 HIDDEN 상태로(공개 목록에서 사라짐, 데이터는 남김)
+// mock 의 SaleStatus 에는 "canceled" 가 있으므로 그것을 사용 (실제 DB 의 HIDDEN 과 매핑)
 export function mockCancelBook(bookId: string): boolean {
   const s = getStore();
   const book = s.books.find((b) => b.id === bookId);
   if (!book) return false;
-  book.status = "sold"; // mock의 SaleStatus 에는 HIDDEN 표현이 없어 sold(거래완료)로 대체
+  book.status = "canceled";
   return true;
 }
 
@@ -813,6 +814,22 @@ export function mockMarkNotificationRead(id: string) {
 export function mockMarkAllNotificationsRead() {
   const s = getStore();
   s.notifications = s.notifications.map((n) => ({ ...n, unread: false }));
+}
+
+// 특정 채팅방의 chat 알림만 일괄 읽음 처리 — 사용자가 그 방을 보고 있는 동안엔
+// 알림 페이지의 빨간점이 켜지지 않도록. (markRoomMessagesRead 와 짝)
+// 반환: 갱신된 행 수 (캐시 invalidate 스킵 판단용)
+export function mockMarkRoomChatNotificationsRead(roomId: string): number {
+  const s = getStore();
+  let n = 0;
+  s.notifications = s.notifications.map((noti) => {
+    if (noti.type === "chat" && noti.unread && noti.roomId === roomId) {
+      n += 1;
+      return { ...noti, unread: false };
+    }
+    return noti;
+  });
+  return n;
 }
 
 // 정적 메타데이터 (자주 바뀌지 않는 표시용 데이터)

@@ -86,6 +86,7 @@ export default function MyPage() {
   // 최근 본 책 개수 — localStorage persist 라 첫 프레임은 0 일 수 있다 (SSR/hydration 안전)
   const recentCount = useRecentlyViewedStore((s) => s.items.length);
 
+  // "판매중" 카운트는 실제로 매물에 노출되는 상태만 — sold/canceled 는 제외
   const sellingCount = myBooks
     ? myBooks.filter((b) => {
         const s = b.status ?? (b.free ? "free" : "selling");

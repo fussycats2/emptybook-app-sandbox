@@ -17,7 +17,7 @@ import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
 import ChatBubbleRoundedIcon from "@mui/icons-material/ChatBubbleRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 import NotificationsOffRoundedIcon from "@mui/icons-material/NotificationsOffRounded";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
@@ -86,12 +86,16 @@ export default function NotificationsPage() {
     else router.push("/notices");
   };
 
-  // 종류 필터 + 안읽음 필터 동시 적용
-  const list = (items ?? []).filter((n) => {
-    if (type !== "all" && n.type !== type) return false;
-    if (unreadOnly && !n.unread) return false;
-    return true;
-  });
+  // 종류 필터 + 안읽음 필터 동시 적용 — 알림이 많을 때 스크롤/토글 시 매 렌더 재계산 회피
+  const list = useMemo(
+    () =>
+      (items ?? []).filter((n) => {
+        if (type !== "all" && n.type !== type) return false;
+        if (unreadOnly && !n.unread) return false;
+        return true;
+      }),
+    [items, type, unreadOnly]
+  );
 
   return (
     <>

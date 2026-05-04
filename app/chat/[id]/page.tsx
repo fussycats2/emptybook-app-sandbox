@@ -28,7 +28,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { useChat } from "@/lib/query/chatHooks";
 import { useBook } from "@/lib/query/bookHooks";
 import { useRealtimeChat } from "@/lib/realtime/useRealtimeChat";
-import { markRoomMessagesRead } from "@/lib/repo";
+import { markRoomChatNotificationsRead, markRoomMessagesRead } from "@/lib/repo";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
 
@@ -62,16 +62,23 @@ export default function ChatDetailPage({
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [msgs.length]);
 
-  // 채팅방을 보고 있는 동안 상대 메시지를 읽음으로 마킹
+  // 채팅방을 보고 있는 동안 상대 메시지 + 그 방의 chat 알림을 함께 읽음 처리
   // - 마운트 직후 1회 + 새 메시지가 도착할 때마다 호출 (read_at IS NULL 조건이라 idempotent)
-  // - 갱신된 행이 있으면 채팅 목록 unread 카운트 캐시도 무효화
+  // - 메시지 갱신 → 채팅 목록 unread 캐시 무효화
+  // - 알림 갱신 → 알림 목록 캐시 무효화 (notificationsStore 의 unreadCount 도 자동 갱신)
+  // 두 호출은 독립적이라 병렬 실행
   const qc = useQueryClient();
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const n = await markRoomMessagesRead(params.id);
+      const [msgN, notiN] = await Promise.all([
+        markRoomMessagesRead(params.id),
+        markRoomChatNotificationsRead(params.id),
+      ]);
       if (cancelled) return;
-      if (n > 0) qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
+      if (msgN > 0) qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
+      if (notiN > 0)
+        qc.invalidateQueries({ queryKey: queryKeys.notification.list() });
     })();
     return () => {
       cancelled = true;

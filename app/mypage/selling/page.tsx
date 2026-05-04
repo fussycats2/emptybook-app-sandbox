@@ -17,11 +17,13 @@ import { useMyBooks } from "@/lib/query/bookHooks";
 import { palette } from "@/lib/theme";
 
 // 칩 라벨 ↔ BookSummary.status (UI status) 매핑
+// "취소됨" 은 판매 취소된(=DB books.status="HIDDEN") 책 — 공개 목록에서는 빠지지만 본인은 볼 수 있어야 함
 const FILTERS: { key: string; label: string }[] = [
   { key: "all", label: "전체" },
   { key: "selling", label: "판매중" },
   { key: "reserved", label: "예약중" },
   { key: "sold", label: "판매완료" },
+  { key: "canceled", label: "취소됨" },
 ];
 
 export default function SellingPage() {

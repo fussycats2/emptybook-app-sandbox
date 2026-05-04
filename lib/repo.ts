@@ -25,6 +25,7 @@ import {
   mockListNotifications,
   mockMarkAllNotificationsRead,
   mockMarkNotificationRead,
+  mockMarkRoomChatNotificationsRead,
   mockListOrders,
   mockGetOrCreateChatRoomByBook,
   mockGetProfile,
@@ -52,8 +53,10 @@ import {
   type AppPrefs,
   type BookRow,
   type BookState,
+  type BookStatus,
   type Profile,
 } from "./supabase/types";
+import type { SaleStatus } from "@/components/ui/StatusBadge";
 
 export type BookDetail = MockBook;
 export type OrderRow = MockOrder;
@@ -98,6 +101,19 @@ export const meta = {
   POPULAR_SEARCHES,
 };
 
+// DB의 books.status (+ 무료나눔 여부) → UI 의 SaleStatus 로 매핑
+// HIDDEN 은 "취소됨"이 우선이므로 free 보다 앞에 둔다 — 취소된 무료나눔도 "취소" 로 보여야 함
+export function bookStatusToUI(
+  status: BookStatus,
+  opts: { free?: boolean } = {}
+): SaleStatus {
+  if (status === "HIDDEN") return "canceled";
+  if (opts.free) return "free";
+  if (status === "RESERVED") return "reserved";
+  if (status === "SOLD") return "sold";
+  return "selling";
+}
+
 // DB의 books row → 카드 컴포넌트(BookCard)에 넘길 가벼운 형태로 변환
 function rowToSummary(b: BookRow): BookSummary {
   const isFree = b.price === 0;
@@ -110,13 +126,7 @@ function rowToSummary(b: BookRow): BookSummary {
     state: STATE_LABEL[b.state],
     loc: b.region ?? undefined,
     date: new Date(b.created_at).toLocaleDateString("ko-KR"),
-    status: isFree
-      ? "free"
-      : b.status === "RESERVED"
-      ? "reserved"
-      : b.status === "SOLD"
-      ? "sold"
-      : "selling",
+    status: bookStatusToUI(b.status, { free: isFree }),
     free: isFree,
     likes: b.like_count,
     coverUrl: b.cover_url ?? undefined,
@@ -152,13 +162,7 @@ function rowToDetail(b: BookRow): BookDetail {
         : b.trade_method === "DIRECT"
         ? "직거래"
         : "택배",
-    status: isFree
-      ? "free"
-      : b.status === "RESERVED"
-      ? "reserved"
-      : b.status === "SOLD"
-      ? "sold"
-      : "selling",
+    status: bookStatusToUI(b.status, { free: isFree }),
     free: isFree,
     likes: b.like_count,
     chats: 0,
@@ -301,9 +305,12 @@ export async function updateAppPrefs(prefs: AppPrefs): Promise<void> {
 
 // 홈 피드용 — 최근 등록된 책 목록
 // HIDDEN(신고/숨김) 상태인 책은 제외하고, 최신순으로 limit 개 조회
+// mock 모드의 SaleStatus 에서 "canceled" 인 책도 같이 제외해서 Supabase 모드와 동일하게 보이게 한다
 export async function listRecentBooks(limit = 10): Promise<BookSummary[]> {
   const supabase = await tryClient();
-  if (!supabase) return mockListBooks({ limit }); // Supabase 없으면 mock
+  if (!supabase) {
+    return mockListBooks().filter((b) => b.status !== "canceled").slice(0, limit);
+  }
   const { data, error } = await supabase
     .from("books")
     .select("*")
@@ -311,7 +318,9 @@ export async function listRecentBooks(limit = 10): Promise<BookSummary[]> {
     .order("created_at", { ascending: false })
     .limit(limit);
   // 쿼리 실패 시에도 화면은 계속 보여주도록 mock 폴백
-  if (error || !data) return mockListBooks({ limit });
+  if (error || !data) {
+    return mockListBooks().filter((b) => b.status !== "canceled").slice(0, limit);
+  }
   return (data as BookRow[]).map(rowToSummary);
 }
 
@@ -326,6 +335,8 @@ export async function searchBooks(opts: {
     // Supabase 없을 땐 mock 배열을 직접 필터링
     const list = mockListBooks();
     return list.filter((b) => {
+      // 취소된 책은 검색 결과에서 빠진다 (Supabase 모드의 .neq("status","HIDDEN") 와 동일)
+      if (b.status === "canceled") return false;
       if (opts.q && !b.title.includes(opts.q) && !(b.author ?? "").includes(opts.q))
         return false;
       if (opts.category && b.category !== opts.category) return false;
@@ -335,7 +346,12 @@ export async function searchBooks(opts: {
   }
   // Supabase 쿼리 빌더에 조건을 누적해서 붙여나간다
   let query = supabase.from("books").select("*").neq("status", "HIDDEN");
-  if (opts.q) query = query.ilike("title", `%${opts.q}%`); // 대소문자 무시 부분일치
+  if (opts.q) {
+    // ilike 는 PostgreSQL LIKE 연산자라 % / _ / \ 가 wildcard 로 해석된다.
+    // 사용자가 "50%" 같은 검색어를 넣었을 때 모든 책이 매칭되지 않게 이스케이프
+    const safe = opts.q.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
+    query = query.ilike("title", `%${safe}%`);
+  }
   if (opts.category) query = query.eq("category", opts.category);
   // 사용자 입력은 한글 라벨 → DB enum 으로 변환해서 매칭
   if (opts.state && STATE_TO_LABEL_FROM_KOR[opts.state]) {
@@ -357,7 +373,9 @@ export async function listBooksByIds(ids: string[]): Promise<BookSummary[]> {
   const supabase = await tryClient();
   if (!supabase) {
     const map = new Map<string, BookSummary>(
-      mockListBooks().map((b) => [b.id, b as BookSummary])
+      mockListBooks()
+        .filter((b) => b.status !== "canceled") // 취소된 책은 결과에서 빠진다
+        .map((b) => [b.id, b as BookSummary])
     );
     return ids
       .map((id) => map.get(id))
@@ -615,8 +633,10 @@ export async function listOrders(): Promise<OrderRow[]> {
         : `구매자: ${anonymizeName(t.buyer?.display_name, "-")}`,
       price: `${num.toLocaleString()}원`,
       priceNumber: num,
+      // PAID(결제 완료)도 사용자 시점에선 "배송중" — 발송 후 SHIPPING 으로 좁히기 전까지 동일 처리
+      // (mock 의 createOrder 가 status:"배송중" 으로 만드는 것과 일치)
       status:
-        t.status === "SHIPPING"
+        t.status === "SHIPPING" || t.status === "PAID"
           ? "배송중"
           : t.status === "COMPLETED"
           ? "거래완료"
@@ -653,8 +673,9 @@ export async function fetchOrder(id: string): Promise<OrderRow | null> {
     info: `판매자: ${anonymizeName(t.books?.seller?.display_name, "-")}`,
     price: `${num.toLocaleString()}원`,
     priceNumber: num,
+    // listOrders 와 동일한 매핑 — PAID 도 "배송중"으로 묶음
     status:
-      t.status === "SHIPPING"
+      t.status === "SHIPPING" || t.status === "PAID"
         ? "배송중"
         : t.status === "COMPLETED"
         ? "거래완료"
@@ -726,16 +747,24 @@ export async function createOrder(input: {
 }
 
 // 거래 확정 — 구매자가 "거래완료" 버튼을 눌렀을 때 호출
-export async function completeOrder(id: string) {
+// 0010 의 BEFORE UPDATE 트리거가 PAID→COMPLETED 만, 그것도 buyer 가 호출했을 때만 허용한다.
+// 정책 위반(이미 완료/취소된 거래, 권한 없음) 시 PostgreSQL 에러가 올라오는데
+// 기존 코드는 await 만 하고 무시 → 사용자에게 실패가 안 보였다. 에러를 throw 해서
+// useCompleteOrder.onError 로 토스트를 띄울 수 있게 한다.
+export async function completeOrder(id: string): Promise<void> {
   const supabase = await tryClient();
   if (!supabase) {
     mockUpdateOrderStatus(id, "거래완료");
     return;
   }
-  await supabase
+  const { error } = await supabase
     .from("transactions")
     .update({ status: "COMPLETED" })
     .eq("id", id);
+  if (error) {
+    console.error("[completeOrder] failed", error);
+    throw error;
+  }
 }
 
 // ---------- Chats (채팅) ----------
@@ -793,12 +822,10 @@ export async function listChats(): Promise<ChatRow[]> {
       : "",
     unread: unreadByRoom[r.id] ?? 0,
     buying: r.buyer_id === uid,
-    status:
-      r.books?.status === "SOLD"
-        ? "sold"
-        : r.books?.status === "RESERVED"
-        ? "reserved"
-        : "selling",
+    // 취소된(HIDDEN) 책의 채팅도 그대로 남되 배지에 "취소" 가 뜨도록
+    status: r.books?.status
+      ? bookStatusToUI(r.books.status as BookStatus)
+      : "selling",
   }));
 }
 
@@ -844,12 +871,9 @@ export async function fetchChat(id: string): Promise<ChatRow | null> {
       : "",
     unread: 0,
     buying: isBuying,
-    status:
-      r.books?.status === "SOLD"
-        ? "sold"
-        : r.books?.status === "RESERVED"
-        ? "reserved"
-        : "selling",
+    status: r.books?.status
+      ? bookStatusToUI(r.books.status as BookStatus)
+      : "selling",
   };
 }
 
@@ -1101,6 +1125,36 @@ export async function markNotificationRead(id: string): Promise<void> {
     .is("read_at", null); // 이미 읽음이면 갱신 스킵
 }
 
+// 특정 채팅방의 chat 알림을 일괄 읽음 처리 — 사용자가 그 방을 보고 있는 동안엔
+// "안 읽은 알림" 빨간점이 다시 켜지지 않게 한다 (인앱 알림 한정의 단순 해법).
+// payload->>room_id 가 roomId 인 MESSAGE kind 의 미읽음 알림만 read_at 갱신.
+// idempotent — 이미 읽음인 행은 .is("read_at", null) 로 자동 스킵.
+// 반환: 갱신된 행 수 (호출자가 0 이면 캐시 invalidate 스킵 가능)
+export async function markRoomChatNotificationsRead(
+  roomId: string
+): Promise<number> {
+  const supabase = await tryClient();
+  if (!supabase) return mockMarkRoomChatNotificationsRead(roomId);
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return mockMarkRoomChatNotificationsRead(roomId);
+  // mock 시드 roomId(c-1 등) 면 Supabase 에는 그런 알림이 없다 → mock 처리
+  if (!isUuid(roomId)) return mockMarkRoomChatNotificationsRead(roomId);
+  const { data, error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", uid)
+    .eq("kind", "MESSAGE")
+    .filter("payload->>room_id", "eq", roomId)
+    .is("read_at", null)
+    .select("id");
+  if (error) {
+    console.error("[markRoomChatNotificationsRead] failed", error);
+    return 0;
+  }
+  return (data as { id: string }[] | null)?.length ?? 0;
+}
+
 // 내 알림 전부 읽음 처리 — 헤더 "모두 읽음" 버튼에서 호출
 export async function markAllNotificationsRead(): Promise<void> {
   const supabase = await tryClient();
@@ -1314,18 +1368,23 @@ export async function listLikedBookIds(): Promise<Set<string>> {
 }
 
 // 내가 찜한 책 전체 목록(BookSummary) — /mypage/likes 화면용
-// likes ↔ books inner join 으로 한 번에 가져온다
+// likes ↔ books inner join 으로 한 번에 가져온다.
+// 판매자가 취소한(HIDDEN) 책은 "사라진 책"이므로 내 찜 목록에서도 제외 — 홈 피드와 동일한 가시성
 export async function listLikedBooks(): Promise<BookSummary[]> {
   const supabase = await tryClient();
   if (!supabase) {
     const ids = new Set(mockListLikedIds());
-    return mockListBooks().filter((b) => ids.has(b.id));
+    return mockListBooks().filter(
+      (b) => ids.has(b.id) && b.status !== "canceled"
+    );
   }
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) {
     const ids = new Set(mockListLikedIds());
-    return mockListBooks().filter((b) => ids.has(b.id));
+    return mockListBooks().filter(
+      (b) => ids.has(b.id) && b.status !== "canceled"
+    );
   }
   const { data } = await supabase
     .from("likes")
@@ -1333,9 +1392,9 @@ export async function listLikedBooks(): Promise<BookSummary[]> {
     .eq("user_id", uid)
     .order("created_at", { ascending: false });
   if (!data) return [];
-  // books 가 null 인 행(연결 끊긴 책)은 걸러낸다
   return (data as { books: BookRow | null }[])
     .filter((r): r is { books: BookRow } => !!r.books)
+    .filter((r) => r.books.status !== "HIDDEN") // 취소된 책은 제외
     .map((r) => rowToSummary(r.books));
 }
 
