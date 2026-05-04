@@ -114,16 +114,22 @@ export default function ResetPasswordPage() {
         <Box>
           <Typography
             sx={{
-              fontSize: 11.5,
+              display: "inline-block",
+              fontSize: 10.5,
               fontWeight: 800,
-              letterSpacing: "0.18em",
+              letterSpacing: "0.16em",
               color: palette.primary,
-              mb: 1.25,
+              background: palette.primaryTint,
+              border: `1px solid ${palette.primarySoft}`,
+              borderRadius: 999,
+              px: 1.1,
+              py: 0.4,
+              mb: 1.5,
             }}
           >
             NEW PASSWORD
           </Typography>
-          <Typography sx={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>
+          <Typography sx={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.3 }}>
             새 비밀번호를
             <br />
             설정해주세요.

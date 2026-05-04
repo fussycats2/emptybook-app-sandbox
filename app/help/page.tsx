@@ -57,20 +57,54 @@ export default function HelpPage() {
             alignItems="center"
             gap={1.5}
             sx={{
-              p: 1.75,
-              background: palette.primarySoft,
+              p: 2,
+              background: `linear-gradient(135deg, ${palette.primaryTint} 0%, ${palette.primarySoft} 100%)`,
+              border: `1px solid ${palette.primarySoft}`,
               borderRadius: 3,
-              mb: 2,
+              mb: 2.5,
+              position: "relative",
+              overflow: "hidden",
             }}
           >
-            <Box sx={{ color: palette.primary, display: "grid", placeItems: "center" }}>
+            <Box
+              sx={{
+                position: "absolute",
+                right: -20,
+                top: -20,
+                width: 100,
+                height: 100,
+                borderRadius: "50%",
+                background: `radial-gradient(circle, ${palette.primaryGlow} 0%, transparent 70%)`,
+                pointerEvents: "none",
+              }}
+            />
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: 2,
+                background: palette.surface,
+                color: palette.primary,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+                boxShadow: "0 4px 10px rgba(45,95,74,0.10)",
+              }}
+            >
               <HeadsetMicRoundedIcon />
             </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 800, color: palette.primary }}>
+            <Box sx={{ flex: 1, position: "relative" }}>
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 800,
+                  color: palette.primaryDark,
+                  letterSpacing: "-0.02em",
+                }}
+              >
                 {SUPPORT_INFO.hours}
               </Typography>
-              <Typography sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25 }}>
+              <Typography sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.4 }}>
                 {SUPPORT_INFO.responseSla}
               </Typography>
             </Box>

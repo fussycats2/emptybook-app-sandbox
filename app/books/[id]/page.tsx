@@ -167,7 +167,7 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
 
   return (
     <>
-      {/* 상단 헤더: 처음에는 투명 + 흰 아이콘, 스크롤되면 흰 배경 + 어두운 아이콘으로 전환 */}
+      {/* 상단 헤더: 처음에는 투명 + 흰 아이콘, 스크롤되면 글래시 배경 + 어두운 아이콘으로 전환 */}
       <Box
         sx={{
           position: "absolute",
@@ -176,10 +176,12 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           right: 0,
           zIndex: 5,
           background: scrolled
-            ? palette.surface
-            : "linear-gradient(180deg, rgba(0,0,0,0.28) 0%, transparent 100%)",
-          borderBottom: scrolled ? `1px solid ${palette.line}` : "none",
-          transition: "background 200ms",
+            ? `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surface}F2 100%)`
+            : "linear-gradient(180deg, rgba(0,0,0,0.32) 0%, transparent 100%)",
+          backdropFilter: scrolled ? "saturate(160%) blur(8px)" : "none",
+          WebkitBackdropFilter: scrolled ? "saturate(160%) blur(8px)" : "none",
+          borderBottom: scrolled ? `1px solid ${palette.lineSoft}` : "none",
+          transition: "background 200ms ease, border-color 200ms ease",
           display: "flex",
           alignItems: "center",
           height: 56,
@@ -245,13 +247,17 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
             alignItems="center"
             sx={{
               borderRadius: 3,
-              border: `1px solid ${palette.line}`,
-              p: 1.25,
+              border: `1px solid ${palette.lineSoft}`,
+              background: palette.surfaceAlt,
+              p: 1.5,
+              transition: "border-color 160ms ease, background 160ms ease",
+              cursor: "pointer",
+              "&:hover": { borderColor: palette.line, background: palette.surface },
             }}
           >
             <BookImage seed={book.seller} width={44} height={44} radius={999} />
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 700 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.02em" }}>
                 {book.seller || "책방마니아"}
               </Typography>
               <Stack
@@ -287,21 +293,29 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
                 {book.category ?? "소설"} · {book.date}
               </Typography>
             </Stack>
-            <Typography sx={{ fontSize: 22, fontWeight: 800, lineHeight: 1.3 }}>
+            <Typography
+              sx={{
+                fontSize: 24,
+                fontWeight: 800,
+                lineHeight: 1.3,
+                letterSpacing: "-0.025em",
+              }}
+            >
               {book.title}
             </Typography>
-            <Typography sx={{ fontSize: 13, color: palette.inkMute, mt: 0.25 }}>
+            <Typography sx={{ fontSize: 13, color: palette.inkMute, mt: 0.5 }}>
               {book.author}
               {book.publisher ? ` · ${book.publisher}` : ""}
             </Typography>
           </Box>
 
-          <Box sx={{ pt: 2 }}>
+          <Box sx={{ pt: 2.25 }}>
             <Stack direction="row" alignItems="baseline" gap={1}>
               <Typography
                 sx={{
-                  fontSize: 28,
+                  fontSize: 30,
                   fontWeight: 800,
+                  letterSpacing: "-0.03em",
                   color: book.free ? palette.accent : palette.ink,
                 }}
               >
@@ -481,16 +495,29 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
               height: 44,
               display: "grid",
               placeItems: "center",
+              transition: "border-color 160ms ease, background 160ms ease",
+              "&:hover": { borderColor: palette.accent, background: palette.accentSoft },
             }}
           >
             <LikeButton bookId={book.id} size="small" />
           </Box>
-          <Box sx={{ borderLeft: `1px solid ${palette.line}`, height: 32 }} />
-          <Box sx={{ flex: 1 }}>
+          <Box sx={{ borderLeft: `1px solid ${palette.lineSoft}`, height: 32 }} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              sx={{
+                fontSize: 11,
+                color: palette.inkSubtle,
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+              }}
+            >
+              총 결제 금액
+            </Typography>
             <Typography
               sx={{
                 fontSize: 17,
                 fontWeight: 800,
+                letterSpacing: "-0.02em",
                 color: book.free ? palette.accent : palette.ink,
               }}
             >
@@ -507,7 +534,7 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           </Button>
           <Button
             variant="contained"
-            sx={{ minWidth: 110 }}
+            sx={{ minWidth: 116 }}
             disabled={ctaDisabled}
             onClick={() => router.push(`/checkout/${book.id}`)}
           >

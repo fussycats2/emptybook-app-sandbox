@@ -23,11 +23,18 @@ export function SectionLabel({
         alignItems: "center",
         justifyContent: "space-between",
         px: 2,
-        pt: 2.5,
-        pb: 1,
+        pt: 3,
+        pb: 1.25,
       }}
     >
-      <Box sx={{ fontSize: 15, fontWeight: 800, color: palette.ink }}>
+      <Box
+        sx={{
+          fontSize: 16,
+          fontWeight: 800,
+          letterSpacing: "-0.025em",
+          color: palette.ink,
+        }}
+      >
         {children}
       </Box>
       {right}
@@ -73,9 +80,12 @@ export function FixedFooter({
     <Box
       className="safe-bottom"
       sx={{
-        p: "12px 16px",
-        borderTop: bordered ? `1px solid ${palette.line}` : "none",
-        background: palette.surface,
+        p: "14px 16px",
+        borderTop: bordered ? `1px solid ${palette.lineSoft}` : "none",
+        // 스크롤 영역과 분리감 — 살짝 글래시 + 그림자
+        background: `linear-gradient(180deg, ${palette.surface}F2 0%, ${palette.surface} 100%)`,
+        backdropFilter: "saturate(160%) blur(8px)",
+        WebkitBackdropFilter: "saturate(160%) blur(8px)",
         flexShrink: 0,
         boxShadow: shadow.sticky,
         zIndex: 5,

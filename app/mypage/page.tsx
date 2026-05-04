@@ -129,59 +129,105 @@ export default function MyPage() {
         <Box
           sx={{
             mx: 2,
-            background: palette.surface,
+            background: `linear-gradient(155deg, ${palette.surface} 0%, ${palette.surfaceAlt} 100%)`,
             borderRadius: 4,
             p: 2.5,
-            border: `1px solid ${palette.line}`,
+            border: `1px solid ${palette.lineSoft}`,
+            position: "relative",
+            overflow: "hidden",
+            boxShadow: "0 1px 2px rgba(26,38,32,0.03), 0 8px 24px rgba(26,38,32,0.05)",
           }}
         >
-          <Stack direction="row" gap={1.5} alignItems="center">
+          {/* 배경 데코 — 살짝 비치는 라디얼 글로우 */}
+          <Box
+            sx={{
+              position: "absolute",
+              top: -60,
+              right: -60,
+              width: 200,
+              height: 200,
+              borderRadius: "50%",
+              background: `radial-gradient(circle, ${palette.primaryGlow} 0%, transparent 70%)`,
+              pointerEvents: "none",
+            }}
+          />
+          <Stack direction="row" gap={1.75} alignItems="center" sx={{ position: "relative" }}>
             <Box sx={{ position: "relative" }}>
-              <BookImage seed="me" width={64} height={64} radius={999} />
+              <Box
+                sx={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: "50%",
+                  padding: "2px",
+                  background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.accent} 100%)`,
+                }}
+              >
+                <Box
+                  sx={{
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    background: palette.surface,
+                  }}
+                >
+                  <BookImage seed="me" width={68} height={68} radius={999} />
+                </Box>
+              </Box>
               <Box
                 sx={{
                   position: "absolute",
                   right: -2,
                   bottom: -2,
-                  width: 22,
-                  height: 22,
+                  width: 24,
+                  height: 24,
                   borderRadius: "50%",
-                  background: palette.primary,
+                  background: `linear-gradient(155deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
                   color: "#fff",
                   display: "grid",
                   placeItems: "center",
                   border: `2px solid ${palette.surface}`,
+                  boxShadow: "0 2px 6px rgba(45,95,74,0.30)",
                 }}
               >
                 <VerifiedRoundedIcon sx={{ fontSize: 14 }} />
               </Box>
             </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 17, fontWeight: 800 }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography sx={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.025em" }}>
                 {displayName}
               </Typography>
-              <Typography sx={{ fontSize: 12, color: palette.inkSubtle }}>
+              <Typography sx={{ fontSize: 12, color: palette.inkSubtle, mt: 0.25 }}>
                 {handle} · 마포구
               </Typography>
               <Typography
                 onClick={() => router.push("/mypage/settings")}
                 sx={{
-                  display: "inline-block",
-                  mt: 0.5,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  mt: 0.85,
                   fontSize: 11.5,
                   color: palette.primary,
                   fontWeight: 700,
+                  letterSpacing: "-0.01em",
                   cursor: "pointer",
+                  px: 1,
+                  py: 0.35,
+                  borderRadius: 999,
+                  border: `1px solid ${palette.primarySoft}`,
+                  background: palette.primaryTint,
+                  transition: "background 140ms ease",
+                  "&:hover": { background: palette.primarySoft },
                 }}
               >
                 프로필 수정 →
               </Typography>
             </Box>
           </Stack>
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: 2.25, position: "relative" }}>
             <MannerTemperature value={38.6} size="lg" />
           </Box>
-          <Stack direction="row" gap={0.75} mt={1.5} flexWrap="wrap">
+          <Stack direction="row" gap={0.75} mt={1.75} flexWrap="wrap" sx={{ position: "relative" }}>
             {["응답이 빨라요", "친절해요", "도서 상태 좋아요"].map((t) => (
               <Box
                 key={t}
@@ -190,9 +236,10 @@ export default function MyPage() {
                   color: palette.primary,
                   fontSize: 11,
                   fontWeight: 700,
-                  px: 1,
-                  py: 0.4,
+                  px: 1.1,
+                  py: 0.45,
                   borderRadius: 999,
+                  letterSpacing: "-0.01em",
                 }}
               >
                 {t}
@@ -251,40 +298,49 @@ export default function MyPage() {
                   }}
                   sx={{
                     background: palette.surface,
-                    border: `1px solid ${palette.line}`,
+                    border: `1px solid ${palette.lineSoft}`,
                     borderRadius: 3,
-                    p: 1.5,
+                    p: 1.75,
                     display: "flex",
                     alignItems: "center",
                     gap: 1.25,
                     cursor: clickable ? "pointer" : "default",
-                    transition: "border-color 120ms ease, background 120ms ease",
+                    transition: "border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease",
                     "&:hover": clickable
                       ? {
-                          borderColor: palette.primary,
-                          background: palette.primaryTint,
+                          borderColor: palette.line,
+                          transform: "translateY(-2px)",
+                          boxShadow: "0 6px 18px rgba(26,38,32,0.06)",
                         }
                       : {},
                   }}
                 >
                   <Box
                     sx={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: 2,
-                      background: palette.primarySoft,
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2.5,
+                      background: `linear-gradient(135deg, ${palette.primaryTint} 0%, ${palette.primarySoft} 100%)`,
                       color: palette.primary,
                       display: "grid",
                       placeItems: "center",
+                      flexShrink: 0,
                     }}
                   >
                     {s.icon}
                   </Box>
                   <Box>
-                    <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 19,
+                        fontWeight: 800,
+                        letterSpacing: "-0.025em",
+                        lineHeight: 1.1,
+                      }}
+                    >
                       {s.val}
                     </Typography>
-                    <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle }}>
+                    <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle, mt: 0.25 }}>
                       {s.label}
                     </Typography>
                   </Box>
@@ -295,14 +351,16 @@ export default function MyPage() {
         </Box>
 
         {SECTIONS.map((section) => (
-          <Box key={section.title} sx={{ px: 2, mb: 1.5 }}>
+          <Box key={section.title} sx={{ px: 2, mb: 1.75 }}>
             <Typography
               sx={{
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: 800,
                 color: palette.inkSubtle,
+                letterSpacing: "0.06em",
+                textTransform: "uppercase",
                 px: 0.5,
-                mb: 0.5,
+                mb: 0.75,
               }}
             >
               {section.title}
@@ -310,7 +368,7 @@ export default function MyPage() {
             <Box
               sx={{
                 background: palette.surface,
-                border: `1px solid ${palette.line}`,
+                border: `1px solid ${palette.lineSoft}`,
                 borderRadius: 3,
                 overflow: "hidden",
               }}
@@ -322,20 +380,41 @@ export default function MyPage() {
                     key={item.label}
                     direction="row"
                     alignItems="center"
-                    gap={1.25}
+                    gap={1.5}
                     sx={{
-                      p: 1.5,
-                      borderTop: i === 0 ? "none" : `1px solid ${palette.line}`,
+                      p: "14px 16px",
+                      borderTop: i === 0 ? "none" : `1px solid ${palette.lineSoft}`,
                       cursor: clickable ? "pointer" : "default",
-                      "&:hover": clickable ? { background: palette.lineSoft } : {},
+                      transition: "background 140ms ease",
+                      "&:hover": clickable ? { background: palette.surfaceAlt } : {},
                     }}
                     onClick={() => {
                       if (item.href) router.push(item.href);
                       else if (item.comingSoon) toast?.show("준비중이에요");
                     }}
                   >
-                    <Box sx={{ color: palette.inkMute }}>{item.icon}</Box>
-                    <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 600 }}>
+                    <Box
+                      sx={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 1.5,
+                        background: palette.primaryTint,
+                        color: palette.primary,
+                        display: "grid",
+                        placeItems: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {item.icon}
+                    </Box>
+                    <Typography
+                      sx={{
+                        flex: 1,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        letterSpacing: "-0.01em",
+                      }}
+                    >
                       {item.label}
                     </Typography>
                     {item.comingSoon && (
@@ -353,7 +432,7 @@ export default function MyPage() {
                         준비중
                       </Box>
                     )}
-                    <KeyboardArrowRightRoundedIcon sx={{ color: palette.inkSubtle }} />
+                    <KeyboardArrowRightRoundedIcon sx={{ color: palette.inkSubtle, fontSize: 20 }} />
                   </Stack>
                 );
               })}

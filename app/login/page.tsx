@@ -132,31 +132,52 @@ function LoginPageInner() {
     <>
       <AppHeader title="" left="back" bordered={false} />
       <Box sx={{ p: 3, pt: 1, display: "flex", flexDirection: "column", flex: 1 }}>
-        <Box>
-          <Typography
+        <Box className="fade-in-up">
+          <Box
             sx={{
-              fontSize: 11.5,
-              fontWeight: 800,
-              letterSpacing: "0.18em",
-              color: palette.primary,
-              mb: 1.25,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 0.5,
+              px: 1.1,
+              py: 0.4,
+              borderRadius: 999,
+              background: palette.primaryTint,
+              border: `1px solid ${palette.primarySoft}`,
+              mb: 1.5,
             }}
           >
-            WELCOME BACK
-          </Typography>
+            <Box
+              sx={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: palette.primary,
+              }}
+            />
+            <Typography
+              sx={{
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: "0.16em",
+                color: palette.primary,
+              }}
+            >
+              WELCOME BACK
+            </Typography>
+          </Box>
           <Typography
             sx={{
-              fontSize: 26,
+              fontSize: 30,
               fontWeight: 800,
-              lineHeight: 1.3,
-              letterSpacing: "-0.02em",
+              lineHeight: 1.25,
+              letterSpacing: "-0.03em",
             }}
           >
             다시 오신 걸
             <br />
             환영해요.
           </Typography>
-          <Typography sx={{ fontSize: 14, color: palette.inkMute, mt: 1.25 }}>
+          <Typography sx={{ fontSize: 14, color: palette.inkMute, mt: 1.5, lineHeight: 1.6 }}>
             이메일과 비밀번호를 입력해주세요.
           </Typography>
         </Box>

@@ -104,17 +104,35 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
             p: 2,
             background: palette.surface,
             borderBottom: `8px solid ${palette.bg}`,
+            alignItems: "center",
           }}
         >
-          <BookImage seed={book.id} width={68} height={88} radius={10} />
-          <Box>
-            <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
+          <BookImage seed={book.id} src={book.coverUrl} width={72} height={92} radius={12} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              sx={{
+                fontSize: 14.5,
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                display: "-webkit-box",
+                WebkitLineClamp: 1,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
               {book.title}
             </Typography>
-            <Typography sx={{ fontSize: 12, color: palette.inkSubtle }}>
+            <Typography sx={{ fontSize: 12, color: palette.inkSubtle, mt: 0.25 }}>
               판매자 {book.seller ?? "책방마니아"} · 상태 {book.state}
             </Typography>
-            <Typography sx={{ fontSize: 16, fontWeight: 800, mt: 0.5 }}>
+            <Typography
+              sx={{
+                fontSize: 17,
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                mt: 0.6,
+              }}
+            >
               {book.price}
             </Typography>
           </Box>
@@ -184,15 +202,17 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
                   onClick={() => setPay(p.key)}
                   sx={{
                     border: `1.5px solid ${
-                      on ? palette.primary : palette.line
+                      on ? palette.primary : palette.lineSoft
                     }`,
                     borderRadius: 3,
-                    p: 1.5,
+                    p: 1.75,
                     display: "flex",
                     alignItems: "center",
                     gap: 1.25,
                     cursor: "pointer",
-                    background: on ? palette.primarySoft : palette.surface,
+                    background: on ? palette.primaryTint : palette.surface,
+                    transition: "border-color 160ms ease, background 160ms ease, box-shadow 160ms ease",
+                    boxShadow: on ? `0 0 0 4px ${palette.primaryGlow}` : "none",
                   }}
                 >
                   <Box
@@ -334,14 +354,22 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
       <FixedFooter>
         <Button
           fullWidth
+          size="large"
           disabled={!agreed || submitting || !!unavailableLabel}
           onClick={submit}
           sx={{
+            fontSize: 15.5,
+            fontWeight: 800,
+            letterSpacing: "-0.015em",
             ...(pay === "kakao" &&
               !unavailableLabel && {
                 background: "#FEE500",
                 color: "#3C1E1E",
-                "&:hover": { background: "#FFE000" },
+                boxShadow: "0 8px 22px rgba(254, 229, 0, 0.42)",
+                "&:hover": {
+                  background: "#FFE000",
+                  boxShadow: "0 8px 22px rgba(254, 229, 0, 0.55)",
+                },
               }),
           }}
         >

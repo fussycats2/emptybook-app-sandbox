@@ -289,10 +289,12 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
     <Box sx={{ p: 2 }}>
       <Typography
         sx={{
-          fontSize: 12,
+          fontSize: 11.5,
           fontWeight: 800,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
           color: palette.inkSubtle,
-          mb: 0.5,
+          mb: 0.75,
           px: 0.5,
         }}
       >
@@ -301,7 +303,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
       <Box
         sx={{
           background: palette.surface,
-          border: `1px solid ${palette.line}`,
+          border: `1px solid ${palette.lineSoft}`,
           borderRadius: 3,
           overflow: "hidden",
         }}
@@ -361,13 +363,14 @@ function Row({
       alignItems="center"
       onClick={onClick}
       sx={{
-        p: 1.5,
-        borderTop: first ? "none" : `1px solid ${palette.line}`,
+        p: "14px 16px",
+        borderTop: first ? "none" : `1px solid ${palette.lineSoft}`,
         cursor: interactive ? "pointer" : "default",
-        "&:hover": interactive ? { background: palette.lineSoft } : {},
+        transition: "background 140ms ease",
+        "&:hover": interactive ? { background: palette.surfaceAlt } : {},
       }}
     >
-      <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 600 }}>
+      <Typography sx={{ flex: 1, fontSize: 14, fontWeight: 600, letterSpacing: "-0.01em" }}>
         {label}
       </Typography>
       {value && (
@@ -376,7 +379,7 @@ function Row({
         </Typography>
       )}
       {interactive && (
-        <KeyboardArrowRightRoundedIcon sx={{ color: palette.inkSubtle }} />
+        <KeyboardArrowRightRoundedIcon sx={{ color: palette.inkSubtle, fontSize: 20 }} />
       )}
     </Stack>
   );
@@ -399,12 +402,11 @@ function Toggle({
       direction="row"
       alignItems="center"
       sx={{
-        p: 1.25,
-        pl: 1.5,
-        borderTop: first ? "none" : `1px solid ${palette.line}`,
+        p: "10px 16px",
+        borderTop: first ? "none" : `1px solid ${palette.lineSoft}`,
       }}
     >
-      <Typography sx={{ flex: 1, fontSize: 14 }}>{label}</Typography>
+      <Typography sx={{ flex: 1, fontSize: 14, letterSpacing: "-0.01em" }}>{label}</Typography>
       <Switch checked={checked} onChange={(_, v) => onChange(v)} />
     </Stack>
   );

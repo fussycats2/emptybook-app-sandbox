@@ -43,30 +43,65 @@ export default function MyReviewsPage() {
             <Box sx={{ p: 2 }}>
               <Box
                 sx={{
-                  background: palette.surface,
-                  border: `1px solid ${palette.line}`,
+                  background: `linear-gradient(135deg, ${palette.surface} 0%, ${palette.surfaceAlt} 100%)`,
+                  border: `1px solid ${palette.lineSoft}`,
                   borderRadius: 3,
-                  p: 2,
+                  p: 2.5,
                   textAlign: "center",
+                  position: "relative",
+                  overflow: "hidden",
                 }}
               >
-                <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle }}>
-                  평균 별점
+                <Box
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    background:
+                      "radial-gradient(circle at 70% 20%, rgba(255, 197, 61, 0.15) 0%, transparent 50%), radial-gradient(circle at 20% 80%, rgba(45,95,74,0.06) 0%, transparent 50%)",
+                    pointerEvents: "none",
+                  }}
+                />
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: "0.12em",
+                    color: palette.inkSubtle,
+                    position: "relative",
+                  }}
+                >
+                  AVERAGE RATING
                 </Typography>
                 <Stack
                   direction="row"
                   alignItems="center"
                   justifyContent="center"
-                  gap={0.5}
-                  mt={0.5}
+                  gap={0.75}
+                  mt={1}
+                  sx={{ position: "relative" }}
                 >
-                  <StarRoundedIcon sx={{ color: "#FFC53D", fontSize: 28 }} />
-                  <Typography sx={{ fontSize: 26, fontWeight: 800 }}>
+                  <StarRoundedIcon sx={{ color: "#FFC53D", fontSize: 32 }} />
+                  <Typography
+                    sx={{
+                      fontSize: 32,
+                      fontWeight: 800,
+                      letterSpacing: "-0.03em",
+                      lineHeight: 1,
+                    }}
+                  >
                     {avg.toFixed(1)}
                   </Typography>
                 </Stack>
-                <Typography sx={{ fontSize: 12, color: palette.inkMute, mt: 0.5 }}>
-                  후기 {reviews.length}개
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    color: palette.inkMute,
+                    mt: 1,
+                    fontWeight: 600,
+                    position: "relative",
+                  }}
+                >
+                  후기 {reviews.length}개를 받았어요
                 </Typography>
               </Box>
             </Box>

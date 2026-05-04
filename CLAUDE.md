@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-05-05 (v7 — 스플래시 리디자인: 오로라 + 한글 워드마크)
+> 최종 업데이트: 2026-05-05 (v8 — 전 화면 모던 리프레시: 글래시 헤더/탭바, 그림자 6단계, 라운드 +4px)
 
 ## 프로젝트 개요
 
@@ -78,6 +78,7 @@
 | **books / profiles UPDATE WITH CHECK (v4)** | `0009_update_with_check.sql` — RLS UPDATE 정책에 `with check` 절 추가. 기존엔 USING 만 있어 셀러가 자기 책의 `seller_id` 를 다른 사용자로 변경(=양도) 가능한 형식적 빈틈이 있었음. profiles.id 도 동일. 양도 기능을 추후 도입하면 SECURITY DEFINER RPC 로 우회 |
 | **transactions 상태 머신 (v4)** | `0010_transactions_fsm.sql` — BEFORE UPDATE 트리거 `enforce_transaction_status` 로 FSM 강제. 허용 전이는 **PAID → COMPLETED, buyer 만**. CANCELED 직행 / 종결 상태(COMPLETED·CANCELED) 변경 / seller 의 거래 확정 모두 RAISE EXCEPTION 으로 차단. INSERT 도 RLS 의 with check 로 `status='PAID'` 강제. `completeOrder` 가 에러 무시 → throw 로 변경, `/orders/[id]` 가 try/catch 로 실패 토스트. 환불 PG 도입 전엔 사용자가 직접 CANCELED 만들 수 없게 잠금 |
 | **활성 채팅방 알림 자동 read (v4)** | `markRoomChatNotificationsRead(roomId)` repo 추가 — `payload->>room_id` 로 그 방의 MESSAGE kind 알림만 일괄 read_at 갱신. `/chat/[id]` 가 `markRoomMessagesRead` 와 병렬 호출. 사용자가 채팅방을 보고 있는 동안엔 알림 목록 빨간점이 다시 켜지지 않음. mock 동등 구현 `mockMarkRoomChatNotificationsRead`. presence 테이블이나 heartbeat 없는 단순 해법 — 추후 디바이스 푸시(FCM) 도입 시 presence 기반 옵션으로 업그레이드 가능 |
+| **전 화면 모던 UI 리프레시 (v8)** | 스플래시(`app/page.tsx`) 제외 24개 페이지 + 11개 공용 컴포넌트 + theme/globals 일괄 다듬음. **토큰**: 라운드 스케일 +2~4px (xs 6 / sm 12 / md 16 / lg 20 / xl 28), 그림자 6단계 재설계 (`card`/`cardHover`/`sticky`/`raised`/`pop`/`ring`), 버튼 minHeight 48 + sizeLarge 56, contained 에 inset highlight + hover glow, input focus 시 4px primaryGlow ring, Chip outlined hover primaryTint 전환, `success`/`accentDark`/`primaryGlow` 토큰 추가. **공용**: `AppHeader`/`BottomTabNav`/`FixedFooter` 글래시(backdrop-blur 8px), 탭바 + 버튼 56px 4px 보더 + dot 인디케이터, `StatusBadge` 색상 dot, `BookCard` hover lift, `MannerTemperature` 그라데이션 막대, `EmptyState` 84px 아이콘 + 라디얼 글로우, `BottomSheet`/`ConfirmDialog` backdrop blur. **페이지**: 홈 이벤트배너 글래시 EVENT 칩 + 다중 데코, 도서상세 sticky 헤더 글래시 전환 + 가격 30px, 결제 결제수단 ring, 채팅 말풍선 18px + 송신 그라데이션, 마이페이지 프로필 그라데이션 보더 + 라디얼 글로우, 알림 unread 좌측 3px accent 줄, 로그인/가입/비번찾기 dot eyebrow + 헤드라인 30px, 후기 평균별점 hero, 등록완료/결제완료 88px scale-in + 라디얼 hero, 약관/개인정보 ARTICLE/SECTION eyebrow + 카드형. globals.css 에 `card-lift`/`fade-in-up`/`scale-in`/`text-gradient` 유틸 + 스크롤바 톤다운. 스플래시는 v7 그대로 유지 |
 
 ### 미완성 / 연결 안 된 것
 

@@ -60,36 +60,58 @@ function CompleteInner({ bookId }: { bookId: string }) {
     >
       <Box
         sx={{
-          background: `linear-gradient(180deg, ${palette.primarySoft} 0%, ${palette.bg} 100%)`,
-          pt: 7,
-          pb: 4,
+          background: `radial-gradient(120% 80% at 50% 0%, ${palette.primarySoft} 0%, ${palette.primaryTint} 50%, ${palette.bg} 100%)`,
+          pt: 8,
+          pb: 5,
           textAlign: "center",
+          position: "relative",
+          overflow: "hidden",
         }}
       >
         <Box
           sx={{
-            width: 80,
-            height: 80,
+            position: "absolute",
+            inset: 0,
+            background:
+              "radial-gradient(circle at 80% 20%, rgba(45,95,74,0.08) 0%, transparent 40%), radial-gradient(circle at 20% 80%, rgba(45,95,74,0.06) 0%, transparent 40%)",
+            pointerEvents: "none",
+          }}
+        />
+        <Box
+          className="scale-in"
+          sx={{
+            position: "relative",
+            width: 88,
+            height: 88,
             borderRadius: "50%",
-            background: palette.primary,
+            background: `linear-gradient(155deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
             color: "#fff",
             display: "grid",
             placeItems: "center",
             mx: "auto",
-            boxShadow: "0 12px 24px rgba(31,111,78,0.25)",
+            boxShadow: "0 16px 40px rgba(45,95,74,0.30), 0 4px 12px rgba(45,95,74,0.20)",
           }}
         >
-          <CheckRoundedIcon sx={{ fontSize: 44 }} />
+          <CheckRoundedIcon sx={{ fontSize: 48 }} />
         </Box>
-        <Typography sx={{ fontSize: 22, fontWeight: 800, mt: 2.5 }}>
+        <Typography
+          sx={{
+            fontSize: 24,
+            fontWeight: 800,
+            mt: 3,
+            letterSpacing: "-0.025em",
+            position: "relative",
+          }}
+        >
           {book?.free ? "신청이 완료됐어요!" : "결제가 완료됐어요!"}
         </Typography>
         <Typography
           sx={{
-            fontSize: 13.5,
+            fontSize: 14,
             color: palette.inkMute,
             mt: 1,
-            lineHeight: 1.6,
+            lineHeight: 1.65,
+            position: "relative",
           }}
         >
           판매자에게 알림이 갔어요.

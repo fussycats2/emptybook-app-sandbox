@@ -26,7 +26,7 @@ import { SectionLabel, ScrollBody } from "@/components/ui/Section";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/ToastProvider";
-import { palette, radius } from "@/lib/theme";
+import { palette, radius, shadow } from "@/lib/theme";
 import { meta } from "@/lib/repo";
 import { useRecentBooks } from "@/lib/query/bookHooks";
 import { useNotificationsStore } from "@/lib/store/notificationsStore";
@@ -46,8 +46,10 @@ export default function HomePage() {
     <>
       <Box
         sx={{
-          background: palette.surface,
-          borderBottom: `1px solid ${palette.line}`,
+          background: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surface}F2 100%)`,
+          backdropFilter: "saturate(160%) blur(8px)",
+          WebkitBackdropFilter: "saturate(160%) blur(8px)",
+          borderBottom: `1px solid ${palette.lineSoft}`,
           px: 2,
           pt: 1.5,
           pb: 1.5,
@@ -87,8 +89,10 @@ export default function HomePage() {
             background: palette.lineSoft,
             borderRadius: 999,
             "& fieldset": { border: "none" },
-            "& input": { py: 1.25, fontSize: 13.5, cursor: "pointer" },
+            "& input": { py: 1.4, fontSize: 13.5, cursor: "pointer" },
             cursor: "pointer",
+            transition: "background 160ms ease",
+            "&:hover": { background: palette.surfaceAlt, boxShadow: `0 0 0 1px ${palette.line}` },
           }}
         />
       </Box>
@@ -97,11 +101,12 @@ export default function HomePage() {
         {/* 이벤트 배너 — 거대 이모지 대신 추상적인 라운드 도형으로 데코 */}
         <Box
           onClick={() => toast?.show("이벤트 페이지는 준비 중이에요")}
+          className="card-lift"
           sx={{
             mx: 2,
             mt: 2,
             borderRadius: `${radius.lg}px`,
-            background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
+            background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 60%, #14302A 100%)`,
             color: "#fff",
             p: 2.5,
             display: "flex",
@@ -110,53 +115,79 @@ export default function HomePage() {
             overflow: "hidden",
             position: "relative",
             cursor: "pointer",
+            boxShadow: shadow.pop,
           }}
         >
           {/* 우측 추상 데코 — 책장 실루엣 느낌의 라운드 도형 */}
           <Box
             sx={{
               position: "absolute",
-              right: -28,
-              top: -18,
-              width: 160,
-              height: 160,
+              right: -40,
+              top: -30,
+              width: 200,
+              height: 200,
               borderRadius: "50%",
               background:
-                "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 60%, transparent 70%)",
+                "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 60%, transparent 70%)",
+              filter: "blur(2px)",
             }}
           />
           <Box
             sx={{
               position: "absolute",
               right: 18,
-              bottom: -22,
-              width: 96,
-              height: 96,
+              bottom: -30,
+              width: 110,
+              height: 110,
               borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.18)",
+              border: "1px solid rgba(255,255,255,0.20)",
+            }}
+          />
+          <Box
+            sx={{
+              position: "absolute",
+              right: 60,
+              top: 30,
+              width: 50,
+              height: 50,
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.16)",
             }}
           />
 
           <Box sx={{ position: "relative", zIndex: 1, maxWidth: "70%" }}>
-            <Stack direction="row" alignItems="center" gap={0.75} mb={0.75}>
-              <CampaignRoundedIcon sx={{ fontSize: 16 }} />
-              <Typography
+            <Stack direction="row" alignItems="center" gap={0.75} mb={1}>
+              <Box
                 sx={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: "0.16em",
-                  opacity: 0.9,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 0.5,
+                  background: "rgba(255,255,255,0.16)",
+                  border: "1px solid rgba(255,255,255,0.22)",
+                  backdropFilter: "blur(6px)",
+                  borderRadius: 999,
+                  px: 1,
+                  py: 0.4,
                 }}
               >
-                EVENT
-              </Typography>
+                <CampaignRoundedIcon sx={{ fontSize: 13 }} />
+                <Typography
+                  sx={{
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    letterSpacing: "0.18em",
+                  }}
+                >
+                  EVENT
+                </Typography>
+              </Box>
             </Stack>
             <Typography
               sx={{
-                fontSize: 17,
+                fontSize: 18,
                 fontWeight: 800,
                 lineHeight: 1.4,
-                letterSpacing: "-0.015em",
+                letterSpacing: "-0.025em",
               }}
             >
               내 책장 정리하면
@@ -167,7 +198,7 @@ export default function HomePage() {
               direction="row"
               gap={0.5}
               alignItems="center"
-              sx={{ mt: 1.25, fontSize: 12, opacity: 0.85, fontWeight: 600 }}
+              sx={{ mt: 1.5, fontSize: 12.5, opacity: 0.92, fontWeight: 700 }}
             >
               참여하기
               <ArrowForwardRoundedIcon sx={{ fontSize: 14 }} />
@@ -175,12 +206,12 @@ export default function HomePage() {
           </Box>
         </Box>
 
-        <Box sx={{ pt: 2.25 }}>
+        <Box sx={{ pt: 2.5 }}>
           <Box
             className="no-scrollbar"
             sx={{
               display: "flex",
-              gap: 1.25,
+              gap: 1.5,
               px: 2,
               overflowX: "auto",
               pb: 0.5,
@@ -197,32 +228,37 @@ export default function HomePage() {
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  gap: 0.6,
+                  gap: 0.75,
                   width: 64,
                   cursor: "pointer",
                 }}
               >
                 <Box
                   sx={{
-                    width: 54,
-                    height: 54,
+                    width: 58,
+                    height: 58,
                     borderRadius: "50%",
-                    background: palette.primaryTint,
+                    background: `linear-gradient(135deg, ${palette.primaryTint} 0%, ${palette.primarySoft} 100%)`,
                     border: `1px solid ${palette.lineSoft}`,
                     display: "grid",
                     placeItems: "center",
-                    fontSize: 24,
-                    transition: "transform 120ms ease, background 120ms ease",
+                    fontSize: 26,
+                    transition: "transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms ease",
                     "&:hover": {
-                      background: palette.primarySoft,
-                      transform: "translateY(-1px)",
+                      transform: "translateY(-2px) scale(1.04)",
+                      boxShadow: `0 8px 20px ${palette.primaryGlow}`,
                     },
                   }}
                 >
                   {c.emoji}
                 </Box>
                 <Typography
-                  sx={{ fontSize: 11.5, color: palette.inkMute, fontWeight: 600 }}
+                  sx={{
+                    fontSize: 11.5,
+                    color: palette.inkMute,
+                    fontWeight: 700,
+                    letterSpacing: "-0.01em",
+                  }}
                 >
                   {c.name}
                 </Typography>
@@ -233,12 +269,27 @@ export default function HomePage() {
 
         <SectionLabel
           right={
-            <Stack direction="row" alignItems="center" gap={0.5}>
+            <Stack
+              direction="row"
+              alignItems="center"
+              gap={0.5}
+              sx={{
+                px: 1,
+                py: 0.4,
+                borderRadius: 999,
+                background: palette.accentSoft,
+              }}
+            >
               <LocalFireDepartmentRoundedIcon
-                sx={{ fontSize: 16, color: palette.accent }}
+                sx={{ fontSize: 13, color: palette.accent }}
               />
               <Typography
-                sx={{ fontSize: 12, color: palette.inkMute, fontWeight: 600 }}
+                sx={{
+                  fontSize: 11,
+                  color: palette.accent,
+                  fontWeight: 800,
+                  letterSpacing: "-0.01em",
+                }}
               >
                 실시간 인기
               </Typography>
@@ -268,32 +319,34 @@ export default function HomePage() {
         <SectionLabel>이 동네 인기 판매자</SectionLabel>
         <Box
           className="no-scrollbar"
-          sx={{ display: "flex", gap: 1.5, px: 2, pb: 3, overflowX: "auto" }}
+          sx={{ display: "flex", gap: 1.5, px: 2, pb: 4, overflowX: "auto" }}
         >
           {POPULAR_SELLERS.map((u) => (
             <Box
               key={u.name}
+              className="card-lift"
               sx={{
                 flexShrink: 0,
-                width: 168,
+                width: 176,
                 background: palette.surface,
-                border: `1px solid ${palette.line}`,
+                border: `1px solid ${palette.lineSoft}`,
                 borderRadius: `${radius.md}px`,
-                p: 1.5,
+                p: 1.75,
                 display: "flex",
                 flexDirection: "column",
                 gap: 1.25,
-                transition: "border-color 120ms ease, transform 120ms ease",
-                "&:hover": { borderColor: palette.primary, transform: "translateY(-1px)" },
+                cursor: "pointer",
+                "&:hover": { borderColor: palette.line, boxShadow: shadow.cardHover },
               }}
             >
               <Stack direction="row" gap={1} alignItems="center">
-                <BookImage seed={u.name} width={36} height={36} radius={999} />
+                <BookImage seed={u.name} width={40} height={40} radius={999} />
                 <Box sx={{ minWidth: 0 }}>
                   <Typography
                     sx={{
-                      fontSize: 13,
-                      fontWeight: 700,
+                      fontSize: 13.5,
+                      fontWeight: 800,
+                      letterSpacing: "-0.02em",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -301,7 +354,7 @@ export default function HomePage() {
                   >
                     {u.name}
                   </Typography>
-                  <Typography sx={{ fontSize: 10.5, color: palette.inkSubtle }}>
+                  <Typography sx={{ fontSize: 10.5, color: palette.inkSubtle, mt: 0.25 }}>
                     거래 {u.trades}회
                   </Typography>
                 </Box>

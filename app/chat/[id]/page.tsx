@@ -117,13 +117,15 @@ export default function ChatDetailPage({
       <Box
         sx={{
           height: 56,
-          borderBottom: `1px solid ${palette.line}`,
+          borderBottom: `1px solid ${palette.lineSoft}`,
           display: "flex",
           alignItems: "center",
           px: 1,
-          gap: 1,
+          gap: 1.25,
           flexShrink: 0,
-          background: palette.surface,
+          background: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surface}F2 100%)`,
+          backdropFilter: "saturate(160%) blur(8px)",
+          WebkitBackdropFilter: "saturate(160%) blur(8px)",
         }}
       >
         <IconButton onClick={() => router.back()}>
@@ -131,10 +133,10 @@ export default function ChatDetailPage({
         </IconButton>
         <BookImage seed={chat?.user ?? book?.seller ?? "seller"} width={36} height={36} radius={999} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
+          <Typography sx={{ fontSize: 14.5, fontWeight: 800, letterSpacing: "-0.02em" }}>
             {chat?.user ?? book?.seller ?? "판매자"}
           </Typography>
-          <Typography sx={{ fontSize: 11, color: palette.inkSubtle }}>
+          <Typography sx={{ fontSize: 11, color: palette.inkSubtle, mt: 0.1 }}>
             {book?.region ?? book?.loc ?? "마포구"} · 매너온도 38.6℃
           </Typography>
         </Box>
@@ -145,12 +147,12 @@ export default function ChatDetailPage({
 
       <Box
         sx={{
-          background: palette.surface,
-          p: "10px 12px",
+          background: palette.surfaceAlt,
+          p: "12px 14px",
           display: "flex",
           alignItems: "center",
           gap: 1.25,
-          borderBottom: `1px solid ${palette.line}`,
+          borderBottom: `1px solid ${palette.lineSoft}`,
           flexShrink: 0,
         }}
       >
@@ -187,14 +189,27 @@ export default function ChatDetailPage({
         sx={{
           flex: 1,
           overflowY: "auto",
-          p: "16px 12px",
+          p: "16px 14px",
           display: "flex",
           flexDirection: "column",
-          gap: 1,
+          gap: 1.25,
           background: palette.bg,
         }}
       >
-        <Box sx={{ textAlign: "center", fontSize: 11, color: palette.inkSubtle, py: 1 }}>
+        <Box
+          sx={{
+            alignSelf: "center",
+            fontSize: 10.5,
+            color: palette.inkSubtle,
+            py: 0.4,
+            px: 1.25,
+            background: palette.surface,
+            border: `1px solid ${palette.lineSoft}`,
+            borderRadius: 999,
+            fontWeight: 700,
+            letterSpacing: "-0.01em",
+          }}
+        >
           2024년 1월 15일
         </Box>
         {msgs.map((m) => {
@@ -254,10 +269,11 @@ export default function ChatDetailPage({
                 <Box
                   sx={{
                     ...bubbleBase,
-                    background: palette.primary,
+                    background: `linear-gradient(160deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
                     color: "#fff",
-                    borderRadius: "16px 16px 4px 16px",
+                    borderRadius: "18px 18px 4px 18px",
                     maxWidth: "100%",
+                    boxShadow: "0 2px 8px rgba(45, 95, 74, 0.20)",
                   }}
                 >
                   {m.body}
@@ -290,9 +306,10 @@ export default function ChatDetailPage({
                   sx={{
                     ...bubbleBase,
                     background: palette.surface,
-                    borderRadius: "16px 16px 16px 4px",
-                    border: `1px solid ${palette.line}`,
+                    borderRadius: "18px 18px 18px 4px",
+                    border: `1px solid ${palette.lineSoft}`,
                     maxWidth: "100%",
+                    boxShadow: "0 1px 2px rgba(26,38,32,0.04)",
                   }}
                 >
                   {m.body}
@@ -310,13 +327,15 @@ export default function ChatDetailPage({
       <Box
         className="safe-bottom"
         sx={{
-          borderTop: `1px solid ${palette.line}`,
-          p: 1,
+          borderTop: `1px solid ${palette.lineSoft}`,
+          p: 1.25,
           display: "flex",
           gap: 0.75,
           alignItems: "center",
           flexShrink: 0,
-          background: palette.surface,
+          background: `linear-gradient(180deg, ${palette.surface}F2 0%, ${palette.surface} 100%)`,
+          backdropFilter: "saturate(160%) blur(8px)",
+          WebkitBackdropFilter: "saturate(160%) blur(8px)",
         }}
       >
         <IconButton onClick={() => toast?.show("첨부 기능은 준비 중")}>
@@ -339,17 +358,31 @@ export default function ChatDetailPage({
             background: palette.lineSoft,
             borderRadius: 999,
             "& fieldset": { border: "none" },
-            "& input": { py: 1, fontSize: 13.5 },
+            "& input": { py: 1.1, fontSize: 13.5 },
+            "&.Mui-focused": {
+              background: palette.surface,
+              boxShadow: `0 0 0 1px ${palette.line}, 0 0 0 5px ${palette.primaryGlow}`,
+            },
           }}
         />
         <IconButton
           onClick={send}
+          disabled={!draft.trim()}
           sx={{
-            background: draft.trim() ? palette.primary : palette.lineSoft,
+            width: 44,
+            height: 44,
+            background: draft.trim()
+              ? `linear-gradient(155deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`
+              : palette.lineSoft,
             color: draft.trim() ? "#fff" : palette.inkSubtle,
+            boxShadow: draft.trim() ? "0 4px 12px rgba(45, 95, 74, 0.28)" : "none",
+            transition: "background 160ms ease, box-shadow 160ms ease, transform 90ms ease",
             "&:hover": {
-              background: draft.trim() ? palette.primaryDark : palette.lineSoft,
+              background: draft.trim()
+                ? `linear-gradient(155deg, ${palette.primaryDark} 0%, ${palette.primaryDark} 100%)`
+                : palette.lineSoft,
             },
+            "&:active": { transform: "scale(0.94)" },
           }}
         >
           <SendRoundedIcon fontSize="small" />

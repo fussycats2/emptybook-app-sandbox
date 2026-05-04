@@ -50,12 +50,17 @@ export default function BottomTabNav() {
     <Box
       className="safe-bottom"
       sx={{
-        height: 64,
-        borderTop: `1px solid ${palette.line}`,
+        height: 68,
+        borderTop: `1px solid ${palette.lineSoft}`,
         display: "flex",
         marginTop: "auto",
         flexShrink: 0,
-        background: palette.surface,
+        // 살짝 글래시한 탭바 — 모던한 폰 앱 느낌
+        background: `linear-gradient(180deg, ${palette.surface}F2 0%, ${palette.surface} 100%)`,
+        backdropFilter: "saturate(160%) blur(8px)",
+        WebkitBackdropFilter: "saturate(160%) blur(8px)",
+        boxShadow: "0 -1px 0 rgba(26,38,32,0.02), 0 -8px 24px rgba(26,38,32,0.04)",
+        position: "relative",
       }}
     >
       {TABS.map((tab) => {
@@ -79,20 +84,25 @@ export default function BottomTabNav() {
             >
               <Box
                 sx={{
-                  width: 52,
-                  height: 52,
+                  width: 56,
+                  height: 56,
                   borderRadius: "50%",
-                  background: `linear-gradient(160deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
+                  background: `linear-gradient(155deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
                   color: "#fff",
                   display: "grid",
                   placeItems: "center",
                   boxShadow: shadow.pop,
-                  transform: "translateY(-12px)",
-                  transition: "transform 140ms ease, box-shadow 140ms ease",
-                  "&:active": { transform: "translateY(-12px) scale(0.94)" },
+                  transform: "translateY(-14px)",
+                  border: `4px solid ${palette.bg}`,
+                  transition: "transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms ease",
+                  "&:hover": {
+                    transform: "translateY(-16px)",
+                    boxShadow: `0 6px 16px rgba(45, 95, 74, 0.22), 0 16px 36px rgba(45, 95, 74, 0.30)`,
+                  },
+                  "&:active": { transform: "translateY(-14px) scale(0.94)" },
                 }}
               >
-                <AddRoundedIcon sx={{ fontSize: 26 }} />
+                <AddRoundedIcon sx={{ fontSize: 28 }} />
               </Box>
             </Box>
           );
@@ -107,17 +117,33 @@ export default function BottomTabNav() {
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              gap: 0.25,
+              gap: 0.3,
               cursor: "pointer",
               color,
-              transition: "color 120ms ease",
+              position: "relative",
+              transition: "color 160ms ease",
             }}
           >
-            <Icon sx={{ fontSize: 24 }} />
+            {/* 활성 탭 상단의 작은 dot 인디케이터 — 모던한 강조 */}
+            <Box
+              sx={{
+                position: "absolute",
+                top: 6,
+                width: 4,
+                height: 4,
+                borderRadius: "50%",
+                background: palette.primary,
+                opacity: active ? 1 : 0,
+                transform: active ? "scale(1)" : "scale(0.4)",
+                transition: "opacity 160ms ease, transform 160ms ease",
+              }}
+            />
+            <Icon sx={{ fontSize: 24, mt: 0.5 }} />
             <Typography
               sx={{
-                fontSize: 11,
-                fontWeight: active ? 700 : 500,
+                fontSize: 10.5,
+                fontWeight: active ? 800 : 600,
+                letterSpacing: "-0.02em",
                 color,
               }}
             >

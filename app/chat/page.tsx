@@ -66,8 +66,10 @@ export default function ChatListPage() {
         sx={{
           px: 2,
           pb: 1.5,
-          background: palette.surface,
-          borderBottom: `1px solid ${palette.line}`,
+          background: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surface}F2 100%)`,
+          backdropFilter: "saturate(160%) blur(8px)",
+          WebkitBackdropFilter: "saturate(160%) blur(8px)",
+          borderBottom: `1px solid ${palette.lineSoft}`,
         }}
       >
         <OutlinedInput
@@ -84,10 +86,14 @@ export default function ChatListPage() {
             background: palette.lineSoft,
             borderRadius: 999,
             "& fieldset": { border: "none" },
-            "& input": { py: 1.25, fontSize: 13.5 },
+            "& input": { py: 1.4, fontSize: 13.5 },
+            "&.Mui-focused": {
+              background: palette.surface,
+              boxShadow: `0 0 0 1px ${palette.line}, 0 0 0 5px ${palette.primaryGlow}`,
+            },
           }}
         />
-        <Stack direction="row" gap={1} mt={1.5}>
+        <Stack direction="row" gap={1} mt={1.75}>
           {TABS.map((t) => {
             const on = active === t.key;
             return (
@@ -95,14 +101,18 @@ export default function ChatListPage() {
                 key={t.key}
                 onClick={() => setActive(t.key)}
                 sx={{
-                  px: 1.5,
-                  py: 0.75,
+                  px: 1.75,
+                  py: 0.85,
                   borderRadius: 999,
-                  background: on ? palette.ink : palette.lineSoft,
+                  background: on ? palette.ink : "transparent",
+                  border: on ? "none" : `1px solid ${palette.lineSoft}`,
                   color: on ? "#fff" : palette.inkMute,
                   fontSize: 12.5,
                   fontWeight: 700,
+                  letterSpacing: "-0.01em",
                   cursor: "pointer",
+                  transition: "background 160ms ease, color 160ms ease, border-color 160ms ease",
+                  "&:hover": on ? {} : { borderColor: palette.line, color: palette.ink },
                 }}
               >
                 {t.label}
@@ -134,11 +144,13 @@ export default function ChatListPage() {
               display: "flex",
               alignItems: "center",
               gap: 1.5,
-              p: "14px 16px",
-              borderBottom: `1px solid ${palette.line}`,
+              p: "16px 16px",
+              borderBottom: `1px solid ${palette.lineSoft}`,
               cursor: "pointer",
               background: c.unread ? palette.surface : "transparent",
-              "&:hover": { background: palette.lineSoft },
+              transition: "background 160ms ease",
+              "&:hover": { background: palette.surfaceAlt },
+              "&:active": { background: palette.lineSoft },
             }}
           >
             <Box sx={{ position: "relative" }}>
@@ -213,16 +225,18 @@ export default function ChatListPage() {
             {c.unread > 0 && (
               <Box
                 sx={{
-                  minWidth: 20,
-                  height: 20,
+                  minWidth: 22,
+                  height: 22,
                   px: 0.75,
-                  background: palette.accent,
+                  background: `linear-gradient(135deg, ${palette.accent} 0%, ${palette.accentDark} 100%)`,
                   borderRadius: 999,
                   display: "grid",
                   placeItems: "center",
                   fontSize: 10.5,
                   color: "#fff",
                   fontWeight: 800,
+                  letterSpacing: "-0.02em",
+                  boxShadow: "0 4px 10px rgba(217, 105, 90, 0.32)",
                 }}
               >
                 {c.unread}

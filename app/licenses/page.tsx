@@ -32,7 +32,7 @@ export default function LicensesPage() {
           <Box
             sx={{
               background: palette.surface,
-              border: `1px solid ${palette.line}`,
+              border: `1px solid ${palette.lineSoft}`,
               borderRadius: 3,
               overflow: "hidden",
             }}
@@ -45,13 +45,14 @@ export default function LicensesPage() {
                   alignItems="center"
                   gap={1}
                   sx={{
-                    p: 1.5,
-                    borderTop: i === 0 ? "none" : `1px solid ${palette.line}`,
+                    p: "14px 16px",
+                    borderTop: i === 0 ? "none" : `1px solid ${palette.lineSoft}`,
                     cursor: interactive ? "pointer" : "default",
                     textDecoration: "none",
                     color: palette.ink,
+                    transition: "background 140ms ease",
                     "&:hover": interactive
-                      ? { background: palette.lineSoft }
+                      ? { background: palette.surfaceAlt }
                       : {},
                   }}
                 >

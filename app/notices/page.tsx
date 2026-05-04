@@ -37,10 +37,11 @@ export default function NoticesPage() {
                 gap={1.25}
                 onClick={() => router.push(`/notices/${n.id}`)}
                 sx={{
-                  p: "16px",
-                  borderBottom: `1px solid ${palette.line}`,
+                  p: "18px 16px",
+                  borderBottom: `1px solid ${palette.lineSoft}`,
                   cursor: "pointer",
-                  "&:hover": { background: palette.lineSoft },
+                  transition: "background 160ms ease",
+                  "&:hover": { background: palette.surfaceAlt },
                 }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>

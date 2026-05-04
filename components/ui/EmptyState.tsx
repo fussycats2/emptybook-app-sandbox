@@ -23,37 +23,65 @@ export default function EmptyState({
 }: Props) {
   return (
     <Stack
+      className="fade-in-up"
       alignItems="center"
       justifyContent="center"
       sx={{ py: 8, px: 4, textAlign: "center", color: palette.inkMute }}
-      gap={2}
+      gap={2.25}
     >
       <Box
         sx={{
-          width: 72,
-          height: 72,
+          width: 84,
+          height: 84,
           borderRadius: "50%",
-          background: palette.primarySoft,
+          background: `radial-gradient(circle at 30% 30%, ${palette.primaryTint} 0%, ${palette.primarySoft} 100%)`,
           color: palette.primary,
           display: "grid",
           placeItems: "center",
-          fontSize: 32,
+          fontSize: 36,
+          boxShadow: `inset 0 0 0 1px ${palette.lineSoft}`,
+          position: "relative",
         }}
       >
+        {/* 아이콘 주변의 미세한 글로우 — 모던 톤 */}
+        <Box
+          sx={{
+            position: "absolute",
+            inset: -8,
+            borderRadius: "50%",
+            background: palette.primaryGlow,
+            filter: "blur(16px)",
+            zIndex: -1,
+          }}
+        />
         {icon}
       </Box>
-      <Box>
-        <Typography sx={{ fontSize: 16, fontWeight: 800, color: palette.ink }}>
+      <Box sx={{ maxWidth: 280 }}>
+        <Typography
+          sx={{
+            fontSize: 16.5,
+            fontWeight: 800,
+            color: palette.ink,
+            letterSpacing: "-0.02em",
+          }}
+        >
           {title}
         </Typography>
         {description && (
-          <Typography sx={{ fontSize: 13, mt: 0.75, lineHeight: 1.55 }}>
+          <Typography
+            sx={{
+              fontSize: 13.5,
+              mt: 1,
+              lineHeight: 1.65,
+              color: palette.inkMute,
+            }}
+          >
             {description}
           </Typography>
         )}
       </Box>
       {actionLabel && onAction && (
-        <Button onClick={onAction} variant="outlined" size="small">
+        <Button onClick={onAction} variant="outlined" size="small" sx={{ mt: 0.5, px: 2.5 }}>
           {actionLabel}
         </Button>
       )}

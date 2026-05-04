@@ -57,11 +57,32 @@ export default function OrderConfirmPage({
     <>
       <AppHeader title="거래 확정" left="back" />
       <ScrollBody>
-        <Box sx={{ background: palette.surface, p: 2, display: "flex", gap: 1.5 }}>
-          <BookImage seed={seedId} width={64} height={84} radius={10} />
-          <Box>
-            <Typography sx={{ fontSize: 14, fontWeight: 800 }}>{title}</Typography>
-            <Typography sx={{ fontSize: 12, color: palette.inkSubtle }}>
+        <Box
+          sx={{
+            background: palette.surface,
+            p: 2,
+            display: "flex",
+            gap: 1.5,
+            alignItems: "center",
+            borderBottom: `1px solid ${palette.lineSoft}`,
+          }}
+        >
+          <BookImage seed={seedId} src={book?.coverUrl} width={68} height={88} radius={12} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              sx={{
+                fontSize: 14.5,
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                display: "-webkit-box",
+                WebkitLineClamp: 1,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}
+            >
+              {title}
+            </Typography>
+            <Typography sx={{ fontSize: 12, color: palette.inkSubtle, mt: 0.4 }}>
               판매자 {sellerName}
             </Typography>
             <Typography sx={{ fontSize: 12, color: palette.inkSubtle, mt: 0.25 }}>
@@ -206,12 +227,15 @@ export default function OrderConfirmPage({
           sx={{
             mx: 2,
             mb: 2,
-            background: "#FFF7E6",
+            background: palette.warnSoft,
+            border: `1px solid ${palette.warn}33`,
             borderRadius: 3,
-            p: 1.5,
+            p: 1.75,
             color: "#7A5800",
             fontSize: 12.5,
-            lineHeight: 1.55,
+            lineHeight: 1.65,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
           }}
         >
           📦 책 상태를 꼭 확인하고 확정해주세요. 거래 확정 후에는 환불이 어려워요.

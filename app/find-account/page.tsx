@@ -153,16 +153,22 @@ function FindEmailForm() {
       <Box>
         <Typography
           sx={{
-            fontSize: 11.5,
+            display: "inline-block",
+            fontSize: 10.5,
             fontWeight: 800,
-            letterSpacing: "0.18em",
+            letterSpacing: "0.16em",
             color: palette.primary,
-            mb: 1.25,
+            background: palette.primaryTint,
+            border: `1px solid ${palette.primarySoft}`,
+            borderRadius: 999,
+            px: 1.1,
+            py: 0.4,
+            mb: 1.5,
           }}
         >
           FIND YOUR ID
         </Typography>
-        <Typography sx={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>
+        <Typography sx={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.3 }}>
           가입 시 입력한 휴대폰 번호로
           <br />
           이메일을 찾아드려요.
@@ -323,7 +329,7 @@ function ResetPasswordForm() {
           >
             CHECK YOUR INBOX
           </Typography>
-          <Typography sx={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>
+          <Typography sx={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.3 }}>
             메일을 보냈어요.
           </Typography>
           <Typography sx={{ fontSize: 14, color: palette.inkMute, mt: 1, lineHeight: 1.6 }}>
@@ -353,16 +359,22 @@ function ResetPasswordForm() {
       <Box>
         <Typography
           sx={{
-            fontSize: 11.5,
+            display: "inline-block",
+            fontSize: 10.5,
             fontWeight: 800,
-            letterSpacing: "0.18em",
+            letterSpacing: "0.16em",
             color: palette.primary,
-            mb: 1.25,
+            background: palette.primaryTint,
+            border: `1px solid ${palette.primarySoft}`,
+            borderRadius: 999,
+            px: 1.1,
+            py: 0.4,
+            mb: 1.5,
           }}
         >
           RESET PASSWORD
         </Typography>
-        <Typography sx={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em" }}>
+        <Typography sx={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.03em", lineHeight: 1.3 }}>
           가입한 이메일을 입력하면
           <br />
           재설정 링크를 보내드려요.

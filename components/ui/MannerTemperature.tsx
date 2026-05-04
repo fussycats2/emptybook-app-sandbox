@@ -27,13 +27,30 @@ export default function MannerTemperature({
       ? palette.primary
       : palette.inkSubtle;
 
-  const fontSize = size === "lg" ? 22 : size === "sm" ? 13 : 16;
+  // 그라데이션으로 채움 — 단색보다 모던
+  const fillGradient =
+    value >= 42
+      ? `linear-gradient(90deg, ${palette.warn} 0%, ${palette.accent} 100%)`
+      : value >= 38
+      ? `linear-gradient(90deg, ${palette.primary} 0%, ${palette.warn} 100%)`
+      : value >= 36
+      ? `linear-gradient(90deg, ${palette.success} 0%, ${palette.primary} 100%)`
+      : `linear-gradient(90deg, ${palette.inkSubtle} 0%, ${palette.inkMute} 100%)`;
+
+  const fontSize = size === "lg" ? 24 : size === "sm" ? 13 : 16;
   const labelSize = size === "lg" ? 12 : 10.5;
 
   return (
     <Box sx={{ minWidth: size === "lg" ? 140 : 88 }}>
       <Stack direction="row" alignItems="baseline" gap={0.5}>
-        <Typography sx={{ fontWeight: 800, color, fontSize }}>
+        <Typography
+          sx={{
+            fontWeight: 800,
+            color,
+            fontSize,
+            letterSpacing: "-0.025em",
+          }}
+        >
           {value.toFixed(1)}℃
         </Typography>
         <Typography
@@ -41,6 +58,7 @@ export default function MannerTemperature({
             fontSize: labelSize,
             color: palette.inkMute,
             fontWeight: 600,
+            letterSpacing: "-0.01em",
           }}
         >
           매너온도
@@ -48,20 +66,21 @@ export default function MannerTemperature({
       </Stack>
       <Box
         sx={{
-          mt: 0.75,
-          height: 6,
+          mt: 0.85,
+          height: size === "lg" ? 8 : 6,
           borderRadius: 999,
           background: palette.lineSoft,
           overflow: "hidden",
+          boxShadow: `inset 0 1px 2px rgba(26,38,32,0.06)`,
         }}
       >
         <Box
           sx={{
             width: `${pct * 100}%`,
             height: "100%",
-            background: color,
+            background: fillGradient,
             borderRadius: 999,
-            transition: "width 400ms",
+            transition: "width 600ms cubic-bezier(0.22, 1, 0.36, 1)",
           }}
         />
       </Box>

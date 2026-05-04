@@ -89,7 +89,7 @@ export default function RecentBooksPage() {
                 pt: 1,
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
-                gap: 1.25,
+                gap: 1.5,
               }}
             >
               {books.map((b) => (

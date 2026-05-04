@@ -122,8 +122,10 @@ export default function NotificationsPage() {
       />
       <Box
         sx={{
-          background: palette.surface,
-          borderBottom: `1px solid ${palette.line}`,
+          background: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surface}F2 100%)`,
+          backdropFilter: "saturate(160%) blur(8px)",
+          WebkitBackdropFilter: "saturate(160%) blur(8px)",
+          borderBottom: `1px solid ${palette.lineSoft}`,
           px: 2,
           py: 1.25,
           display: "flex",
@@ -185,24 +187,39 @@ export default function NotificationsPage() {
               sx={{
                 display: "flex",
                 gap: 1.5,
-                p: "14px 16px",
-                borderBottom: `1px solid ${palette.line}`,
+                p: "16px 16px",
+                borderBottom: `1px solid ${palette.lineSoft}`,
                 background: n.unread ? palette.surface : "transparent",
                 cursor: "pointer",
+                transition: "background 160ms ease",
+                position: "relative",
+                "&:hover": { background: palette.surfaceAlt },
+                ...(n.unread && {
+                  "&::before": {
+                    content: '""',
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 3,
+                    background: palette.accent,
+                  },
+                }),
               }}
               // 클릭 → 읽음 처리 + 종류별 화면으로 이동
               onClick={() => handleClick(n)}
             >
               <Box
                 sx={{
-                  width: 40,
-                  height: 40,
+                  width: 42,
+                  height: 42,
                   borderRadius: "50%",
                   background: conf.bg,
                   color: conf.fg,
                   display: "grid",
                   placeItems: "center",
                   flexShrink: 0,
+                  border: `1px solid ${conf.fg}1A`,
                 }}
               >
                 {conf.icon}

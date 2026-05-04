@@ -165,8 +165,10 @@ function SearchInner() {
     <>
       <Box
         sx={{
-          background: palette.surface,
-          borderBottom: `1px solid ${palette.line}`,
+          background: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surface}F2 100%)`,
+          backdropFilter: "saturate(160%) blur(8px)",
+          WebkitBackdropFilter: "saturate(160%) blur(8px)",
+          borderBottom: `1px solid ${palette.lineSoft}`,
           flexShrink: 0,
         }}
       >
@@ -199,9 +201,13 @@ function SearchInner() {
             sx={{
               background: palette.lineSoft,
               borderRadius: 999,
-              height: 40,
+              height: 42,
               "& fieldset": { border: "none" },
               "& input": { fontSize: 14, py: 0 },
+              "&.Mui-focused": {
+                background: palette.surface,
+                boxShadow: `0 0 0 1px ${palette.line}, 0 0 0 5px ${palette.primaryGlow}`,
+              },
             }}
           />
           <IconButton onClick={() => setFilterOpen(true)}>
@@ -216,7 +222,7 @@ function SearchInner() {
             sx={{
               overflowX: "auto",
               px: 2,
-              pb: 1,
+              pb: 1.25,
             }}
           >
             {activeChips.map((c) => (
@@ -247,6 +253,7 @@ function SearchInner() {
                   ...(sort === s.key && {
                     background: palette.ink,
                     color: "#fff",
+                    "&:hover": { background: palette.ink },
                   }),
                 }}
               />
@@ -257,7 +264,7 @@ function SearchInner() {
 
       <ScrollBody>
         {!isResultMode && (
-          <Stack gap={3} sx={{ p: 2.5 }}>
+          <Stack gap={3.5} sx={{ p: 2.5 }}>
             <Section title="최근 검색어" icon={<HistoryRoundedIcon fontSize="small" />}>
               {recent.length === 0 ? (
                 <Typography sx={{ fontSize: 13, color: palette.inkSubtle }}>
@@ -284,7 +291,14 @@ function SearchInner() {
               )}
             </Section>
             <Section title="실시간 인기" icon={<LocalFireDepartmentRoundedIcon sx={{ color: palette.accent }} />}>
-              <Stack divider={<Box sx={{ height: 1, background: palette.lineSoft }} />}>
+              <Box
+                sx={{
+                  background: palette.surface,
+                  borderRadius: 3,
+                  border: `1px solid ${palette.lineSoft}`,
+                  overflow: "hidden",
+                }}
+              >
                 {POPULAR_SEARCHES.map((t, i) => (
                   <Stack
                     key={t}
@@ -292,27 +306,37 @@ function SearchInner() {
                     alignItems="center"
                     gap={1.5}
                     sx={{
-                      py: 1,
+                      px: 1.75,
+                      py: 1.1,
                       cursor: "pointer",
-                      "&:hover": { background: palette.lineSoft },
+                      borderTop: i === 0 ? "none" : `1px solid ${palette.lineSoft}`,
+                      transition: "background 140ms ease",
+                      "&:hover": { background: palette.surfaceAlt },
                     }}
                     onClick={() => submit(t)}
                   >
                     <Typography
                       sx={{
                         width: 22,
+                        fontSize: 14,
                         fontWeight: 800,
-                        color: i < 3 ? palette.accent : palette.inkMute,
+                        letterSpacing: "-0.02em",
+                        color: i < 3 ? palette.accent : palette.inkSubtle,
                       }}
                     >
                       {i + 1}
                     </Typography>
-                    <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
+                    <Typography sx={{ fontSize: 14, fontWeight: 600, flex: 1, letterSpacing: "-0.01em" }}>
                       {t}
                     </Typography>
+                    {i < 3 && (
+                      <LocalFireDepartmentRoundedIcon
+                        sx={{ fontSize: 14, color: palette.accent, opacity: 0.5 }}
+                      />
+                    )}
                   </Stack>
                 ))}
-              </Stack>
+              </Box>
             </Section>
             <Section title="카테고리">
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
@@ -388,9 +412,17 @@ function Section({
 }) {
   return (
     <Box>
-      <Stack direction="row" gap={0.75} alignItems="center" mb={1}>
+      <Stack direction="row" gap={0.75} alignItems="center" mb={1.25}>
         {icon}
-        <Typography sx={{ fontSize: 14, fontWeight: 800 }}>{title}</Typography>
+        <Typography
+          sx={{
+            fontSize: 14.5,
+            fontWeight: 800,
+            letterSpacing: "-0.025em",
+          }}
+        >
+          {title}
+        </Typography>
       </Stack>
       {children}
     </Box>

@@ -16,26 +16,57 @@ export default function PrivacyPage() {
       <AppHeader title="개인정보 처리방침" left="back" />
       <ScrollBody>
         <Box sx={{ p: 2.5 }}>
-          <Typography
+          <Box
             sx={{
-              fontSize: 12,
-              color: palette.inkSubtle,
-              mb: 2,
-              lineHeight: 1.6,
+              p: 2,
+              mb: 3,
+              background: palette.primaryTint,
+              border: `1px solid ${palette.primarySoft}`,
+              borderRadius: 3,
             }}
           >
-            본 처리방침은 EmptyBook 이 이용자의 개인정보를 어떻게 수집·이용·보호하는지
-            안내하기 위한 발췌본입니다. 정식 처리방침 전문은 추후 공지를 통해
-            안내드립니다.
-          </Typography>
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                color: palette.primaryDark,
+                lineHeight: 1.65,
+                fontWeight: 600,
+              }}
+            >
+              ⓘ 본 처리방침은 EmptyBook 이 이용자의 개인정보를 어떻게 수집·이용·보호하는지
+              안내하기 위한 발췌본입니다. 정식 처리방침 전문은 추후 공지를 통해
+              안내드립니다.
+            </Typography>
+          </Box>
           {PRIVACY_SECTIONS.map((s, i) => (
-            <Box key={i} sx={{ mb: 2.5 }}>
+            <Box
+              key={i}
+              sx={{
+                mb: 2,
+                p: 2,
+                background: palette.surface,
+                border: `1px solid ${palette.lineSoft}`,
+                borderRadius: 3,
+              }}
+            >
               <Typography
                 sx={{
-                  fontSize: 14,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: "0.08em",
+                  color: palette.primary,
+                  mb: 0.75,
+                }}
+              >
+                SECTION {String(i + 1).padStart(2, "0")}
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 15,
                   fontWeight: 800,
                   color: palette.ink,
-                  mb: 0.75,
+                  letterSpacing: "-0.025em",
+                  mb: 1.25,
                 }}
               >
                 {s.title}
@@ -44,7 +75,7 @@ export default function PrivacyPage() {
                 sx={{
                   fontSize: 13,
                   color: palette.inkMute,
-                  lineHeight: 1.7,
+                  lineHeight: 1.75,
                   whiteSpace: "pre-wrap",
                 }}
               >

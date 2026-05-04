@@ -276,16 +276,23 @@ export default function RegisterPage() {
               }}
               sx={{
                 flexShrink: 0,
-                width: 92,
-                height: 92,
+                width: 96,
+                height: 96,
                 border: `1.5px dashed ${palette.line}`,
-                borderRadius: 2.5,
-                background: palette.lineSoft,
+                borderRadius: 3,
+                background: `linear-gradient(135deg, ${palette.surfaceAlt} 0%, ${palette.lineSoft} 100%)`,
                 display: "grid",
                 placeItems: "center",
                 cursor: "pointer",
                 color: palette.inkMute,
                 opacity: photos.length >= MAX_PHOTOS ? 0.5 : 1,
+                transition: "transform 160ms ease, border-color 160ms ease, background 160ms ease",
+                "&:hover": {
+                  borderColor: palette.primary,
+                  color: palette.primary,
+                  background: palette.primaryTint,
+                  transform: "translateY(-1px)",
+                },
               }}
             >
               <Stack alignItems="center" gap={0.25}>
@@ -595,13 +602,16 @@ export default function RegisterPage() {
                   onClick={() => setState(s.key as typeof state)}
                   sx={{
                     flex: 1,
-                    border: `1.5px solid ${on ? palette.primary : palette.line}`,
-                    background: on ? palette.primarySoft : palette.surface,
-                    borderRadius: 2,
-                    py: 1,
+                    border: `1.5px solid ${on ? palette.primary : palette.lineSoft}`,
+                    background: on ? palette.primaryTint : palette.surface,
+                    borderRadius: 2.5,
+                    py: 1.25,
                     px: 0.75,
                     textAlign: "center",
                     cursor: "pointer",
+                    transition: "border-color 160ms ease, background 160ms ease, transform 90ms ease",
+                    boxShadow: on ? `0 0 0 4px ${palette.primaryGlow}` : "none",
+                    "&:active": { transform: "scale(0.97)" },
                   }}
                 >
                   <Typography

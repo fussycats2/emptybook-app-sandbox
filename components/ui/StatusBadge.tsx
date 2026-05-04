@@ -17,12 +17,12 @@ export type SaleStatus =
 // 상태별 라벨 + 배경/전경 색상 매핑 — 모두 palette 토큰에서 파생
 const MAP: Record<
   SaleStatus,
-  { label: string; bg: string; fg: string }
+  { label: string; bg: string; fg: string; dot?: string }
 > = {
-  selling: { label: "판매중", bg: palette.primarySoft, fg: palette.primary },
-  reserved: { label: "예약중", bg: palette.warnSoft, fg: palette.warn },
+  selling: { label: "판매중", bg: palette.primarySoft, fg: palette.primary, dot: palette.primary },
+  reserved: { label: "예약중", bg: palette.warnSoft, fg: palette.warn, dot: palette.warn },
   sold: { label: "거래완료", bg: palette.lineSoft, fg: palette.inkMute },
-  free: { label: "무료나눔", bg: palette.accentSoft, fg: palette.accent },
+  free: { label: "무료나눔", bg: palette.accentSoft, fg: palette.accent, dot: palette.accent },
   canceled: { label: "취소", bg: palette.lineSoft, fg: palette.inkSubtle },
 };
 
@@ -40,13 +40,15 @@ export default function StatusBadge({
       sx={{
         display: "inline-flex",
         alignItems: "center",
+        gap: 0.5,
         background: conf.bg,
         color: conf.fg,
         fontWeight: 700,
         fontSize: size === "sm" ? 10.5 : 12,
         height: size === "sm" ? 20 : 24,
-        px: size === "sm" ? 0.75 : 1,
+        px: size === "sm" ? 0.85 : 1.1,
         borderRadius: 999,
+        letterSpacing: "-0.01em",
         // 한국어 라벨이 좁은 부모 안에서 글자 단위로 줄바꿈되지 않도록 강제
         // (예: 채팅방 헤더의 도서 제목 옆처럼 옆 텍스트가 길어 폭이 부족할 때)
         whiteSpace: "nowrap",
@@ -54,6 +56,18 @@ export default function StatusBadge({
         flexShrink: 0,
       }}
     >
+      {conf.dot && (
+        <Box
+          component="span"
+          sx={{
+            width: size === "sm" ? 5 : 6,
+            height: size === "sm" ? 5 : 6,
+            borderRadius: "50%",
+            background: conf.dot,
+            display: "inline-block",
+          }}
+        />
+      )}
       {conf.label}
     </Box>
   );

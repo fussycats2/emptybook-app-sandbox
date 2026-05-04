@@ -11,7 +11,7 @@ import {
   Button,
   Typography,
 } from "@mui/material";
-import { palette } from "@/lib/theme";
+import { palette, radius } from "@/lib/theme";
 
 interface Props {
   open: boolean;
@@ -39,20 +39,40 @@ export default function ConfirmDialog({
       open={open}
       onClose={onCancel}
       PaperProps={{
-        sx: { borderRadius: 4, width: 320, maxWidth: "92vw", p: 1 },
+        sx: {
+          borderRadius: `${radius.xl}px`,
+          width: 340,
+          maxWidth: "92vw",
+          p: 1.25,
+          boxShadow: "0 24px 60px rgba(26,38,32,0.24), 0 8px 24px rgba(26,38,32,0.12)",
+        },
+      }}
+      sx={{
+        "& .MuiBackdrop-root": {
+          backgroundColor: "rgba(26, 38, 32, 0.45)",
+          backdropFilter: "blur(2px)",
+        },
       }}
     >
-      <DialogTitle sx={{ fontSize: 17, fontWeight: 800, pb: 0.5 }}>
+      <DialogTitle
+        sx={{
+          fontSize: 18,
+          fontWeight: 800,
+          letterSpacing: "-0.025em",
+          pb: 0.5,
+          pt: 2.5,
+        }}
+      >
         {title}
       </DialogTitle>
       {description && (
         <DialogContent sx={{ pt: 0.5 }}>
-          <Typography sx={{ fontSize: 14, color: palette.inkMute, lineHeight: 1.55 }}>
+          <Typography sx={{ fontSize: 14, color: palette.inkMute, lineHeight: 1.65 }}>
             {description}
           </Typography>
         </DialogContent>
       )}
-      <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}>
+      <DialogActions sx={{ px: 2, pb: 2.25, gap: 1 }}>
         <Button variant="outlined" fullWidth onClick={onCancel}>
           {cancelLabel}
         </Button>
@@ -62,7 +82,7 @@ export default function ConfirmDialog({
           sx={{
             background: destructive ? palette.accent : palette.primary,
             "&:hover": {
-              background: destructive ? "#E5564A" : palette.primaryDark,
+              background: destructive ? palette.accentDark : palette.primaryDark,
             },
           }}
         >

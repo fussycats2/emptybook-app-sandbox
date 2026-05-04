@@ -25,6 +25,17 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 
+/* 부드러운 스크롤바 — 데스크톱 카드 안의 스크롤 영역에서 보이는 스크롤바 톤 다운 */
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(94, 107, 99, 0.18);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(94, 107, 99, 0.30);
+}
+
 @keyframes pulseScale {
   0% { transform: scale(1); }
   40% { transform: scale(1.25); }
@@ -37,17 +48,48 @@ button { -webkit-tap-highlight-color: transparent; }
   100% { background-position: 400px 0; }
 }
 .skeleton {
-  background: linear-gradient(90deg, #F1EDE4 0%, #E5E1D7 50%, #F1EDE4 100%);
+  background: linear-gradient(90deg, #F2EEE5 0%, #E8E3D6 50%, #F2EEE5 100%);
   background-size: 800px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.fade-in-up { animation: fadeInUp 220ms ease-out both; }
+.fade-in-up { animation: fadeInUp 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in { animation: fadeIn 240ms ease-out both; }
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.scale-in { animation: scaleIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* 카드 hover 시 살짝 떠오르는 효과 — 컴포넌트에서 className 으로 골라 사용 */
+.card-lift {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 200ms ease;
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* 텍스트 그라데이션 유틸 — 강조 헤드라인에 사용 */
+.text-gradient {
+  background: linear-gradient(120deg, #2D5F4A 0%, #4A8B6E 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
 
 @keyframes splashRise {
   from { opacity: 0; transform: translateY(14px); }

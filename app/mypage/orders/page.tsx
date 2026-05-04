@@ -70,8 +70,10 @@ export default function OrdersPage() {
       <AppHeader title="거래 내역" left="back" />
       <Box
         sx={{
-          background: palette.surface,
-          borderBottom: `1px solid ${palette.line}`,
+          background: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surface}F2 100%)`,
+          backdropFilter: "saturate(160%) blur(8px)",
+          WebkitBackdropFilter: "saturate(160%) blur(8px)",
+          borderBottom: `1px solid ${palette.lineSoft}`,
           flexShrink: 0,
         }}
       >
@@ -85,12 +87,14 @@ export default function OrdersPage() {
                 sx={{
                   flex: 1,
                   textAlign: "center",
-                  py: 1.5,
+                  py: 1.75,
                   cursor: "pointer",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   color: on ? palette.primary : palette.inkSubtle,
                   borderBottom: `2.5px solid ${on ? palette.primary : "transparent"}`,
-                  fontSize: 14,
+                  fontSize: 14.5,
+                  letterSpacing: "-0.02em",
+                  transition: "color 160ms ease, border-color 160ms ease",
                 }}
               >
                 {t.label}
@@ -145,8 +149,9 @@ export default function OrdersPage() {
               key={item.id}
               sx={{
                 p: 2,
-                borderBottom: `1px solid ${palette.line}`,
+                borderBottom: `1px solid ${palette.lineSoft}`,
                 background: palette.surface,
+                transition: "background 140ms ease",
               }}
             >
               <Stack

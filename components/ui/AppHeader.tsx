@@ -50,7 +50,12 @@ export default function AppHeader({
         px: 1,
         gap: 1,
         flexShrink: 0,
-        background: transparent ? "transparent" : palette.surface,
+        // 살짝 글래시한 헤더 — 스크롤 영역과 분리감 + 모던 톤
+        background: transparent
+          ? "transparent"
+          : `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surface}F2 100%)`,
+        backdropFilter: transparent ? "none" : "saturate(160%) blur(8px)",
+        WebkitBackdropFilter: transparent ? "none" : "saturate(160%) blur(8px)",
         zIndex: 2,
       }}
     >
@@ -69,8 +74,9 @@ export default function AppHeader({
         component="h1"
         sx={{
           flex: 1,
-          fontWeight: 700,
+          fontWeight: 800,
           fontSize: 16,
+          letterSpacing: "-0.02em",
           textAlign: centered ? "center" : "left",
           color: palette.ink,
         }}

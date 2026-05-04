@@ -160,21 +160,27 @@ export default function SignupPage() {
             <Box>
               <Typography
                 sx={{
-                  fontSize: 11.5,
+                  display: "inline-block",
+                  fontSize: 10.5,
                   fontWeight: 800,
-                  letterSpacing: "0.18em",
+                  letterSpacing: "0.16em",
                   color: palette.primary,
-                  mb: 1.25,
+                  background: palette.primaryTint,
+                  border: `1px solid ${palette.primarySoft}`,
+                  borderRadius: 999,
+                  px: 1.1,
+                  py: 0.4,
+                  mb: 1.5,
                 }}
               >
                 CREATE ACCOUNT
               </Typography>
               <Typography
                 sx={{
-                  fontSize: 22,
+                  fontSize: 26,
                   fontWeight: 800,
                   lineHeight: 1.3,
-                  letterSpacing: "-0.02em",
+                  letterSpacing: "-0.03em",
                 }}
               >
                 계정 정보를
@@ -259,21 +265,27 @@ export default function SignupPage() {
             <Box>
               <Typography
                 sx={{
-                  fontSize: 11.5,
+                  display: "inline-block",
+                  fontSize: 10.5,
                   fontWeight: 800,
-                  letterSpacing: "0.18em",
+                  letterSpacing: "0.16em",
                   color: palette.primary,
-                  mb: 1.25,
+                  background: palette.primaryTint,
+                  border: `1px solid ${palette.primarySoft}`,
+                  borderRadius: 999,
+                  px: 1.1,
+                  py: 0.4,
+                  mb: 1.5,
                 }}
               >
                 YOUR TASTE
               </Typography>
               <Typography
                 sx={{
-                  fontSize: 22,
+                  fontSize: 26,
                   fontWeight: 800,
                   lineHeight: 1.3,
-                  letterSpacing: "-0.02em",
+                  letterSpacing: "-0.03em",
                 }}
               >
                 좋아하는 장르를
@@ -313,21 +325,27 @@ export default function SignupPage() {
             <Box>
               <Typography
                 sx={{
-                  fontSize: 11.5,
+                  display: "inline-block",
+                  fontSize: 10.5,
                   fontWeight: 800,
-                  letterSpacing: "0.18em",
+                  letterSpacing: "0.16em",
                   color: palette.primary,
-                  mb: 1.25,
+                  background: palette.primaryTint,
+                  border: `1px solid ${palette.primarySoft}`,
+                  borderRadius: 999,
+                  px: 1.1,
+                  py: 0.4,
+                  mb: 1.5,
                 }}
               >
                 ALMOST THERE
               </Typography>
               <Typography
                 sx={{
-                  fontSize: 22,
+                  fontSize: 26,
                   fontWeight: 800,
                   lineHeight: 1.3,
-                  letterSpacing: "-0.02em",
+                  letterSpacing: "-0.03em",
                 }}
               >
                 약관에 동의하고

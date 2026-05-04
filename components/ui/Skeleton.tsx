@@ -10,7 +10,7 @@ import { Box, Stack } from "@mui/material";
 export function SkeletonBox({
   width = "100%",
   height = 12,
-  radius = 6,
+  radius = 8,
   sx,
 }: {
   width?: number | string;
@@ -29,13 +29,14 @@ export function SkeletonBox({
 // BookFeedItem 모양에 맞춘 스켈레톤
 export function BookCardSkeleton() {
   return (
-    <Stack direction="row" gap={1.5} sx={{ p: 2 }}>
-      <SkeletonBox width={92} height={120} radius={12} />
-      <Stack flex={1} gap={1.25} pt={0.5}>
-        <SkeletonBox width="70%" height={14} />
-        <SkeletonBox width="40%" height={12} />
-        <SkeletonBox width="50%" height={18} />
-        <SkeletonBox width="30%" height={10} />
+    <Stack direction="row" gap={1.75} sx={{ py: 2, px: 2 }}>
+      <SkeletonBox width={108} height={132} radius={14} />
+      <Stack flex={1} gap={1.1} pt={0.5}>
+        <SkeletonBox width="70%" height={15} />
+        <SkeletonBox width="42%" height={11} />
+        <Stack flex={1} />
+        <SkeletonBox width="55%" height={20} radius={6} />
+        <SkeletonBox width="30%" height={11} />
       </Stack>
     </Stack>
   );
@@ -44,7 +45,7 @@ export function BookCardSkeleton() {
 // 카드 스켈레톤을 count 개수만큼 세로로 나열 — 목록형 화면 로딩 상태에 사용
 export function ListSkeleton({ count = 4 }: { count?: number }) {
   return (
-    <Stack divider={<Box sx={{ height: 1 }} />}>
+    <Stack>
       {Array.from({ length: count }).map((_, i) => (
         <BookCardSkeleton key={i} />
       ))}

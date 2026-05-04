@@ -39,7 +39,7 @@ export default function LikesPage() {
               p: 2,
               display: "grid",
               gridTemplateColumns: "1fr 1fr",
-              gap: 1.25,
+              gap: 1.5,
             }}
           >
             {books.map((b) => (
