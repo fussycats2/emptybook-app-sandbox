@@ -61,13 +61,22 @@ export function BookFeedItem({ book }: { book: BookSummary }) {
       <BookImage seed={book.id} src={book.coverUrl} width={108} height={132} radius={12} />
       <Stack flex={1} minWidth={0} justifyContent="space-between">
         <Box>
-          <Stack direction="row" gap={0.75} alignItems="center" mb={0.5}>
+          <Stack
+            direction="row"
+            gap={0.75}
+            alignItems="center"
+            mb={0.5}
+            sx={{ minWidth: 0 }}
+          >
             {status && <StatusBadge status={status} size="sm" />}
             <Typography
+              noWrap
               sx={{
                 fontSize: 11,
                 color: palette.inkSubtle,
                 fontWeight: 600,
+                minWidth: 0,
+                flex: 1,
               }}
             >
               {book.author}

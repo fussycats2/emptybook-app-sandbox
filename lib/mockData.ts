@@ -14,10 +14,16 @@ import {
 export type MockBook = BookSummary & {
   publisher?: string;
   isbn?: string;
+  // 정가 — 표시용 포맷 + 계산용 number 두 형태로 보관 (할인율 계산은 number 로)
   originalPrice?: string;
+  originalPriceNumber?: number;
   discount?: string;
   description?: string;
   comment?: string;
+  // 0011 에서 추가된 네이버 메타데이터 필드 — 상세 화면에서 활용
+  synopsis?: string; // 책 줄거리 (네이버 description)
+  pubDate?: string; // 발행일 (YYYY-MM-DD)
+  sourceUrl?: string; // 네이버 도서 페이지 URL
   seller?: string;
   sellerId?: string; // 실제 auth user.id (Supabase 모드). mock에선 미사용
   sellerStats?: string;
@@ -472,6 +478,11 @@ export function mockCreateBook(input: {
   comment?: string;
   tradeMethod?: string;
   coverUrl?: string;
+  // 0011 메타데이터 — mock 모드에서도 같은 형태로 보관해야 도서 상세에서 일관 표시
+  originalPriceNumber?: number;
+  synopsis?: string;
+  pubDate?: string;
+  sourceUrl?: string;
 }): MockBook {
   const s = getStore();
   // 'u-{timestamp}' 형태로 임시 ID 발급 (실제 DB 라면 UUID 사용)
@@ -487,11 +498,19 @@ export function mockCreateBook(input: {
     state: input.state,
     price: isFree ? "무료나눔" : `${input.priceNumber.toLocaleString()}원`,
     priceNumber: input.priceNumber,
+    originalPrice:
+      input.originalPriceNumber && input.originalPriceNumber > 0
+        ? `${input.originalPriceNumber.toLocaleString()}원`
+        : undefined,
+    originalPriceNumber: input.originalPriceNumber,
     loc: input.region ?? "마포구",
     region: input.region ?? "마포구",
     date: "방금 전",
     description: input.description,
     comment: input.comment,
+    synopsis: input.synopsis,
+    pubDate: input.pubDate,
+    sourceUrl: input.sourceUrl,
     seller: "나",
     sellerStats: "거래 0회 · 신규",
     registeredAt: new Date().toLocaleDateString("ko-KR"),

@@ -153,16 +153,39 @@ export default function OrdersPage() {
                 direction="row"
                 justifyContent="space-between"
                 alignItems="center"
+                gap={1}
                 mb={1}
+                sx={{ minWidth: 0 }}
               >
-                <Stack direction="row" gap={0.75} alignItems="center">
+                <Stack
+                  direction="row"
+                  gap={0.75}
+                  alignItems="center"
+                  sx={{ minWidth: 0 }}
+                >
                   <StatusBadge status={badge} size="sm" />
-                  <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle }}>
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: 11.5,
+                      color: palette.inkSubtle,
+                      minWidth: 0,
+                    }}
+                  >
                     {item.date}
                   </Typography>
                 </Stack>
-                <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle }}>
-                  {item.status}
+                {/* 좌측 배지에 한글 상태가 이미 표기되므로 우측은 거래번호(끝 6자) 로 — 중복 제거 */}
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    color: palette.inkSubtle,
+                    fontFamily: "var(--font-geist-mono, ui-monospace, monospace)",
+                    flexShrink: 0,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  #{item.id.slice(-6).toUpperCase()}
                 </Typography>
               </Stack>
               <Stack

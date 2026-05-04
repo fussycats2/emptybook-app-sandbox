@@ -208,8 +208,16 @@ export default function NotificationsPage() {
                 {conf.icon}
               </Box>
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Stack direction="row" alignItems="center" gap={0.5}>
-                  <Typography sx={{ fontSize: 13.5, fontWeight: 800 }}>
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  gap={0.5}
+                  sx={{ minWidth: 0 }}
+                >
+                  <Typography
+                    noWrap
+                    sx={{ fontSize: 13.5, fontWeight: 800, minWidth: 0 }}
+                  >
                     {n.title}
                   </Typography>
                   {n.unread && (
@@ -219,6 +227,7 @@ export default function NotificationsPage() {
                         height: 6,
                         borderRadius: "50%",
                         background: palette.accent,
+                        flexShrink: 0,
                       }}
                     />
                   )}

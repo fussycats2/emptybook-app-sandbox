@@ -23,6 +23,7 @@ import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
@@ -267,9 +268,22 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           </Stack>
 
           <Box sx={{ pt: 2.5 }}>
-            <Stack direction="row" gap={0.75} alignItems="center" mb={0.75}>
+            <Stack
+              direction="row"
+              gap={0.75}
+              alignItems="center"
+              mb={0.75}
+              sx={{ minWidth: 0 }}
+            >
               <StatusBadge status={status as any} size="sm" />
-              <Typography sx={{ fontSize: 12, color: palette.inkSubtle }}>
+              <Typography
+                noWrap
+                sx={{
+                  fontSize: 12,
+                  color: palette.inkSubtle,
+                  minWidth: 0,
+                }}
+              >
                 {book.category ?? "소설"} · {book.date}
               </Typography>
             </Stack>
@@ -358,11 +372,62 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           <InfoRow label="상태" value={book.state} />
           <InfoRow label="거래방식" value={book.tradeMethod ?? "직거래/택배"} />
           <InfoRow label="ISBN" value={book.isbn ?? "-"} />
+          {book.pubDate && <InfoRow label="발행일" value={book.pubDate} />}
           <InfoRow
             label="등록일"
             value={book.registeredAt ?? book.date ?? "-"}
           />
+          {book.sourceUrl && (
+            <Box
+              component="a"
+              href={book.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.5,
+                mt: 1.25,
+                fontSize: 12,
+                fontWeight: 700,
+                color: palette.primary,
+                textDecoration: "none",
+                "&:hover": { textDecoration: "underline" },
+              }}
+            >
+              네이버에서 자세히 보기
+              <OpenInNewRoundedIcon sx={{ fontSize: 13 }} />
+            </Box>
+          )}
         </Box>
+
+        {book.synopsis && (
+          <>
+            <Divider />
+            <Box sx={{ p: 2 }}>
+              <Typography
+                sx={{
+                  fontSize: 12.5,
+                  fontWeight: 800,
+                  color: palette.inkMute,
+                  mb: 1,
+                }}
+              >
+                책 소개
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  lineHeight: 1.7,
+                  color: palette.inkMute,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {book.synopsis}
+              </Typography>
+            </Box>
+          </>
+        )}
 
         <Divider />
         <Box sx={{ p: 2 }}>

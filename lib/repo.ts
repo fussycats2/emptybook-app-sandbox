@@ -137,6 +137,13 @@ function rowToSummary(b: BookRow): BookSummary {
 // summary 보다 더 많은 필드(설명, 등록일, 거래방식 등)를 채운다
 function rowToDetail(b: BookRow): BookDetail {
   const isFree = b.price === 0;
+  // 정가(original_price) 가 판매가보다 높으면 할인율 자동 계산해 표시.
+  // 같거나 낮으면 (이상한 데이터 또는 정가 미상) 정가/할인 모두 노출하지 않음.
+  const listPrice = b.original_price ?? null;
+  const showOriginal = !!listPrice && listPrice > b.price && b.price > 0;
+  const discountPct = showOriginal
+    ? Math.round(((listPrice - b.price) / listPrice) * 100)
+    : 0;
   return {
     id: b.id,
     title: b.title,
@@ -146,12 +153,20 @@ function rowToDetail(b: BookRow): BookDetail {
     category: b.category ?? "기타",
     price: isFree ? "무료나눔" : `${b.price.toLocaleString()}원`,
     priceNumber: b.price,
+    originalPrice: showOriginal
+      ? `${listPrice.toLocaleString()}원`
+      : undefined,
+    originalPriceNumber: listPrice ?? undefined,
+    discount: discountPct >= 5 ? `${discountPct}%` : undefined,
     state: STATE_LABEL[b.state],
     loc: b.region ?? undefined,
     region: b.region ?? undefined,
     date: new Date(b.created_at).toLocaleDateString("ko-KR"),
     description: b.description ?? undefined,
     comment: b.description ?? undefined,
+    synopsis: b.synopsis ?? undefined,
+    pubDate: b.pub_date ?? undefined,
+    sourceUrl: b.source_url ?? undefined,
     seller: "판매자",
     sellerId: b.seller_id, // isMine 판별용 (auth.uid 비교)
     sellerStats: "거래 -",
@@ -448,6 +463,11 @@ export async function createBook(input: {
   comment?: string;
   tradeMethod?: string;
   coverUrl?: string; // 외부 표지 URL (네이버 검색 결과 등)
+  // 0011 에서 추가된 네이버 메타데이터 — 등록 폼에서 검색 결과 선택 시 함께 전달
+  originalPriceNumber?: number;
+  synopsis?: string;
+  pubDate?: string; // YYYY-MM-DD
+  sourceUrl?: string;
 }): Promise<{ id: string }> {
   const supabase = await tryClient();
   if (!supabase) {
@@ -472,10 +492,17 @@ export async function createBook(input: {
       category: input.category ?? null,
       state: stateEnum,
       price: input.free ? 0 : input.priceNumber,
+      original_price:
+        input.originalPriceNumber && input.originalPriceNumber > 0
+          ? input.originalPriceNumber
+          : null,
       trade_method: "BOTH",
       region: input.region ?? null,
       description: input.description ?? null,
       cover_url: input.coverUrl ?? null,
+      synopsis: input.synopsis ?? null,
+      pub_date: input.pubDate ?? null,
+      source_url: input.sourceUrl ?? null,
     })
     .select("id")
     .single();

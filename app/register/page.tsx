@@ -175,6 +175,11 @@ export default function RegisterPage() {
         publisher: selected?.publisher || undefined,
         isbn: selected?.isbn || undefined,
         coverUrl: selected?.image || undefined,
+        // 0011 메타데이터 — 네이버 검색 결과를 선택한 경우에만 채워서 INSERT
+        originalPriceNumber: selected?.price || undefined,
+        synopsis: selected?.description || undefined,
+        pubDate: selected?.pubdate || undefined,
+        sourceUrl: selected?.link || undefined,
         category,
         state,
         priceNumber,
@@ -421,11 +426,19 @@ export default function RegisterPage() {
                     .filter(Boolean)
                     .join(" · ")}
                 </Typography>
-                {selected.price > 0 && (
+                {(selected.price > 0 || selected.pubdate) && (
                   <Typography
                     sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25 }}
+                    noWrap
                   >
-                    정가 {selected.price.toLocaleString()}원
+                    {[
+                      selected.price > 0
+                        ? `정가 ${selected.price.toLocaleString()}원`
+                        : null,
+                      selected.pubdate ? `${selected.pubdate} 발행` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </Typography>
                 )}
               </Box>

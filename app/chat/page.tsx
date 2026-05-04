@@ -164,13 +164,27 @@ export default function ChatListPage() {
               </Box>
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Stack direction="row" alignItems="center" gap={0.75}>
-                <Typography sx={{ fontSize: 14.5, fontWeight: 800 }}>
+              <Stack
+                direction="row"
+                alignItems="center"
+                gap={0.75}
+                sx={{ minWidth: 0 }}
+              >
+                <Typography
+                  noWrap
+                  sx={{ fontSize: 14.5, fontWeight: 800, minWidth: 0 }}
+                >
                   {c.user}
                 </Typography>
                 {c.status && <StatusBadge status={c.status} size="sm" />}
                 <Box sx={{ flex: 1 }} />
-                <Typography sx={{ fontSize: 11, color: palette.inkSubtle }}>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    color: palette.inkSubtle,
+                    flexShrink: 0,
+                  }}
+                >
                   {c.time}
                 </Typography>
               </Stack>

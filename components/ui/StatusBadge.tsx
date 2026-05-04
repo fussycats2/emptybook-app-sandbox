@@ -47,6 +47,11 @@ export default function StatusBadge({
         height: size === "sm" ? 20 : 24,
         px: size === "sm" ? 0.75 : 1,
         borderRadius: 999,
+        // 한국어 라벨이 좁은 부모 안에서 글자 단위로 줄바꿈되지 않도록 강제
+        // (예: 채팅방 헤더의 도서 제목 옆처럼 옆 텍스트가 길어 폭이 부족할 때)
+        whiteSpace: "nowrap",
+        // flex 자식으로 들어갔을 때(BookCard 의 row 등) 옆 텍스트 길이로 찌부되지 않게
+        flexShrink: 0,
       }}
     >
       {conf.label}

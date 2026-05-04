@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-05-04 (v5 — OAuth 실연동: 카카오/구글 + 네이버 커스텀, 아이디·비밀번호 찾기)
+> 최종 업데이트: 2026-05-04 (v6 — OAuth 운영 가동 + 네이버 도서 메타데이터 통합)
 
 ## 프로젝트 개요
 
@@ -29,6 +29,7 @@
 | **거래 흐름 화면** | 도서 상세 → 결제 → 구매완료 → 거래확정 → 후기 작성 흐름 화면 |
 | **Supabase Auth** | 이메일/비번 로그인·회원가입·로그아웃, `AuthProvider` + `useAuth()` 훅 |
 | **OAuth 로그인 (v5)** | 카카오·구글 — Supabase 내장 Provider 로 `signInWithOAuth` + `/auth/callback` 라우트(=`exchangeCodeForSession`). 카카오는 비즈니스앱 미전환이라 `/login` 에서 disabled. 네이버 — Supabase 가 미지원이라 커스텀 구현: `/api/auth/naver/start`(state CSRF 쿠키 + 네이버 authorize 302) → `/api/auth/naver/callback`(token 교환 + nid/me 프로필 조회 + `admin.createUser` idempotent + `admin.generateLink({ type:"magiclink" })` 의 **hashed_token 을 받아 곧바로 `verifyOtp` 서버사이드 호출**, `createServerClient.setAll` 콜백으로 NextResponse 에 세션 쿠키 직접 심고 `/home` redirect). 초기 시도에서 action_link 로 redirect 했더니 Supabase verify 가 hash fragment(`#access_token=…`)로 토큰을 돌려줘 서버에서 안 보였던 문제 — 외부 hop 자체를 제거함. 네이버 email 누락 시 `naver_<id>@naver.users.emptybook.local` 합성 이메일 폴백. service_role 키는 `lib/supabase/admin.ts` 헬퍼에서만 사용 (서버 전용). 실패 시 `/login?error=oauth&provider=naver&reason=state\|config\|token\|profile\|create\|link\|verify\|service_role` 단서 부착 + 서버 콘솔에 `[naver-oauth]` 로그. 마이페이지 설정 "연동 계정" 행이 `user.app_metadata.provider` 기반으로 동적 표시 |
+| **네이버 도서 메타데이터 통합 (v6, 운영 가동)** | 네이버 도서 검색 API 의 응답을 최대한 보존해 `books` 테이블에 저장: 정가(`original_price`, 0001 부터 존재), 책 줄거리(`synopsis`, 0011 신규), 발행일(`pub_date`, 0011 신규), 외부 페이지 URL(`source_url`, 0011 신규). `BookSearchItem` 에 `link` 필드 추가, `normalize()` 가 그대로 보존. `createBook` 인자 + INSERT 가 새 4개 필드(originalPriceNumber/synopsis/pubDate/sourceUrl) 받음. `rowToDetail` 에서 정가>판매가 일 때 할인율 자동 계산해 `discount` 채움(5% 미만은 노이즈라 표시 생략). **UI 반영**: ① 등록 폼 검색 결과 카드에 "정가 19,800원 · 2024-01-15 발행" 한 줄 추가 ② 도서 상세의 가격 영역 — 기존 originalPrice/discount 표시 로직이 자동 활성화 (정가에 line-through + 할인율 칩) ③ 도서 정보 섹션에 "발행일" InfoRow + 하단에 "네이버에서 자세히 보기 ↗" 외부 링크 ④ 판매자 코멘트 섹션 위에 "책 소개"(synopsis) 별도 섹션. mockCreateBook 도 새 필드 받음 |
 | **아이디·비밀번호 찾기 (v5)** | `/find-account?tab=email\|password` 단일 탭 페이지 — `/login` 의 "아이디 찾기 / 비밀번호 찾기" 링크가 각 탭으로 라우팅. **이메일 찾기**: 휴대폰 번호 입력 → `POST /api/auth/find-email` 이 service_role 로 `profiles.phone` 매칭 후 `auth.users.email` 을 마스킹("ab****@gmail.com") 반환. 휴대폰 번호는 숫자만 추출해 정규화 비교. enumeration 방지를 위해 모든 실패 케이스가 동일하게 `{ found: false }` 응답. SMS OTP 본인 인증은 미구현 — 마스킹으로만 1차 보호. **비밀번호 찾기**: 이메일 입력 → `supabase.auth.resetPasswordForEmail(email, { redirectTo: /auth/callback?next=/reset-password })` → 메일 발송 후 안내 카드. 사용자가 메일 링크 클릭 → 기존 `/auth/callback` 의 PKCE 흐름 재사용 → `/reset-password` 도착, recovery 세션이 있으면 `updateUser({ password })` 로 변경 후 `/home`. 세션이 없으면 "링크 만료/오류" 안내 |
 | **인증 가드** | `middleware.ts` — 액션 라우트(`/register`, `/checkout`, `/orders`, `/chat`, `/mypage`, `/notifications`)만 보호. `/home`, `/search`, `/books`는 게스트 허용 |
 | **찜(좋아요) API** | `toggleLike` / `isLiked` / `listLikedBookIds` / `listLikedBooks` 완성. LikeButton 자체 토글 + 도서 상세 카운트 즉시 동기화. 마이페이지 STATS "찜" 카운트도 실데이터 |
@@ -56,7 +57,7 @@
 | **알림 자동 생성 트리거** | `0006_notification_triggers.sql` — `messages` INSERT(상대), `transactions` INSERT(판매자, kind=TX_NEW)/UPDATE→COMPLETED(양쪽, kind=TX_COMPLETED), `reviews` INSERT(reviewee, kind=REVIEW). 모두 SECURITY DEFINER 로 RLS 우회. payload 는 `{ title, body, ...domain_ids }` 형태로 화면이 그대로 그림 |
 | **likes 카운트 트리거** | `0005_likes_count_trigger.sql` — `likes` INSERT/DELETE 시 `books.like_count` ±1 (SECURITY DEFINER). 클라이언트는 더 이상 `books` 를 직접 UPDATE 하지 않음. 마이그레이션 시점 1회 일괄 동기화 |
 | **최근 본 상품** | `lib/store/recentlyViewedStore` — Zustand + localStorage persist (max 30, move-to-front, name `emptybook:recently-viewed`). `/books/[id]` 진입 시 `book.id` 로 push. `lib/repo.listBooksByIds(ids)` + `useBooksByIds(ids)` 가 입력 순서를 그대로 유지하며 Supabase/mock 양쪽에서 책을 가져옴. `/mypage/recent` 가 그리드로 표시 + "전체 삭제" 액션 + 사라진 책(HIDDEN/삭제) 은 결과에서 빠짐 + store 의 stale id 도 자동 정리. 마이페이지 STATS "최근 본" 도 store 길이 실시간 표시 |
-| **정적 페이지** | `lib/staticContent.ts` (NOTICES / TERMS_SECTIONS / SUPPORT_INFO) + `/notices` 목록 + `/notices/[id]` 상세 + `/terms` 약관 + `/help` 1:1 문의(폼 → mailto: 메일 앱 호출) + `/mypage/coupons` 쿠폰함(빈 상태 안내). 마이페이지 SECTIONS 의 "준비중" 칩 4종을 모두 실링크로 교체 |
+| **정적 페이지** | `lib/staticContent.ts` (NOTICES / TERMS_SECTIONS / PRIVACY_SECTIONS / SUPPORT_INFO) + `/notices` 목록 + `/notices/[id]` 상세 + `/terms` 약관 + `/privacy` 개인정보 처리방침 + `/help` 1:1 문의(폼 → mailto: 메일 앱 호출) + `/mypage/coupons` 쿠폰함(빈 상태 안내). 마이페이지 SECTIONS 의 "준비중" 칩 4종을 모두 실링크로 교체. v6 에서 settings 의 "비밀번호 변경" → /find-account?tab=password, "이용 약관" → /terms, "개인정보 처리방침" → /privacy 라우팅 연결 (그 전엔 모두 "준비중" 토스트였음) |
 | **실명 마스킹** | 회원가입 시 입력한 실명이 그대로 `profiles.display_name` 에 저장돼 다른 사용자 화면에 노출되던 버그 픽스. `anonymizeName(name)` 헬퍼(첫 글자만 노출, 나머지는 `*`. "김민주" → "김**") 추가 + `fetchChat`/`listOrders`/`fetchOrder`/`fetchReviewContext`/`listReceivedReviews` 모두 적용. DB 트리거(`notify_on_message`/`notify_on_transaction_insert`/`notify_on_review`) 도 0008 에서 `mask_display_name(text)` SQL 함수로 마스킹 + 기존 알림 행 backfill |
 | **채팅 읽음 RLS 픽스** | 0001 에 `messages` UPDATE RLS 정책이 빠져 있어 `markRoomMessagesRead` 의 read_at UPDATE 가 조용히 차단(0행 영향) → 채팅방 들어가서 읽어도 unread 배지가 안 사라지던 버그. 0007 에서 채팅방 참여자(buyer/seller) 가 `messages` UPDATE 가능하도록 정책 추가 |
 | **UI 테마 리프레시 (v3)** | `lib/theme.ts` 의 `palette` / `radius` / `shadow` 토큰을 새 톤으로 일괄 교체 — primary `#1F6F4E → #2D5F4A` (sage), bg `#FAF7F2 → #F7F4ED` (warm cream), accent `#FF6B5E → #D9695A` (terracotta). 새 토큰 추가: `primaryTint`, `surfaceAlt`, `accentSoft`, `warn` / `warnSoft`, `radius.xl`, `shadow.pop`. 버튼/Input/Switch/Card 기본 hover·focus·disabled 정리. `globals.css` 의 body bg, skeleton 색도 새 라인에 맞춰 정리. 컴포넌트(`StatusBadge`, `MannerTemperature`, `BookCard`, `BookImage` 자리표시 6색, `app/notifications` 아이콘 매핑)에 박혀 있던 직접 hex 도 모두 토큰으로 치환 |
@@ -82,7 +83,7 @@
 
 | 항목 | 상태 | 비고 |
 |------|------|------|
-| **OAuth 로그인** | 코드 완성 | 카카오·구글·네이버 모두 코드 연동 완료. **사용자 작업 필요**: ① Supabase Dashboard 에서 카카오·구글 Provider 활성화 + 콜백 URL 등록 ② 네이버 개발자 콘솔에서 "네이버 로그인" 권한 앱 발급 → `NAVER_OAUTH_CLIENT_ID/SECRET` 채우기 + Callback URL `https://<domain>/api/auth/naver/callback` 등록 ③ `SUPABASE_SERVICE_ROLE_KEY` 설정 |
+| **OAuth 로그인** | 운영 중 | 구글·네이버 정상 동작 확인됨. 카카오는 비즈니스앱 전환 전이라 `/login` 에서 disabled (KAKAO_DISABLED=true) 처리 — 비즈 인증 후 플래그만 false 로 바꾸면 즉시 활성화 |
 | **이메일 인증 플로우** | 부분 | 가입 시 `data.session` 없으면 `/login`으로 안내. Supabase 대시보드 "Confirm email" 정책 확정 필요 |
 | **결제 PG** | 구현 안 함 | Mock UI 만 유지 (사이드 프로젝트 단계에서는 PG 사업자 등록·심사가 비현실적). 0010 FSM 트리거는 PAID→COMPLETED 만 허용하고 CANCELED 진입을 차단. 추후 도입 시 트리거에 `PAID → CANCELED` 전이(권한 정책 포함) 추가 필요 |
 | **알림 푸시(Push)** | 없음 | 인앱 알림은 트리거+Realtime 으로 완성. 디바이스 푸시(FCM/Web Push)는 Edge Functions 미작성 |
@@ -132,6 +133,7 @@ app/                              # 화면 라우트
   notices/[id]/page.tsx           # /notices/[id] — 공지사항 상세
   help/page.tsx                   # /help — 1:1 문의 (mailto)
   terms/page.tsx                  # /terms — 이용 약관
+  privacy/page.tsx                # /privacy — 개인정보 처리방침
 
 components/
   ui/                             # 공용 UI (상단 표 참고)
@@ -169,6 +171,7 @@ supabase/migrations/
   0008_anonymize_notification_names.sql    # 알림 트리거 + 기존 행 백필에서 display_name 마스킹
   0009_update_with_check.sql               # books/profiles UPDATE 정책에 with check 추가 (양도 차단)
   0010_transactions_fsm.sql                # transactions 상태 머신 (PAID→COMPLETED, buyer 만 / CANCELED 차단)
+  0011_book_metadata.sql                   # books 에 synopsis/pub_date/source_url 추가 (네이버 메타데이터 통합)
 ```
 
 ---
@@ -222,7 +225,7 @@ supabase/migrations/
 | 테이블 | 핵심 컬럼 |
 |--------|----------|
 | `profiles` | `id(=auth.uid)`, `display_name`, `rating_avg`, `trade_count` |
-| `books` | `seller_id`, `title`, `state(A_PLUS/A/B/C)`, `price`, `status(SELLING/RESERVED/SOLD/HIDDEN)`, `trade_method(DIRECT/PARCEL/BOTH)` |
+| `books` | `seller_id`, `title`, `state(A_PLUS/A/B/C)`, `price`, `original_price`, `status(SELLING/RESERVED/SOLD/HIDDEN)`, `trade_method(DIRECT/PARCEL/BOTH)`, `description`(사용자 코멘트), `synopsis`(책 줄거리), `pub_date`, `source_url`, `cover_url` |
 | `book_images` | `book_id`, `storage_path`, `sort_order` |
 | `likes` | `(user_id, book_id)` PK |
 | `transactions` | `book_id`, `buyer_id`, `seller_id`, `status(OFFERED→ACCEPTED→PAID→SHIPPING→COMPLETED/CANCELED)` |
@@ -239,14 +242,23 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 
 ## 다음 개발 단계 우선순위
 
-> 결제 PG 는 사이드 프로젝트 단계에서는 구현하지 않기로 결정 (PG 사업자 등록·심사 비현실적).
-> OAuth 코드는 v5 에서 완료 — 남은 건 Supabase Dashboard / 네이버 콘솔에서 Provider 키 등록뿐.
+### 큰 항목
 
-1. **OAuth 콘솔 작업 (사용자)** — ① Supabase Dashboard → Authentication → Providers 에서 Kakao / Google 활성화 + 각 콘솔에서 발급한 Client ID·Secret 입력 + 콜백 URL `https://<project>.supabase.co/auth/v1/callback` 을 카카오/구글 콘솔에 등록 ② 네이버 개발자 콘솔에서 "네이버 로그인" 권한 앱 발급 → `NAVER_OAUTH_CLIENT_ID/SECRET` 환경변수에 채우기 + Callback URL `https://<domain>/api/auth/naver/callback` 등록 ③ `SUPABASE_SERVICE_ROLE_KEY` (Supabase Dashboard → Settings → API) 설정
-2. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
-3. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
+> OAuth 는 v5 에서 코드·콘솔 모두 완료(구글·네이버 정상 동작 확인 / 카카오는 비즈 전환 보류).
+> 결제 PG 는 사이드 프로젝트 단계에서는 구현하지 않기로 결정 (PG 사업자 등록·심사 비현실적).
+> v6 메타데이터 마이그레이션(0011)은 운영 적용 완료 — synopsis/pub_date/source_url 정상 동작.
+
+1. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
+2. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
+3. **카카오 OAuth 활성화** — 비즈니스앱 전환 후 `app/login/page.tsx` 의 `KAKAO_DISABLED = false` 로만 바꾸면 됨 (Supabase Dashboard 에 Kakao Provider 설정은 이미 가능)
 
 > 결제 PG 는 후순위 — Mock UI 유지. 실제 도입을 결정하면 `0010_transactions_fsm.sql` 의 `enforce_transaction_status` 에 `PAID → CANCELED` 전이 + 권한 정책(buyer? admin?) 추가 필요.
+
+### 작은 점검 후보 (이어갈 때 참고)
+- **settings 의 남은 placeholder 2곳** — "본인 인증" / "오픈소스 라이선스" 는 아직 토스트만. 본인 인증은 SMS OTP 도입 시, 라이선스는 `package.json` deps 를 가공해 정적 페이지로 노출 가능
+- **books detail 의 책 소개(synopsis) 더보기 토글** — 네이버 description 이 종종 길어 카드가 늘어남. 4-5줄 클램프 + "더 보기" 토글 추천
+- **마이페이지 메인 STATS 카드 정렬** — 4번째 "최근 본"이 다른 카드와 톤이 달랐던 적 있음. 다시 보면 일관성 점검 필요할 수도
+- **검색 결과 빈 상태 메시지 검토** — 빈 결과일 때 EmptyState 가 어떻게 보이는지 확인
 
 ---
 

@@ -32,6 +32,7 @@ export type BookSearchItem = {
   price: number; // 정가(원)
   description: string;
   pubdate: string; // YYYY-MM-DD 또는 빈 문자열
+  link: string; // 네이버 도서 상세 페이지 URL — 도서 상세에서 "외부 정보 보기" 링크로 활용
 };
 
 // 네이버 응답에 섞인 <b>...</b> 강조 태그 제거
@@ -69,6 +70,7 @@ function normalize(item: NaverItem): BookSearchItem {
     price: parseInt(item.price || "0", 10) || 0,
     description: stripTags(item.description),
     pubdate: formatPubdate(item.pubdate),
+    link: item.link ?? "",
   };
 }
 

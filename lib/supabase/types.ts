@@ -71,11 +71,15 @@ export interface BookRow {
   original_price: number | null;
   trade_method: TradeMethod;
   region: string | null;
-  description: string | null;
+  description: string | null; // 사용자 입력 코멘트
   status: BookStatus;
   view_count: number;
   like_count: number;
   cover_url: string | null;
+  // 0011_book_metadata.sql 에서 추가된 네이버 도서 메타데이터 컬럼들
+  synopsis: string | null; // 책 줄거리 (네이버 description)
+  pub_date: string | null; // 발행일 (YYYY-MM-DD)
+  source_url: string | null; // 외부 정보 출처(네이버 도서 페이지) URL
   created_at: string;
   updated_at: string;
 }

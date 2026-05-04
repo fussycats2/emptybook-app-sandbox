@@ -39,9 +39,11 @@ const PROVIDER_LABEL: Record<string, string> = {
   google: "Google",
 };
 
-const ETC: { label: string; value?: string; info?: boolean }[] = [
-  { label: "이용 약관" },
-  { label: "개인정보 처리방침" },
+// info: 클릭 불가(읽기 전용 표시값) — 앱 버전처럼 상세 페이지가 없는 항목
+// href: 라우터로 이동할 절대경로 — 정적 페이지(약관/개인정보) 등 이미 페이지가 있는 경우
+const ETC: { label: string; value?: string; info?: boolean; href?: string }[] = [
+  { label: "이용 약관", href: "/terms" },
+  { label: "개인정보 처리방침", href: "/privacy" },
   { label: "오픈소스 라이선스" },
   { label: "앱 버전", value: "1.2.3", info: true },
 ];
@@ -176,9 +178,10 @@ export default function SettingsPage() {
 
         <Group title="계정">
           <Row label="이메일" value={user?.email ?? "-"} first />
+          {/* 비밀번호 변경 — 재설정 메일 발송 흐름(/find-account) 재사용 */}
           <Row
             label="비밀번호 변경"
-            onClick={() => toast?.show("준비 중인 기능이에요")}
+            onClick={() => router.push("/find-account?tab=password")}
           />
           <Row
             label="연동 계정"
@@ -226,7 +229,11 @@ export default function SettingsPage() {
               value={a.value}
               first={i === 0}
               onClick={
-                a.info ? undefined : () => toast?.show("준비 중인 기능이에요")
+                a.info
+                  ? undefined
+                  : a.href
+                  ? () => router.push(a.href!)
+                  : () => toast?.show("준비 중인 기능이에요")
               }
             />
           ))}
