@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-05-04 (v4 — 데이터 정합성 정리 + transactions FSM + 활성 채팅방 알림 자동 read)
+> 최종 업데이트: 2026-05-04 (v5 — OAuth 실연동: 카카오/구글 + 네이버 커스텀, 아이디·비밀번호 찾기)
 
 ## 프로젝트 개요
 
@@ -28,6 +28,8 @@
 | **화면 UI** | 20개 화면 UI 골격 + 마이페이지 판매내역/찜한 책 화면 |
 | **거래 흐름 화면** | 도서 상세 → 결제 → 구매완료 → 거래확정 → 후기 작성 흐름 화면 |
 | **Supabase Auth** | 이메일/비번 로그인·회원가입·로그아웃, `AuthProvider` + `useAuth()` 훅 |
+| **OAuth 로그인 (v5)** | 카카오·구글 — Supabase 내장 Provider 로 `signInWithOAuth` + `/auth/callback` 라우트(=`exchangeCodeForSession`). 카카오는 비즈니스앱 미전환이라 `/login` 에서 disabled. 네이버 — Supabase 가 미지원이라 커스텀 구현: `/api/auth/naver/start`(state CSRF 쿠키 + 네이버 authorize 302) → `/api/auth/naver/callback`(token 교환 + nid/me 프로필 조회 + `admin.createUser` idempotent + `admin.generateLink({ type:"magiclink" })` 의 **hashed_token 을 받아 곧바로 `verifyOtp` 서버사이드 호출**, `createServerClient.setAll` 콜백으로 NextResponse 에 세션 쿠키 직접 심고 `/home` redirect). 초기 시도에서 action_link 로 redirect 했더니 Supabase verify 가 hash fragment(`#access_token=…`)로 토큰을 돌려줘 서버에서 안 보였던 문제 — 외부 hop 자체를 제거함. 네이버 email 누락 시 `naver_<id>@naver.users.emptybook.local` 합성 이메일 폴백. service_role 키는 `lib/supabase/admin.ts` 헬퍼에서만 사용 (서버 전용). 실패 시 `/login?error=oauth&provider=naver&reason=state\|config\|token\|profile\|create\|link\|verify\|service_role` 단서 부착 + 서버 콘솔에 `[naver-oauth]` 로그. 마이페이지 설정 "연동 계정" 행이 `user.app_metadata.provider` 기반으로 동적 표시 |
+| **아이디·비밀번호 찾기 (v5)** | `/find-account?tab=email\|password` 단일 탭 페이지 — `/login` 의 "아이디 찾기 / 비밀번호 찾기" 링크가 각 탭으로 라우팅. **이메일 찾기**: 휴대폰 번호 입력 → `POST /api/auth/find-email` 이 service_role 로 `profiles.phone` 매칭 후 `auth.users.email` 을 마스킹("ab****@gmail.com") 반환. 휴대폰 번호는 숫자만 추출해 정규화 비교. enumeration 방지를 위해 모든 실패 케이스가 동일하게 `{ found: false }` 응답. SMS OTP 본인 인증은 미구현 — 마스킹으로만 1차 보호. **비밀번호 찾기**: 이메일 입력 → `supabase.auth.resetPasswordForEmail(email, { redirectTo: /auth/callback?next=/reset-password })` → 메일 발송 후 안내 카드. 사용자가 메일 링크 클릭 → 기존 `/auth/callback` 의 PKCE 흐름 재사용 → `/reset-password` 도착, recovery 세션이 있으면 `updateUser({ password })` 로 변경 후 `/home`. 세션이 없으면 "링크 만료/오류" 안내 |
 | **인증 가드** | `middleware.ts` — 액션 라우트(`/register`, `/checkout`, `/orders`, `/chat`, `/mypage`, `/notifications`)만 보호. `/home`, `/search`, `/books`는 게스트 허용 |
 | **찜(좋아요) API** | `toggleLike` / `isLiked` / `listLikedBookIds` / `listLikedBooks` 완성. LikeButton 자체 토글 + 도서 상세 카운트 즉시 동기화. 마이페이지 STATS "찜" 카운트도 실데이터 |
 | **후기 저장** | `createReview` / `fetchReviewContext`. 거래 컨텍스트(상대방 자동 결정) + UNIQUE 위반 시 `alreadyExists` 분기. 작성 화면 잠금 처리까지 |
@@ -80,9 +82,9 @@
 
 | 항목 | 상태 | 비고 |
 |------|------|------|
-| **OAuth 로그인** | 미연동 | 카카오/네이버/Apple 버튼만 있음 (토스트로 "준비중") |
+| **OAuth 로그인** | 코드 완성 | 카카오·구글·네이버 모두 코드 연동 완료. **사용자 작업 필요**: ① Supabase Dashboard 에서 카카오·구글 Provider 활성화 + 콜백 URL 등록 ② 네이버 개발자 콘솔에서 "네이버 로그인" 권한 앱 발급 → `NAVER_OAUTH_CLIENT_ID/SECRET` 채우기 + Callback URL `https://<domain>/api/auth/naver/callback` 등록 ③ `SUPABASE_SERVICE_ROLE_KEY` 설정 |
 | **이메일 인증 플로우** | 부분 | 가입 시 `data.session` 없으면 `/login`으로 안내. Supabase 대시보드 "Confirm email" 정책 확정 필요 |
-| **결제 PG** | Mock UI | 실제 PG 연동 없음, 트랜잭션은 PAID로 즉시 기록. 0010 FSM 트리거가 현재 PAID→COMPLETED 만 허용하고 CANCELED 진입을 차단 — 환불 PG 도입 시 트리거에 `PAID → CANCELED` 전이(권한 정책 포함)를 추가해야 함 |
+| **결제 PG** | 구현 안 함 | Mock UI 만 유지 (사이드 프로젝트 단계에서는 PG 사업자 등록·심사가 비현실적). 0010 FSM 트리거는 PAID→COMPLETED 만 허용하고 CANCELED 진입을 차단. 추후 도입 시 트리거에 `PAID → CANCELED` 전이(권한 정책 포함) 추가 필요 |
 | **알림 푸시(Push)** | 없음 | 인앱 알림은 트리거+Realtime 으로 완성. 디바이스 푸시(FCM/Web Push)는 Edge Functions 미작성 |
 | **쿠폰 / 공지 / 문의 / 약관** | 정적 페이지 | UI 는 모두 연결됨. 쿠폰 발급·사용 시스템 + 공지 CMS 는 미구현 (현재 staticContent.ts 의 더미 데이터) |
 
@@ -96,6 +98,12 @@ app/                              # 화면 라우트
   layout.tsx                      # 루트 레이아웃 (ThemeProvider, ToastProvider)
   providers.tsx                   # 클라이언트 Provider 래퍼
   api/books/search/route.ts       # 네이버 도서 검색 프록시 (서버)
+  api/auth/naver/start/route.ts   # 네이버 OAuth 시작 — state 쿠키 + nid.naver.com/oauth2.0/authorize 302
+  api/auth/naver/callback/route.ts # 네이버 OAuth 콜백 — token 교환 + admin.createUser + verifyOtp 서버사이드
+  api/auth/find-email/route.ts    # 아이디 찾기 — phone → 마스킹된 email 반환 (service_role)
+  auth/callback/route.ts          # Supabase OAuth(PKCE) 공통 콜백 — exchangeCodeForSession 후 next 로 redirect
+  find-account/page.tsx           # /find-account — 아이디/비밀번호 찾기 탭 페이지
+  reset-password/page.tsx         # /reset-password — recovery 세션에서 새 비번 설정
   login/page.tsx                  # /login
   signup/page.tsx                 # /signup
   home/page.tsx                   # /home — 홈 피드
@@ -144,6 +152,7 @@ lib/
   supabase/
     client.ts                     # 브라우저 클라이언트
     server.ts                     # RSC 서버 클라이언트
+    admin.ts                      # service_role 클라이언트 — 서버 전용 (네이버 OAuth 콜백 등에서만 사용)
     middleware.ts                 # SSR 쿠키 갱신 + getUser 헬퍼
     types.ts                      # DB row 타입 + AppPrefs/DEFAULT_APP_PREFS
 
@@ -230,12 +239,14 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 
 ## 다음 개발 단계 우선순위
 
-> 남은 항목은 모두 외부 키/계약/콘솔 작업이 필요한 통합 작업이다.
+> 결제 PG 는 사이드 프로젝트 단계에서는 구현하지 않기로 결정 (PG 사업자 등록·심사 비현실적).
+> OAuth 코드는 v5 에서 완료 — 남은 건 Supabase Dashboard / 네이버 콘솔에서 Provider 키 등록뿐.
 
-1. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
-2. **결제 PG 연동** — 현재 Mock UI를 토스/카카오페이 등으로 교체. 환불 흐름 추가 시 `0010_transactions_fsm.sql` 의 `enforce_transaction_status` 함수에 `PAID → CANCELED` 전이 + 권한 정책(seller? buyer? admin?) 결정 필요
-3. **OAuth 로그인** — 카카오/네이버/Apple 실연동 (현재는 토스트로 "준비중")
-4. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
+1. **OAuth 콘솔 작업 (사용자)** — ① Supabase Dashboard → Authentication → Providers 에서 Kakao / Google 활성화 + 각 콘솔에서 발급한 Client ID·Secret 입력 + 콜백 URL `https://<project>.supabase.co/auth/v1/callback` 을 카카오/구글 콘솔에 등록 ② 네이버 개발자 콘솔에서 "네이버 로그인" 권한 앱 발급 → `NAVER_OAUTH_CLIENT_ID/SECRET` 환경변수에 채우기 + Callback URL `https://<domain>/api/auth/naver/callback` 등록 ③ `SUPABASE_SERVICE_ROLE_KEY` (Supabase Dashboard → Settings → API) 설정
+2. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
+3. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
+
+> 결제 PG 는 후순위 — Mock UI 유지. 실제 도입을 결정하면 `0010_transactions_fsm.sql` 의 `enforce_transaction_status` 에 `PAID → CANCELED` 전이 + 권한 정책(buyer? admin?) 추가 필요.
 
 ---
 

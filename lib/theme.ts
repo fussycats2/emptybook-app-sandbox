@@ -33,6 +33,11 @@ export const palette = {
   warnSoft: "#FBEFD6",
   kakao: "#FEE500",
   kakaoText: "#1A1A1A",
+  naver: "#03C75A",
+  naverText: "#FFFFFF",
+  google: "#FFFFFF",
+  googleText: "#1F1F1F",
+  googleBorder: "#DADCE0",
   // 호환용 alias — 기존 코드가 gray1~gray4 로 직접 접근하던 곳을 위해 유지
   gray1: "#F1EDE4",
   gray2: "#E5E1D7",

@@ -20,7 +20,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { palette } from "@/lib/theme";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { useToast } from "@/components/ui/ToastProvider";
 
 // --- 책 표지 데코 ----------------------------------------------------------
 // 각 표지는 같은 외형(96×128, 라운드, 광택 슬라이드, 살짝 회전 + 부유)을 공유하고
@@ -252,17 +251,12 @@ function FloatingCover({ def }: { def: CoverDef }) {
 
 export default function SplashPage() {
   const router = useRouter();
-  const toast = useToast();
   const { user, signOut } = useAuth();
   const [navigating, setNavigating] = useState(false);
 
-  // 카카오 OAuth — 아직 연결되지 않아 사용자에게 안내만
-  const goKakao = () => {
-    toast?.show("카카오 로그인은 준비 중이에요");
-  };
-
-  // 이메일 로그인 화면으로 이동 — 이미 로그인된 경우 먼저 로그아웃해 middleware 자동 리다이렉트를 우회
-  const goEmailLogin = async () => {
+  // /login 으로 이동 — 이메일/네이버/구글/카카오 4종을 한 화면에서 선택
+  // 이미 로그인된 경우 먼저 로그아웃해 middleware 자동 리다이렉트를 우회
+  const goLogin = async () => {
     if (navigating) return;
     setNavigating(true);
     try {
@@ -460,7 +454,7 @@ export default function SplashPage() {
         >
           <Button
             fullWidth
-            onClick={goEmailLogin}
+            onClick={goLogin}
             disabled={navigating}
             sx={{
               background: "#fff",
@@ -476,21 +470,7 @@ export default function SplashPage() {
               },
             }}
           >
-            이메일로 시작하기
-          </Button>
-          <Button
-            fullWidth
-            onClick={goKakao}
-            sx={{
-              background: palette.kakao,
-              color: palette.kakaoText,
-              fontWeight: 800,
-              minHeight: 54,
-              fontSize: 15,
-              "&:hover": { background: "#FFD900" },
-            }}
-          >
-            카카오로 계속하기
+            시작하기
           </Button>
           <Button
             fullWidth

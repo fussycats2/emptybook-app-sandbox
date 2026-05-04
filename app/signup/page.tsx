@@ -28,6 +28,7 @@ import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/repo";
+import { INPUT_SX, PRIMARY_BUTTON_SX } from "@/lib/ui/formStyle";
 
 const GENRES = ["소설", "에세이", "자기계발", "경제/경영", "역사", "과학", "아동", "만화"];
 const TERMS = [
@@ -157,10 +158,28 @@ export default function SignupPage() {
         {step === 0 && (
           <Stack gap={2}>
             <Box>
-              <Typography sx={{ fontSize: 22, fontWeight: 800, lineHeight: 1.3 }}>
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  letterSpacing: "0.18em",
+                  color: palette.primary,
+                  mb: 1.25,
+                }}
+              >
+                CREATE ACCOUNT
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 22,
+                  fontWeight: 800,
+                  lineHeight: 1.3,
+                  letterSpacing: "-0.02em",
+                }}
+              >
                 계정 정보를
                 <br />
-                입력해주세요
+                입력해주세요.
               </Typography>
             </Box>
             <Field label="이름">
@@ -169,14 +188,18 @@ export default function SignupPage() {
                 placeholder="실명"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                sx={INPUT_SX}
               />
             </Field>
             <Field label="이메일">
               <OutlinedInput
                 fullWidth
                 placeholder="email@example.com"
+                type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                sx={INPUT_SX}
               />
             </Field>
             <Field label="비밀번호" hint="영문/숫자 조합 8자 이상">
@@ -184,10 +207,17 @@ export default function SignupPage() {
                 fullWidth
                 type={show ? "text" : "password"}
                 placeholder="비밀번호"
+                autoComplete="new-password"
                 value={pw}
                 onChange={(e) => setPw(e.target.value)}
+                sx={INPUT_SX}
                 endAdornment={
-                  <IconButton size="small" onClick={() => setShow((s) => !s)}>
+                  <IconButton
+                    size="small"
+                    onClick={() => setShow((s) => !s)}
+                    aria-label={show ? "비밀번호 숨기기" : "비밀번호 보기"}
+                    sx={{ color: palette.inkSubtle, mr: -0.5 }}
+                  >
                     {show ? (
                       <VisibilityOffOutlinedIcon fontSize="small" />
                     ) : (
@@ -203,18 +233,23 @@ export default function SignupPage() {
             >
               <OutlinedInput
                 fullWidth
-                type="password"
+                type={show ? "text" : "password"}
                 placeholder="비밀번호 재입력"
+                autoComplete="new-password"
                 value={pw2}
                 onChange={(e) => setPw2(e.target.value)}
+                sx={INPUT_SX}
               />
             </Field>
             <Field label="휴대폰 번호">
               <OutlinedInput
                 fullWidth
                 placeholder="01012345678"
+                inputMode="tel"
+                autoComplete="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
+                sx={INPUT_SX}
               />
             </Field>
           </Stack>
@@ -222,10 +257,28 @@ export default function SignupPage() {
         {step === 1 && (
           <Stack gap={2}>
             <Box>
-              <Typography sx={{ fontSize: 22, fontWeight: 800, lineHeight: 1.3 }}>
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  letterSpacing: "0.18em",
+                  color: palette.primary,
+                  mb: 1.25,
+                }}
+              >
+                YOUR TASTE
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 22,
+                  fontWeight: 800,
+                  lineHeight: 1.3,
+                  letterSpacing: "-0.02em",
+                }}
+              >
                 좋아하는 장르를
                 <br />
-                알려주세요
+                알려주세요.
               </Typography>
               <Typography sx={{ fontSize: 13, color: palette.inkMute, mt: 1 }}>
                 관심 분야의 책을 먼저 추천해드릴게요. (1개 이상)
@@ -258,10 +311,28 @@ export default function SignupPage() {
         {step === 2 && (
           <Stack gap={2}>
             <Box>
-              <Typography sx={{ fontSize: 22, fontWeight: 800, lineHeight: 1.3 }}>
+              <Typography
+                sx={{
+                  fontSize: 11.5,
+                  fontWeight: 800,
+                  letterSpacing: "0.18em",
+                  color: palette.primary,
+                  mb: 1.25,
+                }}
+              >
+                ALMOST THERE
+              </Typography>
+              <Typography
+                sx={{
+                  fontSize: 22,
+                  fontWeight: 800,
+                  lineHeight: 1.3,
+                  letterSpacing: "-0.02em",
+                }}
+              >
                 약관에 동의하고
                 <br />
-                마무리해요
+                마무리해요.
               </Typography>
             </Box>
             <Stack
@@ -338,6 +409,7 @@ export default function SignupPage() {
           disabled={!stepValid || submitting}
           onClick={goNext}
           startIcon={step === 2 ? <CheckRoundedIcon /> : undefined}
+          sx={PRIMARY_BUTTON_SX}
         >
           {step === 2 ? (submitting ? "가입 중…" : "가입 완료") : "다음"}
         </Button>

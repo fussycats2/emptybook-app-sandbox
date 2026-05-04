@@ -30,11 +30,14 @@ import {
   useUpdateMyProfile,
 } from "@/lib/query/profileHooks";
 
-const ACCOUNT_PLACEHOLDER = [
-  { label: "비밀번호 변경" },
-  { label: "연동 계정", value: "Kakao" },
-  { label: "본인 인증", value: "완료" },
-];
+// supabase user.app_metadata.provider 코드 → 사용자 표시명 매핑
+// (이메일 가입은 보통 "email" 로 들어오고, OAuth 가입은 "kakao"/"naver"/"google" 로 들어온다)
+const PROVIDER_LABEL: Record<string, string> = {
+  email: "이메일",
+  kakao: "Kakao",
+  naver: "Naver",
+  google: "Google",
+};
 
 const ETC: { label: string; value?: string; info?: boolean }[] = [
   { label: "이용 약관" },
@@ -173,14 +176,22 @@ export default function SettingsPage() {
 
         <Group title="계정">
           <Row label="이메일" value={user?.email ?? "-"} first />
-          {ACCOUNT_PLACEHOLDER.map((a) => (
-            <Row
-              key={a.label}
-              label={a.label}
-              value={a.value}
-              onClick={() => toast?.show("준비 중인 기능이에요")}
-            />
-          ))}
+          <Row
+            label="비밀번호 변경"
+            onClick={() => toast?.show("준비 중인 기능이에요")}
+          />
+          <Row
+            label="연동 계정"
+            value={
+              PROVIDER_LABEL[user?.app_metadata?.provider ?? ""] ??
+              (user?.app_metadata?.provider ?? "-")
+            }
+          />
+          <Row
+            label="본인 인증"
+            value="완료"
+            onClick={() => toast?.show("준비 중인 기능이에요")}
+          />
         </Group>
 
         <Group title="알림">

@@ -2,8 +2,9 @@
 
 // 로그인 페이지 (/login)
 // - 스플래시에서 "이메일로 로그인" 으로 진입하는 화면이라, 이메일/비밀번호 폼을 메인으로 배치
-// - 하단의 "또는 SNS로 로그인" 영역에 카카오/네이버/Apple 버튼을 보조로 둠 (아직 OAuth 미구현 → 토스트)
+// - 하단의 "또는 SNS로 로그인" 영역에 카카오/네이버/Google 버튼 — 모두 Supabase OAuth 실연동
 // - URL의 next 쿼리스트링이 있으면 로그인 후 그 경로로 돌아간다
+// - ?error=oauth 로 돌아오면 OAuth 실패 토스트를 띄움
 
 import {
   Box,
@@ -17,12 +18,19 @@ import {
 import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/repo";
+import { FIELD_HEIGHT, INPUT_SX, PRIMARY_BUTTON_SX } from "@/lib/ui/formStyle";
+
+// Supabase 내장 OAuth Provider 키 (Apple/Google/Kakao 등 — Naver 는 미포함이라 별도 처리)
+type OAuthProvider = "kakao" | "google";
+
+// 카카오 로그인은 비즈니스 앱 전환이 필요해서 현재는 비활성. 전환 끝나면 false 로 바꾸면 자동 활성화
+const KAKAO_DISABLED = true;
 
 // useSearchParams 는 Suspense 경계 안에서만 동작 — 그래서 외부에서 한 번 감싼다
 export default function LoginPage() {
@@ -74,9 +82,51 @@ function LoginPageInner() {
     router.refresh();
   };
 
-  // SNS 로그인은 OAuth 미구현 — 모두 동일한 안내 토스트
-  const notReady = (provider: string) =>
-    toast?.show(`${provider} 로그인은 준비 중이에요`);
+  // 콜백 라우트(/auth/callback or /api/auth/naver/callback)에서 실패해 ?error=oauth 로 돌아온 경우 토스트로 안내
+  // - 네이버 커스텀 콜백은 reason= 쿼리에 어느 단계에서 실패했는지 단서를 함께 보낸다
+  useEffect(() => {
+    if (searchParams.get("error") !== "oauth") return;
+    const provider = searchParams.get("provider");
+    const reason = searchParams.get("reason");
+    const reasonLabel: Record<string, string> = {
+      state: "보안 토큰 검증 실패 (CSRF)",
+      config: "네이버 OAuth 환경변수 누락",
+      supabase_config: "Supabase 환경변수 누락",
+      token: "네이버 토큰 교환 실패",
+      profile: "네이버 프로필 조회 실패",
+      create: "Supabase 사용자 생성 실패",
+      link: "매직링크 발급 실패",
+      verify: "세션 검증 실패",
+      service_role: "service_role 키 누락",
+    };
+    const head = provider === "naver" ? "네이버 로그인 실패" : "SNS 로그인 실패";
+    const tail = reason && reasonLabel[reason] ? ` — ${reasonLabel[reason]}` : "";
+    toast?.show(`${head}${tail}`);
+    // toast 는 ref 처럼 안정적이므로 마운트 시 1회면 충분
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // SNS 로그인 — Supabase OAuth(PKCE) 흐름 시작
+  // 성공 시 외부 IdP 로 redirect → 인증 후 /auth/callback 으로 돌아오면 세션 교환
+  const handleOAuth = async (provider: OAuthProvider, displayName: string) => {
+    if (!isSupabaseConfigured) {
+      toast?.show("Supabase 환경변수가 없어 SNS 로그인을 사용할 수 없어요");
+      return;
+    }
+    // 콜백 후 원래 가려던 경로로 보내기 위해 next 를 redirectTo 쿼리에 실어 보낸다
+    const callbackUrl = new URL("/auth/callback", window.location.origin);
+    callbackUrl.searchParams.set("next", next);
+    const { error } = await supabaseBrowser().auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: callbackUrl.toString() },
+    });
+    if (error) {
+      // 가장 흔한 케이스: Supabase Dashboard 에서 해당 provider 가 비활성
+      toast?.show(
+        error.message || `${displayName} 로그인을 시작하지 못했어요`
+      );
+    }
+  };
 
   return (
     <>
@@ -120,6 +170,7 @@ function LoginPageInner() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            sx={INPUT_SX}
           />
           <OutlinedInput
             fullWidth
@@ -134,8 +185,14 @@ function LoginPageInner() {
               e.preventDefault();
               handleEmailLogin();
             }}
+            sx={INPUT_SX}
             endAdornment={
-              <IconButton size="small" onClick={() => setShow((s) => !s)}>
+              <IconButton
+                size="small"
+                onClick={() => setShow((s) => !s)}
+                aria-label={show ? "비밀번호 숨기기" : "비밀번호 보기"}
+                sx={{ color: palette.inkSubtle, mr: -0.5 }}
+              >
                 {show ? (
                   <VisibilityOffOutlinedIcon fontSize="small" />
                 ) : (
@@ -148,62 +205,126 @@ function LoginPageInner() {
             fullWidth
             onClick={handleEmailLogin}
             disabled={submitting}
-            sx={{ mt: 0.5, minHeight: 48 }}
+            sx={{ ...PRIMARY_BUTTON_SX, mt: 1 }}
           >
             {submitting ? "로그인 중…" : "로그인"}
           </Button>
           <Stack
             direction="row"
             justifyContent="center"
+            alignItems="center"
             gap={2}
-            sx={{ fontSize: 12.5, color: palette.inkSubtle, mt: 1 }}
+            sx={{ fontSize: 13, color: palette.inkSubtle, mt: 1.5 }}
           >
-            <span style={{ cursor: "pointer" }}>아이디 찾기</span>
-            <span>|</span>
-            <span style={{ cursor: "pointer" }}>비밀번호 찾기</span>
-            <span>|</span>
-            <span
+            <Box
+              component="span"
+              onClick={() => router.push("/find-account?tab=email")}
+              sx={{ cursor: "pointer", "&:hover": { color: palette.ink } }}
+            >
+              아이디 찾기
+            </Box>
+            <Box
+              component="span"
+              sx={{ width: "1px", height: 11, background: palette.line }}
+            />
+            <Box
+              component="span"
+              onClick={() => router.push("/find-account?tab=password")}
+              sx={{ cursor: "pointer", "&:hover": { color: palette.ink } }}
+            >
+              비밀번호 찾기
+            </Box>
+            <Box
+              component="span"
+              sx={{ width: "1px", height: 11, background: palette.line }}
+            />
+            <Box
+              component="span"
               onClick={() => router.push("/signup")}
-              style={{ color: palette.primary, fontWeight: 700, cursor: "pointer" }}
+              sx={{
+                color: palette.primary,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
             >
               회원가입
-            </span>
+            </Box>
           </Stack>
         </Stack>
 
-        <Divider sx={{ my: 3, color: palette.inkSubtle, fontSize: 12 }}>
-          또는 SNS로 로그인
+        <Divider
+          sx={{
+            my: 3.5,
+            color: palette.inkSubtle,
+            fontSize: 11.5,
+            letterSpacing: "0.08em",
+            "&::before, &::after": { borderColor: palette.line },
+          }}
+        >
+          또는 SNS로 계속하기
         </Divider>
 
         <Stack gap={1.25}>
           <Button
             fullWidth
-            onClick={() => notReady("카카오")}
+            disabled={KAKAO_DISABLED}
+            onClick={() => handleOAuth("kakao", "카카오")}
             sx={{
               background: palette.kakao,
               color: palette.kakaoText,
               fontWeight: 800,
-              minHeight: 48,
+              fontSize: 14.5,
+              height: FIELD_HEIGHT,
               "&:hover": { background: "#FFE000" },
+              "&.Mui-disabled": {
+                background: palette.kakao,
+                color: palette.kakaoText,
+                opacity: 0.55,
+              },
             }}
           >
-            카카오로 계속하기
+            {KAKAO_DISABLED ? "카카오로 계속하기 (준비 중)" : "카카오로 계속하기"}
           </Button>
           <Button
             fullWidth
-            variant="outlined"
-            sx={{ minHeight: 48 }}
-            onClick={() => notReady("네이버")}
+            onClick={() => {
+              if (!isSupabaseConfigured) {
+                toast?.show("Supabase 환경변수가 없어 SNS 로그인을 사용할 수 없어요");
+                return;
+              }
+              // 네이버는 Supabase 내장 Provider 가 아니라 커스텀 라우트로 이동
+              const start = new URL(
+                "/api/auth/naver/start",
+                window.location.origin
+              );
+              start.searchParams.set("next", next);
+              window.location.href = start.toString();
+            }}
+            sx={{
+              background: palette.naver,
+              color: palette.naverText,
+              fontWeight: 800,
+              fontSize: 14.5,
+              height: FIELD_HEIGHT,
+              "&:hover": { background: "#02B351" },
+            }}
           >
             네이버로 계속하기
           </Button>
           <Button
             fullWidth
-            variant="outlined"
-            sx={{ minHeight: 48 }}
-            onClick={() => notReady("Apple")}
+            onClick={() => handleOAuth("google", "Google")}
+            sx={{
+              background: palette.google,
+              color: palette.googleText,
+              fontWeight: 700,
+              fontSize: 14.5,
+              height: FIELD_HEIGHT,
+              border: `1px solid ${palette.googleBorder}`,
+              "&:hover": { background: "#F8F9FA", borderColor: palette.googleBorder },
+            }}
           >
-            Apple로 계속하기
+            Google로 계속하기
           </Button>
         </Stack>
       </Box>
