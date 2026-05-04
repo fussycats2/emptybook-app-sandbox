@@ -25,7 +25,7 @@ import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import ImageCarousel from "@/components/ui/ImageCarousel";
 import StatusBadge from "@/components/ui/StatusBadge";
@@ -404,28 +404,7 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
         {book.synopsis && (
           <>
             <Divider />
-            <Box sx={{ p: 2 }}>
-              <Typography
-                sx={{
-                  fontSize: 12.5,
-                  fontWeight: 800,
-                  color: palette.inkMute,
-                  mb: 1,
-                }}
-              >
-                책 소개
-              </Typography>
-              <Typography
-                sx={{
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                  color: palette.inkMute,
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {book.synopsis}
-              </Typography>
-            </Box>
+            <SynopsisSection text={book.synopsis} />
           </>
         )}
 
@@ -635,6 +614,82 @@ function SheetRow({
         )}
       </Box>
     </Stack>
+  );
+}
+
+// 책 소개(synopsis) — 5줄 클램프 + "더 보기" 토글
+// 텍스트가 5줄을 안 넘으면 토글 자체를 숨겨 카드가 깔끔하게 끝나게 한다.
+// scrollHeight 비교는 폰트 로드/리사이즈 후에도 안전하도록 ResizeObserver 로 추적.
+const SYNOPSIS_LINE_CLAMP = 5;
+
+function SynopsisSection({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflow, setOverflow] = useState(false);
+  const ref = useRef<HTMLParagraphElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      // expanded 상태에서는 clamp 가 풀려 항상 fit 하므로 측정 의미가 없음.
+      // 다음 collapse 진입 시 다시 재 측정되도록 일단 그대로 둔다.
+      if (expanded) return;
+      setOverflow(el.scrollHeight - el.clientHeight > 1);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, expanded]);
+
+  return (
+    <Box sx={{ p: 2 }}>
+      <Typography
+        sx={{
+          fontSize: 12.5,
+          fontWeight: 800,
+          color: palette.inkMute,
+          mb: 1,
+        }}
+      >
+        책 소개
+      </Typography>
+      <Typography
+        ref={ref}
+        sx={{
+          fontSize: 14,
+          lineHeight: 1.7,
+          color: palette.inkMute,
+          whiteSpace: "pre-wrap",
+          ...(expanded
+            ? {}
+            : {
+                display: "-webkit-box",
+                WebkitLineClamp: SYNOPSIS_LINE_CLAMP,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }),
+        }}
+      >
+        {text}
+      </Typography>
+      {overflow && (
+        <Typography
+          onClick={() => setExpanded((v) => !v)}
+          sx={{
+            mt: 1,
+            display: "inline-block",
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: palette.primary,
+            cursor: "pointer",
+            "&:hover": { textDecoration: "underline" },
+          }}
+        >
+          {expanded ? "접기" : "더 보기"}
+        </Typography>
+      )}
+    </Box>
   );
 }
 

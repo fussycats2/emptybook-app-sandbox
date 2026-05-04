@@ -55,21 +55,51 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 .splash-rise { animation: splashRise 720ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 
-@keyframes splashFloat {
-  0%   { transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg)); }
-  50%  { transform: translate3d(0, -10px, 0) rotate(var(--rot, 0deg)); }
-  100% { transform: translate3d(0, 0, 0) rotate(var(--rot, 0deg)); }
+/* 스플래시 오로라 블롭 — 라디얼 그라데이션 3장이 screen 블렌드로 빛처럼 합성되며 드리프트
+   어두운 배경(#0A1714) 위에 mint/peach/sage 톤이 천천히 흐르는 효과
+   카드 폭(420px) 안에서도 보이도록 위치를 안쪽으로, 색상은 더 밝고 채도 높게 */
+.aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  will-change: transform, opacity;
+  mix-blend-mode: screen;
 }
-.splash-float { animation: splashFloat 6.5s ease-in-out infinite; will-change: transform; }
+.aurora-1 {
+  width: 420px; height: 420px;
+  top: -120px; left: -100px;
+  background: radial-gradient(circle, rgba(95, 220, 165, 0.75) 0%, rgba(95, 220, 165, 0) 70%);
+  animation: auroraDrift1 14s ease-in-out infinite;
+}
+.aurora-2 {
+  width: 360px; height: 360px;
+  top: 30%; right: -120px;
+  background: radial-gradient(circle, rgba(240, 140, 120, 0.7) 0%, rgba(240, 140, 120, 0) 70%);
+  animation: auroraDrift2 17s ease-in-out infinite;
+}
+.aurora-3 {
+  width: 400px; height: 400px;
+  bottom: -140px; left: -40px;
+  background: radial-gradient(circle, rgba(140, 230, 200, 0.65) 0%, rgba(140, 230, 200, 0) 70%);
+  animation: auroraDrift3 12s ease-in-out infinite;
+}
+@keyframes auroraDrift1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(60px, 80px) scale(1.15); }
+}
+@keyframes auroraDrift2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-70px, -40px) scale(1.2); }
+}
+@keyframes auroraDrift3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(80px, -60px) scale(1.12); }
+}
 
-@keyframes splashGlow {
-  0%, 100% { opacity: 0.45; transform: scale(1); }
-  50%      { opacity: 0.7;  transform: scale(1.08); }
+/* 라이브 인디케이터 펄스 */
+@keyframes splashPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.15); }
 }
-.splash-glow { animation: splashGlow 4.5s ease-in-out infinite; }
-
-@keyframes splashShimmer {
-  0%   { transform: translateX(-120%) skewX(-12deg); }
-  100% { transform: translateX(220%)  skewX(-12deg); }
-}
-.splash-shimmer { animation: splashShimmer 5.5s ease-in-out infinite; }
+.splash-pulse { animation: splashPulse 1.6s ease-in-out infinite; }

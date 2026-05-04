@@ -111,6 +111,31 @@ export const SUPPORT_INFO = {
   responseSla: "영업일 기준 24시간 이내 답변",
 };
 
+// 오픈소스 라이선스 — package.json 의 dependencies 를 사람이 보는 형태로 가공
+// 자동 생성기를 도입하기 전까지 손으로 동기화. 새 dep 추가 시 이 배열도 함께 갱신.
+export type OssEntry = {
+  name: string;
+  version: string;
+  license: string;
+  homepage?: string;
+};
+
+export const OSS_LICENSES: OssEntry[] = [
+  { name: "next", version: "14.2.18", license: "MIT", homepage: "https://nextjs.org" },
+  { name: "react", version: "18.3.1", license: "MIT", homepage: "https://react.dev" },
+  { name: "react-dom", version: "18.3.1", license: "MIT", homepage: "https://react.dev" },
+  { name: "@mui/material", version: "6.1.10", license: "MIT", homepage: "https://mui.com" },
+  { name: "@mui/icons-material", version: "6.1.10", license: "MIT", homepage: "https://mui.com" },
+  { name: "@mui/material-nextjs", version: "6.1.9", license: "MIT", homepage: "https://mui.com" },
+  { name: "@emotion/cache", version: "11.13.5", license: "MIT", homepage: "https://emotion.sh" },
+  { name: "@emotion/react", version: "11.13.5", license: "MIT", homepage: "https://emotion.sh" },
+  { name: "@emotion/styled", version: "11.13.5", license: "MIT", homepage: "https://emotion.sh" },
+  { name: "@supabase/ssr", version: "0.5.2", license: "MIT", homepage: "https://supabase.com" },
+  { name: "@supabase/supabase-js", version: "2.46.2", license: "MIT", homepage: "https://supabase.com" },
+  { name: "@tanstack/react-query", version: "5.100.6", license: "MIT", homepage: "https://tanstack.com/query" },
+  { name: "zustand", version: "5.0.12", license: "MIT", homepage: "https://github.com/pmndrs/zustand" },
+];
+
 // 개인정보 처리방침 — 데모용. 실제 서비스 시 법무 검토를 거친 전문으로 교체.
 export const PRIVACY_SECTIONS: { title: string; body: string }[] = [
   {

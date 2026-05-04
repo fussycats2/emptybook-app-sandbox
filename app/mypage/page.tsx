@@ -87,15 +87,13 @@ export default function MyPage() {
   const recentCount = useRecentlyViewedStore((s) => s.items.length);
 
   // "판매중" 카운트는 실제로 매물에 노출되는 상태만 — sold/canceled 는 제외
-  const sellingCount = myBooks
-    ? myBooks.filter((b) => {
-        const s = b.status ?? (b.free ? "free" : "selling");
-        return s === "selling" || s === "free" || s === "reserved";
-      }).length
-    : null;
-  const buyingCount = orders
-    ? orders.filter((o) => o.side === "buy").length
-    : null;
+  // 로딩 중에는 0 으로 폴백 — 4개 STATS 카드가 모두 number 로 일관 표시되도록 (찜/최근 본 도 0 부터 시작)
+  const sellingCount =
+    myBooks?.filter((b) => {
+      const s = b.status ?? (b.free ? "free" : "selling");
+      return s === "selling" || s === "free" || s === "reserved";
+    }).length ?? 0;
+  const buyingCount = orders?.filter((o) => o.side === "buy").length ?? 0;
 
   // 표시 이름/핸들 결정 우선순위:
   // 1) profiles.display_name → 2) 이메일 앞부분 → 3) "게스트"
@@ -239,19 +237,17 @@ export default function MyPage() {
                 },
               ] as {
                 label: string;
-                val: number | null;
+                val: number;
                 icon: React.ReactNode;
                 href?: string;
-                comingSoon?: boolean;
               }[]
             ).map((s) => {
-              const clickable = !!s.href || !!s.comingSoon;
+              const clickable = !!s.href;
               return (
                 <Box
                   key={s.label}
                   onClick={() => {
                     if (s.href) router.push(s.href);
-                    else if (s.comingSoon) toast?.show("준비중이에요");
                   }}
                   sx={{
                     background: palette.surface,
@@ -286,7 +282,7 @@ export default function MyPage() {
                   </Box>
                   <Box>
                     <Typography sx={{ fontSize: 18, fontWeight: 800 }}>
-                      {s.val == null ? "-" : s.val}
+                      {s.val}
                     </Typography>
                     <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle }}>
                       {s.label}

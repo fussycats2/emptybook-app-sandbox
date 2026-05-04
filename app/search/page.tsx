@@ -146,6 +146,21 @@ function SearchInner() {
     },
   ].filter(Boolean) as { label: string; onRemove: () => void }[];
 
+  // 가격 범위가 디폴트(0~50000)에서 벗어났는지 — 빈 결과 안내·필터 초기화 판정에 사용
+  const priceCustom =
+    filter.priceRange[0] > 0 || filter.priceRange[1] < 50000;
+  const hasActiveFilters =
+    activeChips.length > 0 || priceCustom;
+  const resetFilters = () =>
+    setFilter({
+      states: [],
+      category: undefined,
+      trade: "BOTH",
+      priceRange: [0, 50000],
+      freeOnly: false,
+      region: "",
+    });
+
   return (
     <>
       <Box
@@ -322,8 +337,18 @@ function SearchInner() {
             {sorted && sorted.length === 0 && (
               <EmptyState
                 icon={<SearchRoundedIcon />}
-                title="검색 결과가 없어요"
-                description="검색어를 다시 확인하거나 필터를 조정해보세요."
+                title={
+                  q.trim()
+                    ? `'${q.trim()}'에 대한 검색 결과가 없어요`
+                    : "조건에 맞는 책이 없어요"
+                }
+                description={
+                  hasActiveFilters
+                    ? "필터를 조정하거나 초기화해 다시 시도해보세요."
+                    : "다른 키워드로 검색해보세요."
+                }
+                actionLabel={hasActiveFilters ? "필터 초기화" : undefined}
+                onAction={hasActiveFilters ? resetFilters : undefined}
               />
             )}
             {sorted && sorted.length > 0 && (

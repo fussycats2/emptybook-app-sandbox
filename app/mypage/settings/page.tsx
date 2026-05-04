@@ -44,7 +44,7 @@ const PROVIDER_LABEL: Record<string, string> = {
 const ETC: { label: string; value?: string; info?: boolean; href?: string }[] = [
   { label: "이용 약관", href: "/terms" },
   { label: "개인정보 처리방침", href: "/privacy" },
-  { label: "오픈소스 라이선스" },
+  { label: "오픈소스 라이선스", href: "/licenses" },
   { label: "앱 버전", value: "1.2.3", info: true },
 ];
 
@@ -190,9 +190,10 @@ export default function SettingsPage() {
               (user?.app_metadata?.provider ?? "-")
             }
           />
+          {/* SMS OTP 도입 전까지는 placeholder — "완료" 처럼 거짓 표기 대신 "준비중" 으로 솔직하게 노출 */}
           <Row
             label="본인 인증"
-            value="완료"
+            value="준비중"
             onClick={() => toast?.show("준비 중인 기능이에요")}
           />
         </Group>

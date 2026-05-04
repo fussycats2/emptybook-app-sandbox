@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-05-04 (v6 — OAuth 운영 가동 + 네이버 도서 메타데이터 통합)
+> 최종 업데이트: 2026-05-05 (v7 — 스플래시 리디자인: 오로라 + 한글 워드마크)
 
 ## 프로젝트 개요
 
@@ -14,7 +14,7 @@
 
 ---
 
-## 현재 구현 상태 (2026-05-04 기준)
+## 현재 구현 상태 (2026-05-05 기준)
 
 ### 완료된 것
 
@@ -61,7 +61,7 @@
 | **실명 마스킹** | 회원가입 시 입력한 실명이 그대로 `profiles.display_name` 에 저장돼 다른 사용자 화면에 노출되던 버그 픽스. `anonymizeName(name)` 헬퍼(첫 글자만 노출, 나머지는 `*`. "김민주" → "김**") 추가 + `fetchChat`/`listOrders`/`fetchOrder`/`fetchReviewContext`/`listReceivedReviews` 모두 적용. DB 트리거(`notify_on_message`/`notify_on_transaction_insert`/`notify_on_review`) 도 0008 에서 `mask_display_name(text)` SQL 함수로 마스킹 + 기존 알림 행 backfill |
 | **채팅 읽음 RLS 픽스** | 0001 에 `messages` UPDATE RLS 정책이 빠져 있어 `markRoomMessagesRead` 의 read_at UPDATE 가 조용히 차단(0행 영향) → 채팅방 들어가서 읽어도 unread 배지가 안 사라지던 버그. 0007 에서 채팅방 참여자(buyer/seller) 가 `messages` UPDATE 가능하도록 정책 추가 |
 | **UI 테마 리프레시 (v3)** | `lib/theme.ts` 의 `palette` / `radius` / `shadow` 토큰을 새 톤으로 일괄 교체 — primary `#1F6F4E → #2D5F4A` (sage), bg `#FAF7F2 → #F7F4ED` (warm cream), accent `#FF6B5E → #D9695A` (terracotta). 새 토큰 추가: `primaryTint`, `surfaceAlt`, `accentSoft`, `warn` / `warnSoft`, `radius.xl`, `shadow.pop`. 버튼/Input/Switch/Card 기본 hover·focus·disabled 정리. `globals.css` 의 body bg, skeleton 색도 새 라인에 맞춰 정리. 컴포넌트(`StatusBadge`, `MannerTemperature`, `BookCard`, `BookImage` 자리표시 6색, `app/notifications` 아이콘 매핑)에 박혀 있던 직접 hex 도 모두 토큰으로 치환 |
-| **스플래시 페이지 리디자인** | `app/page.tsx` — 떠다니는 책 표지 데코 3장(채식주의자/코스모스/아몬드)을 인라인 SVG 아트워크로 그려 넣음. 잎·행성+별·아몬드 형태. 각 표지 좌측 책등(spine) 음영 + inset highlight + shimmer 슬라이드 + `clipPath: inset(0 round 8px)` 로 라운드 클리핑 (rotate 부모 + skew 자식 조합에서 overflow:hidden 이 새는 이슈 회피). 로고 글로우 링, "EMPTY · YOUR · SHELF" 키커, 라이브 활동 칩 ("3,250명이 책장을 비우고 있어요"), stagger 페이드인. 키프레임 `splashRise` / `splashFloat` / `splashGlow` / `splashShimmer` 신규 (globals.css) |
+| **스플래시 페이지 리디자인 (v7)** | `app/page.tsx` — 이전 v3 의 떠다니는 책 표지 SVG 데코를 폐기하고 **천천히 흐르는 오로라 블롭 3장**(라디얼 그라데이션 + `mixBlendMode: screen`)으로 교체. 어두운 배경(`#0A1714`) 위에 mint/peach/sage 톤이 빛처럼 합성되며 14~17s 주기로 드리프트. 모바일 카드 폭(420px) 안에서도 보이도록 blob 크기 360–420px, 위치는 안쪽 당김, blur 60px. 상단 워드마크는 영문 `EmptyBook` → **한글 `책장비움`** (모바일에서 PhoneFrame 좌측 브랜드 패널이 안 보이므로 모바일 유일 브랜드 텍스트). Hero 카피는 무게 대비(200 ↔ 800)로 `책장은 비우고, / 이야기는 잇다.`(녹색 마침표) — 카드 폭에서 단어 분리되지 않게 `fontSize xs:46/sm:56` + `whiteSpace: nowrap`. 서브카피는 `당신의 책 한 권이, / 누군가의 첫 페이지가 됩니다.` — `<br />` 로 의도된 위치 줄바꿈. 미세 그레인 노이즈(opacity 0.16 + overlay) 로 평면 그라데이션 균질화 방지. 라이브 활동 칩 ("3,250명이 책장을 비우고 있어요"), 키프레임 `splashRise` / `auroraDrift1~3` / `splashPulse` (globals.css). 이전 `splashFloat` / `splashGlow` / `splashShimmer` 키프레임은 제거됨 |
 | **PhoneFrame 데스크톱 패널 리프레시** | `components/ui/PhoneFrame.tsx` — 라디얼 그라데이션 배경 + 글래스 통계 박스(borders + backdrop-blur), 카드 라운드 28 → `radius.xl`, EYEBROW 키커 추가 |
 | **홈 비주얼 다듬기** | 이벤트 배너의 거대 📚 이모지 제거 → 추상 라디얼/링 데코로 교체. 카테고리 칩 hover lift, 인기 판매자 카드 hover 정리. **중복되던 등록 Fab 제거** — `BottomTabNav` 가운데 + 버튼과 동일 동작이라 두 번 떠 있던 문제. 헤더 알림 Badge 의 `invisible={unreadCount === 0}` 연결 |
 | **하단 탭 강조 버튼** | `components/ui/BottomTabNav.tsx` 가운데 + 버튼: 그라데이션 + `shadow.pop`, 52px 로 살짝 키움 |
