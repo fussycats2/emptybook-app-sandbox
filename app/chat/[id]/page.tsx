@@ -28,9 +28,15 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { useChat } from "@/lib/query/chatHooks";
 import { useBook } from "@/lib/query/bookHooks";
 import { useRealtimeChat } from "@/lib/realtime/useRealtimeChat";
-import { markRoomChatNotificationsRead, markRoomMessagesRead } from "@/lib/repo";
+import {
+  markRoomChatNotificationsRead,
+  markRoomMessagesRead,
+  type ChatRow,
+  type NotificationRow,
+} from "@/lib/repo";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
+import { useNotificationsStore } from "@/lib/store/notificationsStore";
 
 const ACTIONS = [
   { key: "reserve", label: "예약하기" },
@@ -64,26 +70,48 @@ export default function ChatDetailPage({
 
   // 채팅방을 보고 있는 동안 상대 메시지 + 그 방의 chat 알림을 함께 읽음 처리
   // - 마운트 직후 1회 + 새 메시지가 도착할 때마다 호출 (read_at IS NULL 조건이라 idempotent)
-  // - 메시지 갱신 → 채팅 목록 unread 캐시 무효화
-  // - 알림 갱신 → 알림 목록 캐시 무효화 (notificationsStore 의 unreadCount 도 자동 갱신)
-  // 두 호출은 독립적이라 병렬 실행
+  // - 사용자 체감을 즉시 만들기 위해 채팅 목록·알림 목록 캐시와 unread store 를 먼저 패치
+  //   (서버 응답 기다리면 5-10초씩 늦게 반영되던 문제 — Realtime 은 messages UPDATE 를
+  //    구독하지 않아 read_at 변경 자체로는 invalidate 가 트리거되지 않음)
+  // - 그 후 백그라운드에서 실제 UPDATE 를 날리고, 다음 자연 refetch 시점에 정정된다
   const qc = useQueryClient();
+  const setUnreadCount = useNotificationsStore((s) => s.setUnreadCount);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const [msgN, notiN] = await Promise.all([
-        markRoomMessagesRead(params.id),
-        markRoomChatNotificationsRead(params.id),
-      ]);
-      if (cancelled) return;
+    if (!params.id) return;
+
+    // 1) 낙관적 패치 — 채팅 목록 캐시에서 이 방의 unread 0 처리
+    qc.setQueryData<ChatRow[] | undefined>(
+      queryKeys.chat.list(),
+      (old) =>
+        old?.map((c) => (c.id === params.id ? { ...c, unread: 0 } : c))
+    );
+
+    // 2) 낙관적 패치 — 알림 목록에서 이 방의 MESSAGE 알림을 read 처리 + store 반영
+    const prevNotis = qc.getQueryData<NotificationRow[]>(
+      queryKeys.notification.list()
+    );
+    if (prevNotis) {
+      const next = prevNotis.map((n) =>
+        n.unread && n.roomId === params.id ? { ...n, unread: false } : n
+      );
+      const changed = next.some((n, i) => n.unread !== prevNotis[i].unread);
+      if (changed) {
+        qc.setQueryData(queryKeys.notification.list(), next);
+        setUnreadCount(next.filter((n) => n.unread).length);
+      }
+    }
+
+    // 3) 백그라운드 — 서버에 read_at UPDATE. 응답 후 캐시 invalidate 로 정정
+    //    cancelled 가드를 두지 않는다: 사용자가 빨리 뒤로 가도 읽음 처리는 끝까지 반영
+    void Promise.all([
+      markRoomMessagesRead(params.id),
+      markRoomChatNotificationsRead(params.id),
+    ]).then(([msgN, notiN]) => {
       if (msgN > 0) qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
       if (notiN > 0)
         qc.invalidateQueries({ queryKey: queryKeys.notification.list() });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [params.id, msgs.length, qc]);
+    });
+  }, [params.id, msgs.length, qc, setUnreadCount]);
 
   // 메시지 전송 — 빈 문자열은 무시. send 결과는 훅이 state에 push
   const send = async () => {

@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-05-05 (v8 — 전 화면 모던 리프레시: 글래시 헤더/탭바, 그림자 6단계, 라운드 +4px)
+> 최종 업데이트: 2026-05-05 (v8.1 — 채팅 unread 뱃지 / 홈 찜 카운트 즉시 반영 픽스)
 
 ## 프로젝트 개요
 
@@ -79,6 +79,7 @@
 | **transactions 상태 머신 (v4)** | `0010_transactions_fsm.sql` — BEFORE UPDATE 트리거 `enforce_transaction_status` 로 FSM 강제. 허용 전이는 **PAID → COMPLETED, buyer 만**. CANCELED 직행 / 종결 상태(COMPLETED·CANCELED) 변경 / seller 의 거래 확정 모두 RAISE EXCEPTION 으로 차단. INSERT 도 RLS 의 with check 로 `status='PAID'` 강제. `completeOrder` 가 에러 무시 → throw 로 변경, `/orders/[id]` 가 try/catch 로 실패 토스트. 환불 PG 도입 전엔 사용자가 직접 CANCELED 만들 수 없게 잠금 |
 | **활성 채팅방 알림 자동 read (v4)** | `markRoomChatNotificationsRead(roomId)` repo 추가 — `payload->>room_id` 로 그 방의 MESSAGE kind 알림만 일괄 read_at 갱신. `/chat/[id]` 가 `markRoomMessagesRead` 와 병렬 호출. 사용자가 채팅방을 보고 있는 동안엔 알림 목록 빨간점이 다시 켜지지 않음. mock 동등 구현 `mockMarkRoomChatNotificationsRead`. presence 테이블이나 heartbeat 없는 단순 해법 — 추후 디바이스 푸시(FCM) 도입 시 presence 기반 옵션으로 업그레이드 가능 |
 | **전 화면 모던 UI 리프레시 (v8)** | 스플래시(`app/page.tsx`) 제외 24개 페이지 + 11개 공용 컴포넌트 + theme/globals 일괄 다듬음. **토큰**: 라운드 스케일 +2~4px (xs 6 / sm 12 / md 16 / lg 20 / xl 28), 그림자 6단계 재설계 (`card`/`cardHover`/`sticky`/`raised`/`pop`/`ring`), 버튼 minHeight 48 + sizeLarge 56, contained 에 inset highlight + hover glow, input focus 시 4px primaryGlow ring, Chip outlined hover primaryTint 전환, `success`/`accentDark`/`primaryGlow` 토큰 추가. **공용**: `AppHeader`/`BottomTabNav`/`FixedFooter` 글래시(backdrop-blur 8px), 탭바 + 버튼 56px 4px 보더 + dot 인디케이터, `StatusBadge` 색상 dot, `BookCard` hover lift, `MannerTemperature` 그라데이션 막대, `EmptyState` 84px 아이콘 + 라디얼 글로우, `BottomSheet`/`ConfirmDialog` backdrop blur. **페이지**: 홈 이벤트배너 글래시 EVENT 칩 + 다중 데코, 도서상세 sticky 헤더 글래시 전환 + 가격 30px, 결제 결제수단 ring, 채팅 말풍선 18px + 송신 그라데이션, 마이페이지 프로필 그라데이션 보더 + 라디얼 글로우, 알림 unread 좌측 3px accent 줄, 로그인/가입/비번찾기 dot eyebrow + 헤드라인 30px, 후기 평균별점 hero, 등록완료/결제완료 88px scale-in + 라디얼 hero, 약관/개인정보 ARTICLE/SECTION eyebrow + 카드형. globals.css 에 `card-lift`/`fade-in-up`/`scale-in`/`text-gradient` 유틸 + 스크롤바 톤다운. 스플래시는 v7 그대로 유지 |
+| **실시간 반영 지연 픽스 (v8.1)** | 두 군데서 사용자 액션이 5-10초 늦게 반영되던 체감 버그 정리. **(1) 홈 찜 카운트** — `BookFeedItem` 이 `book.likes`(서버 캐시) 만 보고 있어서, 토글 후 `likeKeys.list/ids` 만 invalidate 되고 `book.recent` 캐시는 다음 자연 refetch 까지 멈춰 있었음. 이제 `useLikesStore` 의 `counts[bookId]` 를 우선 구독하고, 첫 노출 시 `book.likes` 로 store 시드(`useEffect`) 해 `useBookLike.onMutate` 의 낙관적 +-1 가 정상 동작 → 클릭 즉시 숫자 변동. **(2) 채팅 unread 뱃지** — `app/chat/[id]/page.tsx` 의 useEffect 가 `markRoomMessagesRead`+`markRoomChatNotificationsRead` 후 invalidate 하는 구조였는데 `cancelled` 가드 때문에 사용자가 빨리 뒤로 가면 invalidate 가 스킵 + Realtime 은 `messages` UPDATE 미구독이라 `read_at` 변경으론 캐시 갱신이 절대 안 일어남. 진입 즉시 `qc.setQueryData(queryKeys.chat.list(), ...)` 로 해당 방 unread 0 직접 패치 + 알림 캐시 / `notificationsStore.setUnreadCount` 도 같이 패치 → 헤더 빨간점/방 카드 뱃지 즉시 사라짐. 백그라운드 read UPDATE 는 `cancelled` 가드 제거해 끝까지 반영 후 invalidate 로 정정 |
 
 ### 미완성 / 연결 안 된 것
 
@@ -245,15 +246,22 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 
 ### 큰 항목
 
-> OAuth 는 v5 에서 코드·콘솔 모두 완료(구글·네이버 정상 동작 확인 / 카카오는 비즈 전환 보류).
+> OAuth 는 v5 에서 구글·네이버 운영 가동 완료. 카카오는 비즈니스앱 전환이 필요해 결제 PG 와 함께 영구 보류.
 > 결제 PG 는 사이드 프로젝트 단계에서는 구현하지 않기로 결정 (PG 사업자 등록·심사 비현실적).
 > v6 메타데이터 마이그레이션(0011)은 운영 적용 완료 — synopsis/pub_date/source_url 정상 동작.
 
-1. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
-2. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
-3. **카카오 OAuth 활성화** — 비즈니스앱 전환 후 `app/login/page.tsx` 의 `KAKAO_DISABLED = false` 로만 바꾸면 됨 (Supabase Dashboard 에 Kakao Provider 설정은 이미 가능)
+#### 신규 기능 로드맵 (v9 후보)
 
-> 결제 PG 는 후순위 — Mock UI 유지. 실제 도입을 결정하면 `0010_transactions_fsm.sql` 의 `enforce_transaction_status` 에 `PAID → CANCELED` 전이 + 권한 정책(buyer? admin?) 추가 필요.
+1. **ISBN 바코드 스캐너** — 도서 등록 폼(`/register`)에서 카메라로 책 뒷면 바코드를 찍으면 ISBN 자동 인식 → 기존 네이버 검색 API 에 `query=ISBN` 으로 그대로 던져 결과 카드 자동 채움. 후보 라이브러리: `@zxing/browser`(웹 표준, 의존성 가벼움) 또는 ML Kit. 모바일 사파리 / 안드로이드 크롬에서 `getUserMedia` 권한 요청 + iOS PWA 추가 후 카메라 권한 fallback UX 필요. 등록 폼 상단에 "📷 바코드로 찾기" 버튼 → 풀스크린 BottomSheet 카메라 미리보기 + 스캔 라인 + 인식 시 햅틱 → ISBN 검증(체크섬) 후 기존 검색 결과 자동 채움 흐름. 권한 거부 / 인식 실패 시 수동 입력으로 폴백
+2. **내 책장 관리** — `/mypage/shelf` 신규 화면. 사용자가 가진 책을 4가지 상태로 분류해 관리: **읽는 중 / 완독 / 판매예정 / 소장**. 실제 책장 같은 비주얼 — 가로 슬롯에 책등(스파인) 으로 책을 진열하고 탭하면 책 정보 카드 펼침. 상태 전환은 BottomSheet 액션(예: "판매예정 → 등록하기" 가 `/register` 로 이동하며 책 정보 prefill). 새 테이블 `shelf_items(user_id, book_id, status, started_at, finished_at, rating, memo)` 추가 + RLS(본인만). ISBN 또는 네이버 검색으로 책장에 추가, "판매예정" 상태에서 "등록하기" 누르면 기존 createBook 흐름 재사용. 부수 효과: 마이페이지 STATS 5번째 카드 "책장(N권)" 추가 가능. 디자인: 나무결 배경 + sage 톤 책등, 카테고리별 색상 띠
+3. **도서 상태 등급 상세 템플릿** — 현재 등록 폼은 최상/상/중/하 4단계만 받지만, 판매자/구매자 분쟁의 핵심이 "상태 표기 모호함". 등록 폼의 상태 선택 옆에 "상세 체크" 버튼 → BottomSheet 안에 체크리스트 템플릿: **표지(접힘/긁힘/변색), 책등(꺾임/탈색), 모서리(닳음), 본문(낙서/형광펜/얼룩/페이지누락), 부속(띠지/엽서/CD)**. 항목 체크 결과로 등급을 자동 추천(예: 본문 낙서 있으면 최대 "중") + `books.condition_detail` jsonb 컬럼 신설해 상세 항목 저장 → 도서 상세에서 "상태 상세 보기" 토글로 노출. 0012 마이그레이션 + 상태 추정 로직(`lib/conditionGrade.ts`) + 도서 상세 신규 섹션. 분쟁 발생 시 객관적 근거가 됨
+4. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
+5. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
+
+#### 영구 보류 (사이드 프로젝트 범위 밖)
+
+- **결제 PG 연동** — Mock UI 유지. 실제 도입하려면 PG 사업자 등록·심사 + `0010_transactions_fsm.sql` 의 `enforce_transaction_status` 에 `PAID → CANCELED` 전이 + 권한 정책(buyer? admin?) 추가 필요. 현재는 결제 성공으로 가정하고 PAID 만 기록
+- **카카오 OAuth** — 카카오 로그인은 2024 정책상 비즈니스앱 전환(사업자등록증 + 검수)이 필수라 개인 사이드 프로젝트로는 활성화 불가. `/login` 의 `KAKAO_DISABLED=true` 그대로 유지. 코드 자체는 Supabase 내장 Provider 만 enable 하면 즉시 동작하는 상태로 남겨둠 (`signInWithOAuth` + `/auth/callback` 흐름)
 
 ### 작은 점검 후보 (이어갈 때 참고)
 - **settings 의 남은 placeholder 2곳** — "본인 인증" / "오픈소스 라이선스" 는 아직 토스트만. 본인 인증은 SMS OTP 도입 시, 라이선스는 `package.json` deps 를 가공해 정적 페이지로 노출 가능

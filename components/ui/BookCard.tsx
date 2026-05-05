@@ -10,10 +10,12 @@ import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
 import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
 import FavoriteBorderRoundedIcon from "@mui/icons-material/FavoriteBorderRounded";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import BookImage from "./BookImage";
 import StatusBadge, { type SaleStatus } from "./StatusBadge";
 import LikeButton from "./LikeButton";
 import { palette, radius, shadow } from "@/lib/theme";
+import { useLikesStore, selectLikeCount } from "@/lib/store/likesStore";
 
 // 카드에 필요한 최소 정보 — repo.ts 의 변환 함수가 이 형태로 데이터를 만들어 넘김
 export interface BookSummary {
@@ -43,6 +45,18 @@ export function BookFeedItem({ book }: { book: BookSummary }) {
   const router = useRouter();
   const status: SaleStatus | undefined =
     book.status ?? (book.free ? "free" : undefined);
+  // 토글 직후 카운트가 즉시 보이도록 store 의 최신값 우선. 없으면 서버 값.
+  // (useBookLike 가 onMutate 에서 setCount 로 즉시 반영하므로 다음 프레임에 반영됨)
+  const liveCount = useLikesStore(selectLikeCount(book.id));
+  const setStoreCount = useLikesStore((s) => s.setCount);
+  // 첫 노출 시 store 에 서버 카운트를 시드해 두면, 이후 토글의 낙관적 업데이트(onMutate)도
+  // prevCount 를 정상적으로 +-1 할 수 있어 클릭 즉시 숫자가 바뀐다.
+  useEffect(() => {
+    if (typeof liveCount === "number") return;
+    if (typeof book.likes !== "number") return;
+    setStoreCount(book.id, book.likes);
+  }, [book.id, book.likes, liveCount, setStoreCount]);
+  const likeCount = liveCount ?? book.likes ?? 0;
   return (
     <Box
       onClick={() => router.push(`/books/${book.id}`)}
@@ -147,7 +161,7 @@ export function BookFeedItem({ book }: { book: BookSummary }) {
             )}
             <Stack direction="row" gap={0.3} alignItems="center">
               <FavoriteBorderRoundedIcon sx={{ fontSize: 13 }} />
-              {book.likes ?? 0}
+              {likeCount}
             </Stack>
           </Stack>
         </Stack>
