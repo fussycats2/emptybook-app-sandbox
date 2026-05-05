@@ -4,7 +4,8 @@
 // 프로필/계정/알림/개인정보/기타 섹션과 로그아웃·탈퇴 버튼
 // - 프로필 정보(표시이름/사용자명/전화번호) 는 updateMyProfile 로 저장
 // - 알림/개인정보 토글은 updateAppPrefs (app_prefs jsonb) 로 즉시 반영 (debounce 없이 fire-and-forget)
-// - 이메일 변경/비번 변경/연동/본인인증 행은 여전히 placeholder
+// - 비밀번호 변경 → /find-account?tab=password, 연동 계정 → user.app_metadata.provider 값 표시
+// - 본인 인증 행만 SMS OTP 미도입으로 placeholder 유지
 
 import {
   Box,

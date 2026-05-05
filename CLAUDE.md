@@ -264,10 +264,10 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 - **카카오 OAuth** — 카카오 로그인은 2024 정책상 비즈니스앱 전환(사업자등록증 + 검수)이 필수라 개인 사이드 프로젝트로는 활성화 불가. `/login` 의 `KAKAO_DISABLED=true` 그대로 유지. 코드 자체는 Supabase 내장 Provider 만 enable 하면 즉시 동작하는 상태로 남겨둠 (`signInWithOAuth` + `/auth/callback` 흐름)
 
 ### 작은 점검 후보 (이어갈 때 참고)
-- **settings 의 남은 placeholder 2곳** — "본인 인증" / "오픈소스 라이선스" 는 아직 토스트만. 본인 인증은 SMS OTP 도입 시, 라이선스는 `package.json` deps 를 가공해 정적 페이지로 노출 가능
-- **books detail 의 책 소개(synopsis) 더보기 토글** — 네이버 description 이 종종 길어 카드가 늘어남. 4-5줄 클램프 + "더 보기" 토글 추천
-- **마이페이지 메인 STATS 카드 정렬** — 4번째 "최근 본"이 다른 카드와 톤이 달랐던 적 있음. 다시 보면 일관성 점검 필요할 수도
-- **검색 결과 빈 상태 메시지 검토** — 빈 결과일 때 EmptyState 가 어떻게 보이는지 확인
+- **settings 의 본인 인증 placeholder** — 아직 토스트만. SMS OTP 또는 PASS 같은 간편 본인확인 SDK 도입 시 활성화. 오픈소스 라이선스(`/licenses`) 와 synopsis "더 보기" 토글, 검색 빈 상태(EmptyState 분기), STATS 카드 정렬은 모두 정리 완료
+- **홈 LocationChip 동네 변경** — 현재 토스트만. 사용자 활성 지역 목록(`profiles.region` 또는 별도 `user_regions` 테이블) 연동 시 BottomSheet 로 선택 UI 가능
+- **/orders/[id] 운송장 단계** — `STEPS` 더미 배열 기반. 외부 배송사 API(우체국/CJ) 연동 전까지는 PAID 시점에 정해진 단계만 노출
+- **signup → 이메일 인증 정책** — Supabase Auth "Confirm email" ON/OFF 결정 + 그에 따른 `/signup` 이후 분기(자동 로그인 vs 메일 안내) 정합성 한 번 더 점검
 
 ---
 
