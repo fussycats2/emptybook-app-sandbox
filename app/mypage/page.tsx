@@ -92,6 +92,7 @@ export default function MyPage() {
   // 책장 카운트 — useMyShelf 가 결과를 받으면 shelfStore 가 동기화됨 (hydrate 트리거용 호출)
   useMyShelf();
   const shelfTotal = useShelfStore((s) => s.total);
+  const shelfByStatus = useShelfStore((s) => s.byStatus);
 
   // "판매중" 카운트는 실제로 매물에 노출되는 상태만 — sold/canceled 는 제외
   // 로딩 중에는 0 으로 폴백 — 4개 STATS 카드가 모두 number 로 일관 표시되도록 (찜/최근 본 도 0 부터 시작)
@@ -289,12 +290,6 @@ export default function MyPage() {
                   icon: <HistoryRoundedIcon />,
                   href: "/mypage/recent",
                 },
-                {
-                  label: "책장",
-                  val: shelfTotal,
-                  icon: <AutoStoriesRoundedIcon />,
-                  href: "/mypage/shelf",
-                },
               ] as {
                 label: string;
                 val: number;
@@ -360,6 +355,102 @@ export default function MyPage() {
                 </Box>
               );
             })}
+          </Box>
+
+          {/* 책장 풀폭 카드 — 4상태 미니바로 분포를 한눈에 */}
+          <Box
+            onClick={() => router.push("/mypage/shelf")}
+            sx={{
+              mt: 1.25,
+              background: palette.surface,
+              border: `1px solid ${palette.lineSoft}`,
+              borderRadius: 3,
+              p: 1.75,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              cursor: "pointer",
+              transition: "border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease",
+              "&:hover": {
+                borderColor: palette.line,
+                transform: "translateY(-2px)",
+                boxShadow: "0 6px 18px rgba(26,38,32,0.06)",
+              },
+            }}
+          >
+            <Box
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: 2.5,
+                background: `linear-gradient(135deg, ${palette.primaryTint} 0%, ${palette.primarySoft} 100%)`,
+                color: palette.primary,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              <AutoStoriesRoundedIcon />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Stack direction="row" alignItems="baseline" gap={0.75}>
+                <Typography
+                  sx={{
+                    fontSize: 19,
+                    fontWeight: 800,
+                    letterSpacing: "-0.025em",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {shelfTotal}
+                </Typography>
+                <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle }}>
+                  내 책장
+                </Typography>
+              </Stack>
+              {/* 4상태 미니 분포 — dot 색상 + 카운트 한 줄 */}
+              <Stack direction="row" gap={1.25} sx={{ mt: 0.85, flexWrap: "wrap" }}>
+                {(
+                  [
+                    { label: "읽는 중", v: shelfByStatus.READING, c: palette.primary },
+                    { label: "완독", v: shelfByStatus.FINISHED, c: palette.success },
+                    { label: "판매예정", v: shelfByStatus.FOR_SALE, c: palette.accent },
+                    { label: "소장", v: shelfByStatus.OWNED, c: palette.warn },
+                  ] as { label: string; v: number; c: string }[]
+                ).map((s) => (
+                  <Stack
+                    key={s.label}
+                    direction="row"
+                    alignItems="center"
+                    gap={0.5}
+                    sx={{ minWidth: 0 }}
+                  >
+                    <Box
+                      sx={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: "50%",
+                        background: s.c,
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        color: palette.inkMute,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {s.label} {s.v}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Box>
+            <KeyboardArrowRightRoundedIcon
+              sx={{ color: palette.inkSubtle, fontSize: 22, flexShrink: 0 }}
+            />
           </Box>
         </Box>
 

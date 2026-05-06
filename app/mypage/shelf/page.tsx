@@ -154,6 +154,14 @@ export default function ShelfPage() {
     router.push(`/register?shelfId=${selected.id}`);
   };
 
+  // 이미 판매로 등록된 책장 항목 — 매물 상세로 이동 (재등록 방지)
+  const handleViewListing = async () => {
+    if (!selected?.linkedBookId) return;
+    await persistDraft();
+    closeSheet();
+    router.push(`/books/${selected.linkedBookId}`);
+  };
+
   const handleDelete = async () => {
     if (!selected) return;
     await removeMut.mutateAsync(selected.id);
@@ -309,7 +317,26 @@ export default function ShelfPage() {
               >
                 삭제
               </Button>
-              {selected.status === "FOR_SALE" ? (
+              {selected.linkedBookId ? (
+                // 이미 매물로 등록된 책장 항목 — 중복 등록 방지 + 매물로 점프
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<StorefrontRoundedIcon />}
+                  onClick={handleViewListing}
+                  sx={{
+                    borderColor: palette.primary,
+                    color: palette.primary,
+                    background: palette.primaryTint,
+                    "&:hover": {
+                      borderColor: palette.primary,
+                      background: palette.primarySoft,
+                    },
+                  }}
+                >
+                  등록된 매물 보기
+                </Button>
+              ) : selected.status === "FOR_SALE" ? (
                 <Button
                   fullWidth
                   startIcon={<StorefrontRoundedIcon />}
@@ -357,6 +384,27 @@ export default function ShelfPage() {
                     {selected.startedAt && selected.finishedAt && " · "}
                     {selected.finishedAt && `완독 ${selected.finishedAt}`}
                   </Typography>
+                )}
+                {selected.linkedBookId && (
+                  <Box
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 0.4,
+                      mt: 0.6,
+                      px: 0.85,
+                      py: 0.25,
+                      borderRadius: 999,
+                      background: palette.primarySoft,
+                      color: palette.primary,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      letterSpacing: "-0.01em",
+                    }}
+                  >
+                    <StorefrontRoundedIcon sx={{ fontSize: 12 }} />
+                    매물로 등록됨
+                  </Box>
                 )}
               </Box>
             </Stack>

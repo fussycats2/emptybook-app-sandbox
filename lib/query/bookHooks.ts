@@ -82,6 +82,7 @@ export function useCreateBook() {
 // 판매 취소 — 책의 status 가 HIDDEN 으로 바뀌면 다음 화면들도 영향:
 //   - 채팅 목록(`listChats`): 책 status 가 join 으로 같이 들어가 배지가 변함
 //   - 찜 목록(`listLikedBooks`): HIDDEN 책은 결과에서 빠짐
+//   - 책장(0014 트리거): 연결된 FOR_SALE 항목이 OWNED 로 자동 전이됨
 export function useCancelBook() {
   const qc = useQueryClient();
   return useMutation({
@@ -91,11 +92,13 @@ export function useCancelBook() {
       qc.invalidateQueries({ queryKey: queryKeys.book.detail(bookId) });
       qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
       qc.invalidateQueries({ queryKey: likeKeys.list() });
+      qc.invalidateQueries({ queryKey: queryKeys.shelf.lists() });
     },
   });
 }
 
-// 영구 삭제 — cancel 과 동일한 파급 (chat/likes 도 갱신)
+// 영구 삭제 — cancel 과 동일한 파급 (chat/likes/shelf 도 갱신)
+// 책이 사라지면 shelf_items.linked_book_id 는 ON DELETE SET NULL 로 자동 null 화
 export function useDeleteBook() {
   const qc = useQueryClient();
   return useMutation({
@@ -105,6 +108,7 @@ export function useDeleteBook() {
       qc.invalidateQueries({ queryKey: queryKeys.book.detail(bookId) });
       qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
       qc.invalidateQueries({ queryKey: likeKeys.list() });
+      qc.invalidateQueries({ queryKey: queryKeys.shelf.lists() });
     },
   });
 }

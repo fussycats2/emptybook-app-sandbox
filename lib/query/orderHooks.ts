@@ -42,6 +42,8 @@ export function useCreateOrder() {
         queryKey: queryKeys.book.detail(input.bookId),
       });
       qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
+      // 0014 트리거가 책장 FOR_SALE → OWNED 로 자동 전이시키므로 책장 캐시도 갱신
+      qc.invalidateQueries({ queryKey: queryKeys.shelf.lists() });
     },
   });
 }

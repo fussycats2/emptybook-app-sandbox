@@ -19,8 +19,10 @@ import LocalFireDepartmentRoundedIcon from "@mui/icons-material/LocalFireDepartm
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import LocationChip from "@/components/ui/LocationChip";
+import RegionPickerSheet from "@/components/ui/RegionPickerSheet";
 import { BookFeedItem } from "@/components/ui/BookCard";
 import BookImage from "@/components/ui/BookImage";
 import { SectionLabel, ScrollBody } from "@/components/ui/Section";
@@ -33,6 +35,7 @@ import { useRecentBooks } from "@/lib/query/bookHooks";
 import { useNotificationsStore } from "@/lib/store/notificationsStore";
 import { useMyShelf } from "@/lib/query/shelfHooks";
 import { useShelfStore } from "@/lib/store/shelfStore";
+import { useRegionStore } from "@/lib/store/regionStore";
 import { SHELF_STATUS_LABEL } from "@/lib/supabase/types";
 
 const { CATEGORIES, POPULAR_SELLERS } = meta;
@@ -50,6 +53,9 @@ export default function HomePage() {
   useMyShelf();
   const shelfTotal = useShelfStore((s) => s.total);
   const shelfByStatus = useShelfStore((s) => s.byStatus);
+  // 사용자가 선택한 동네 — 헤더 칩 라벨 + 섹션 헤더 라벨에 일관 적용
+  const region = useRegionStore((s) => s.region);
+  const [regionPickerOpen, setRegionPickerOpen] = useState(false);
 
   return (
     <>
@@ -66,7 +72,7 @@ export default function HomePage() {
         }}
       >
         <Stack direction="row" alignItems="center" justifyContent="space-between" mb={1.25}>
-          <LocationChip onClick={() => toast?.show("동네 변경은 준비 중이에요")} />
+          <LocationChip label={region} onClick={() => setRegionPickerOpen(true)} />
           <Stack direction="row">
             <IconButton onClick={() => router.push("/search")}>
               <SearchRoundedIcon />
@@ -438,7 +444,7 @@ export default function HomePage() {
             </Stack>
           }
         >
-          마포구의 따끈한 책
+          {region}의 따끈한 책
         </SectionLabel>
 
         <Box sx={{ background: palette.surface }}>
@@ -508,6 +514,10 @@ export default function HomePage() {
       </ScrollBody>
 
       <BottomTabNav />
+      <RegionPickerSheet
+        open={regionPickerOpen}
+        onClose={() => setRegionPickerOpen(false)}
+      />
     </>
   );
 }

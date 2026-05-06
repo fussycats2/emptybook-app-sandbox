@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-05-06 (v9.1 — 도서 상태 등급 상세 템플릿)
+> 최종 업데이트: 2026-05-06 (v9.4 — 책장↔매물 status 자동 동기화 트리거)
 
 ## 프로젝트 개요
 
@@ -21,7 +21,7 @@
 | 영역 | 내용 |
 |------|------|
 | **라우트 구조** | 22+α 화면 라우트 (`app/` 하위) — 마이페이지 하위에 `/mypage/selling`, `/mypage/likes`, `/mypage/shelf`, `/mypage/shelf/add` 추가 |
-| **공용 UI 컴포넌트** | `components/ui/` 전체 (PhoneFrame, AppHeader, BottomTabNav, BookCard, BookImage, ImageCarousel, BottomSheet, ConfirmDialog, StatusBadge, MannerTemperature, LikeButton, LocationChip, Fab, EmptyState, Skeleton, ToastProvider, Section, ImgPlaceholder, **BarcodeScanner**(v9), **BookSpine**(v9), **ConditionDetailSheet**(v9.1)). 전 컴포넌트에 한글 주석 추가 완료 |
+| **공용 UI 컴포넌트** | `components/ui/` 전체 (PhoneFrame, AppHeader, BottomTabNav, BookCard, BookImage, ImageCarousel, BottomSheet, ConfirmDialog, StatusBadge, MannerTemperature, LikeButton, LocationChip, Fab, EmptyState, Skeleton, ToastProvider, Section, ImgPlaceholder, **BarcodeScanner**(v9), **BookSpine**(v9), **ConditionDetailSheet**(v9.1), **RegionPickerSheet**(v9.3)). 전 컴포넌트에 한글 주석 추가 완료 |
 | **MUI 테마** | `lib/theme.ts` 완성 — 색상 토큰, 라운드 스케일, 그림자 토큰 |
 | **Mock 데이터 계층** | `lib/mockData.ts` + `lib/repo.ts` — Supabase 없이도 전 화면 동작. likes/reviews 인메모리 저장 포함 |
 | **DB 스키마** | `0001_init.sql` ~ `0008_anonymize_notification_names.sql`. RLS·Realtime·Storage 포함. ERD 와 트리거 상세는 [`ERD.md`](./ERD.md) |
@@ -84,6 +84,9 @@
 | **내 책장 관리 (v9)** | `/mypage/shelf` 신규 — 사용자가 가진 책을 4가지 상태(**READING**/**FINISHED**/**FOR_SALE**/**OWNED**)로 분류해 관리. **DB**: `0012_shelf_items.sql` — `shelf_items(user_id, title, author, publisher, isbn, category, cover_url, status, started_at, finished_at, rating(1-5), memo, linked_book_id)` + `shelf_status` enum + RLS(본인만 R/W) + ISBN partial unique(같은 ISBN 중복 추가 차단, NULL 은 제외) + `(user_id, status, updated_at desc)` 인덱스 + updated_at 자동 트리거. books 와 분리된 개인 컬렉션이라 메타데이터를 denormalize 저장 — books lifecycle(SOLD/HIDDEN) 에 종속되지 않음. **Repo**: `listMyShelf(filter?)` / `getShelfItem` / `addShelfItem` / `updateShelfItem` / `removeShelfItem` (Supabase + mock 폴백). updateShelfItem 은 status → READING/FINISHED 전이 시 시작·완독 일자를 자동 채움. **UI**: 상단 5탭(전체+4상태, 카운트 배지) → "나무 받침대" 톤 책장 행에 `BookSpine` 진열 (카테고리별 색상 띠 + 표지 이미지 폴백 + 별점 뱃지). 책 클릭 → BottomSheet (4분할 상태 segmented + 별점 1-5 + 300자 메모 + 삭제/판매등록 액션). FOR_SALE 항목의 "판매 등록하기" 는 `/register?shelfId=xxx` 로 라우팅 — 등록 폼이 책장 메타데이터로 prefill 되고 등록 성공 시 `linked_book_id` 로 두 행을 연결 (실패해도 등록은 성공으로 진행). **추가 화면**: `/mypage/shelf/add` 는 네이버 검색 + BarcodeScanner 재사용 + 4상태 초기 선택. **카운트 동기화**: `lib/store/shelfStore.ts` (Zustand) total / status별 카운트 — `useMyShelf()` 가 결과 도착 시 hydrate 해 마이페이지 STATS 5번째 카드 / 홈 바로가기 카드가 같은 카운트 즉시 반영. mock 모드에서는 4가지 상태가 한 권씩 시드되어 비로그인 사용자도 책장 UI 를 바로 체험 |
 | **홈 / 마이페이지 책장 진입점 (v9)** | **홈** (`app/home/page.tsx`): 이벤트 배너 바로 아래에 "내 책장" 바로가기 카드 추가 — 미니 책등 데코 3장(sage/terracotta/golden, 한 장은 살짝 기울임) + 라이트 우드 톤 받침대 라인 + "총 N권 · 읽는 중 N · 판매예정 N" 요약 + 화살표 CTA. `useMyShelf()` 호출만 트리거하고 카운트는 `shelfStore` 에서 구독해 다른 곳 토글 시도 즉시 반영. **마이페이지** (`app/mypage/page.tsx`): SECTIONS "내 활동" 첫 항목으로 "내 책장" 추가 (AutoStoriesRoundedIcon, /mypage/shelf 라우팅) + STATS 그리드 5번째 카드 "책장(N권)" 추가. 5번째 카드는 2열 그리드의 row 3 column 1 에 단독 배치 |
 | **도서 상태 등급 상세 템플릿 (v9.1)** | 판매자/구매자 분쟁의 핵심인 "상태 표기 모호함" 해소. **DB**: `0013_books_condition_detail.sql` — `books.condition_detail jsonb` 컬럼 (nullable, 인덱스 X — 표시용 부속 데이터). **로직** (`lib/conditionGrade.ts`): `ConditionDetail` 타입 + 5개 카테고리 (표지/책등/모서리/본문/부속) × 항목 정의(`CONDITION_CATEGORIES`) + `inferGrade(detail)` 등급 추정. **추정 규칙**: ① 본문 페이지누락 → 최대 "하" ② 본문 낙서/형광펜/얼룩 → 최대 "중" ③ 외관 손상(표지·책등·모서리) 합계 ≥ 3개 → 최대 "중", 1~2개 → 최대 "상" ④ 부속 누락(띠지/엽서/CD)은 등급에 영향 X. 미체크면 "최상" 시작값. **UI**: 등록 폼(`/register`)의 "도서 상태" 섹션 헤더 우측에 "상세 체크" 버튼 → `ConditionDetailSheet` BottomSheet. 카테고리별 체크박스 칩 + footer 에 "추정 등급" 칩 + "상태 적용 ({등급})" CTA. 적용 시 `state` 자동 추천 + `conditionDetail` 저장 + 토스트 "상태가 X 으로 추천됐어요" — 사용자가 다시 다른 등급을 고를 수 있는 자유 보장. **도서 상세** (`/books/[id]`): "도서 정보" 섹션의 "상태" InfoRow 바로 아래에 `ConditionDetailRow` — 체크된 항목이 있으면 "상태 상세 보기 (N)" 토글 노출, 펼치면 카테고리별 warn 톤 칩 리스트. flattenChecked / hasAnyChecked 헬퍼가 노출 판단. 체크 항목 0개면 토글 자체가 안 그려짐 |
+| **마이페이지 STATS 책장 풀폭 + 매물 연결 표시 (v9.2)** | v9 에서 책장 카드를 5번째 STATS 로 추가했더니 2열 그리드 row 3 col 2 가 비어 어색했던 부분 정리. 책장을 STATS 배열에서 빼고 그리드 아래 풀폭 카드로 분리 — 좌측 아이콘 + 큰 카운트(`shelfTotal`) + 우측 4상태 미니 분포(`READING`/`FINISHED`/`FOR_SALE`/`OWNED` 각각 dot+카운트, sage/success/accent/warn 톤) + KeyboardArrowRight CTA. 책장 분포가 한 줄 안에 다 보여 "어떤 상태가 많은지" 즉각 파악 가능. **책장 ↔ 매물 표시 연동**: 책장 상세 시트에서 `linkedBookId` 가 있으면 헤더에 sage 톤 "매물로 등록됨" 배지 + footer CTA 가 "판매 등록하기"/"저장하고 닫기" → "**등록된 매물 보기**"(outlined) 로 전환되어 클릭 시 `/books/{linkedBookId}` 로 점프. 같은 책을 두 번 등록하는 실수를 막고, 책장 → 매물 흐름의 마지막 한 칸을 마무리 |
+| **동네 변경 BottomSheet (v9.3)** | 홈 헤더 LocationChip 이 토스트만 띄우던 placeholder 를 실제 동네 선택 UI 로 풀음. **Store** (`lib/store/regionStore.ts`): Zustand + localStorage persist (`emptybook:region`, default "마포구") + `SEOUL_DISTRICTS` 25개 자치구 시드. **UI** (`components/ui/RegionPickerSheet.tsx`): BottomSheet 안에 검색 입력 + 자치구 리스트(아이콘 + 라벨 + 선택된 항목 sage 톤 강조 + 체크 아이콘). 검색은 단순 substring 매칭 — 25개라 충분히 빠름. 선택 즉시 store 갱신 후 자동 close. **홈 페이지** (`app/home/page.tsx`): `useRegionStore` 구독 → LocationChip label + 섹션 헤더 "{region}의 따끈한 책" 둘 다 동기화. localStorage persist 라 새로고침/재방문 시에도 마지막 선택 유지. 추후 `profiles.region` 또는 `user_regions` 테이블 연동 시 store 만 갈아끼우면 됨 |
+| **책장↔매물 status 자동 동기화 (v9.4)** | v9 의 마지막 한 칸 — 매물이 SOLD/HIDDEN 으로 바뀌면 연결된 책장 항목도 자동 정리. **DB** (`0014_shelf_books_sync.sql`): `sync_shelf_on_book_status_change()` SECURITY DEFINER 트리거. `books` AFTER UPDATE OF status 에서 status 가 SOLD 또는 HIDDEN 으로 바뀌면 `shelf_items.linked_book_id = book.id` AND `status = 'FOR_SALE'` 행만 OWNED 로 전이 (READING/FINISHED/이미 OWNED 는 사용자 명시 분류이므로 보존). `linked_book_id` 자체는 유지 — 사용자가 책장에서 "등록된 매물 보기" 링크로 과거 거래 추적 가능. 마이그레이션 시점에 이미 SOLD/HIDDEN 인 매물에 연결된 FOR_SALE 행을 일괄 백필. **Mock 모드**: `mockCancelBook` / `mockCreateOrder`(SOLD 전이) 가 같은 동작을 재현하는 `syncShelfOnBookStatusChange()` 헬퍼 호출 + `mockDeleteBook` 은 `linked_book_id` 를 undefined 로 정리(FK ON DELETE SET NULL 동등). **클라이언트 캐시**: `useCancelBook` / `useDeleteBook` / `useCreateOrder` 의 `onSuccess` 가 `queryKeys.shelf.lists()` 도 invalidate — 책장 화면이 열려 있어도 다음 fetch 에 자동 갱신 |
 
 ### 미완성 / 연결 안 된 것
 
@@ -156,6 +159,7 @@ lib/
   isbn.ts                         # ISBN-10/13 체크섬 검증 + 정규화 (바코드 스캐너용)
   conditionGrade.ts               # 도서 상태 상세 체크리스트 정의 + inferGrade 등급 추정
   store/shelfStore.ts             # 책장 카운트 (Zustand) — 홈/마이페이지 STATS 동기화
+  store/regionStore.ts            # 사용자 동네 (Zustand + localStorage) — 홈 헤더/섹션 라벨 동기화
   query/shelfHooks.ts             # 책장 React Query 훅 (useMyShelf / useAdd/Update/Remove)
   auth/
     AuthProvider.tsx              # 클라이언트 user/session Context + useAuth() 훅
@@ -186,6 +190,7 @@ supabase/migrations/
   0011_book_metadata.sql                   # books 에 synopsis/pub_date/source_url 추가 (네이버 메타데이터 통합)
   0012_shelf_items.sql                     # shelf_items 테이블 + shelf_status enum + RLS + ISBN partial unique
   0013_books_condition_detail.sql          # books.condition_detail jsonb — 도서 상태 상세 체크리스트
+  0014_shelf_books_sync.sql                # books.status SOLD/HIDDEN → 연결된 shelf_items FOR_SALE → OWNED 자동 전이
 ```
 
 ---
@@ -270,25 +275,33 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 > v6 메타데이터 마이그레이션(0011)은 운영 적용 완료 — synopsis/pub_date/source_url 정상 동작.
 > v9 (2026-05-06): ISBN 바코드 스캐너 + 내 책장 관리 — 둘 다 구현 완료. 0012_shelf_items.sql 적용 필요.
 > v9.1 (2026-05-06): 도서 상태 등급 상세 템플릿 — 구현 완료. 0013_books_condition_detail.sql 적용 필요.
+> v9.4 (2026-05-06): 책장↔매물 status 자동 동기화 — 0014_shelf_books_sync.sql 적용 필요.
 
 #### 신규 기능 로드맵 (v10 후보)
 
 1. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
 2. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
-3. **책장 ↔ 매물 양방향 동기화** — v9 에서 `shelf_items.linked_book_id` 만 채우는 단방향이라, 연결된 매물이 SOLD/HIDDEN 으로 바뀌어도 책장 status 는 그대로. 트리거(`books` UPDATE → `shelf_items` 자동 OWNED 전이) 또는 클라이언트 동기화 한 줄. 책장 상세 시트에서 linkedBookId 가 있으면 "이미 판매 등록됨" 배지 + 매물로 점프하는 링크도 함께 추가
-4. **상태 상세 체크 — 검색 필터 연동** — 0013 의 `condition_detail` 은 현재 표시용. 향후 검색 필터에 "본문 깨끗" 같은 빠른 필터를 추가하면 jsonb 인덱스(`gin (condition_detail)`) + 쿼리(예: `condition_detail->'body'->>'pen' is not true`) 로 분기 가능. 운영 데이터가 쌓이면 검토
+3. **상태 상세 체크 — 검색 필터 연동** — 0013 의 `condition_detail` 은 현재 표시용. 향후 검색 필터에 "본문 깨끗" 같은 빠른 필터를 추가하면 jsonb 인덱스(`gin (condition_detail)`) + 쿼리(예: `condition_detail->'body'->>'pen' is not true`) 로 분기 가능. 운영 데이터가 쌓이면 검토
 
 #### 영구 보류 (사이드 프로젝트 범위 밖)
 
 - **결제 PG 연동** — Mock UI 유지. 실제 도입하려면 PG 사업자 등록·심사 + `0010_transactions_fsm.sql` 의 `enforce_transaction_status` 에 `PAID → CANCELED` 전이 + 권한 정책(buyer? admin?) 추가 필요. 현재는 결제 성공으로 가정하고 PAID 만 기록
 - **카카오 OAuth** — 카카오 로그인은 2024 정책상 비즈니스앱 전환(사업자등록증 + 검수)이 필수라 개인 사이드 프로젝트로는 활성화 불가. `/login` 의 `KAKAO_DISABLED=true` 그대로 유지. 코드 자체는 Supabase 내장 Provider 만 enable 하면 즉시 동작하는 상태로 남겨둠 (`signInWithOAuth` + `/auth/callback` 흐름)
 
+### 사용자 테스트 보고 — 다음 점검 우선순위 (2026-05-06)
+
+> 사용자가 v9.x 흐름을 직접 시도하면서 보고한 이슈. 다음 세션에서 우선 처리.
+
+1. **거래 확정 후 매물이 사라지지 않음** — 사용자가 거래확정(`/orders/[id]` → COMPLETED)을 눌러도 해당 책이 홈 피드 / 검색 / 마이페이지 판매내역에서 SOLD 로 안 빠진다는 보고. **점검 포인트**: ① `lib/repo.ts` `createOrder` 가 supabase 모드에서 `transactions` INSERT 만 하고 `books.status` UPDATE 를 빠뜨렸을 가능성 (mock 의 `mockCreateOrder` 는 즉시 `book.status="sold"` 처리). ② 또는 `completeOrder` 시점에 `books.status` 를 SOLD 로 옮겨야 하는데 안 옮기는 케이스. ③ `0010_transactions_fsm.sql` 은 transactions 상태만 강제하고 books 와의 연동 트리거는 없음. **해결 방향**: (a) `createOrder` 에서 books UPDATE 를 같이 하거나 (RLS 때문에 buyer 가 seller 의 books 를 못 바꿈 → SECURITY DEFINER 트리거 필요), (b) 0015 마이그레이션으로 `transactions` AFTER INSERT(status='PAID') 트리거 만들어 `books.status='SOLD'` 로 옮김. 동시에 `useCreateOrder` 의 invalidate 가 이미 book lists/detail 을 갱신하므로 트리거만 추가하면 화면 동기화는 자동.
+
+2. **거래확정 후 메인으로 돌아갈 길이 없음** — `/orders/[id]` 에서 거래확정 누르면 같은 페이지에 머물러 사용자가 홈으로 가려면 뒤로가기를 여러 번 눌러야 함. **해결 방향**: `useCompleteOrder` 성공 후 `/orders/[id]` 페이지에서 (a) 자동 `router.replace("/mypage/orders")` 또는 `/home` 으로 이동, 또는 (b) 페이지를 "거래완료" 상태로 잠그고 footer CTA 를 "후기 작성하기" + "홈으로" 두 버튼으로 교체. (b) 가 거래 흐름 자연스러움 — 후기 작성 직후 홈으로 점프하면 끝.
+
+3. **구매한 책이 책장에 자동 안 들어감** — 사용자 기대: 책을 사면 buyer 의 책장(`shelf_items`) 에 OWNED 로 자동 추가. 현재는 의도적으로 미구현. **해결 방향**: 0016 마이그레이션 — `transactions` AFTER INSERT(status='PAID') 트리거에서 buyer_id 의 `shelf_items` 에 책 메타데이터(title/author/publisher/isbn/cover_url/category) 를 books 에서 복사해 INSERT(status='OWNED'). ISBN partial unique 와 충돌하지 않게 `on conflict (user_id, isbn) where isbn is not null do nothing` 적용. linked_book_id 도 같이 채움. 1번 이슈의 트리거와 같은 함수에 묶어도 됨 (PAID 시점 1회 호출).
+
 ### 작은 점검 후보 (이어갈 때 참고)
 - **settings 의 본인 인증 placeholder** — 아직 토스트만. SMS OTP 또는 PASS 같은 간편 본인확인 SDK 도입 시 활성화. 오픈소스 라이선스(`/licenses`) 와 synopsis "더 보기" 토글, 검색 빈 상태(EmptyState 분기), STATS 카드 정렬은 모두 정리 완료
-- **홈 LocationChip 동네 변경** — 현재 토스트만. 사용자 활성 지역 목록(`profiles.region` 또는 별도 `user_regions` 테이블) 연동 시 BottomSheet 로 선택 UI 가능
 - **/orders/[id] 운송장 단계** — `STEPS` 더미 배열 기반. 외부 배송사 API(우체국/CJ) 연동 전까지는 PAID 시점에 정해진 단계만 노출
 - **signup → 이메일 인증 정책** — Supabase Auth "Confirm email" ON/OFF 결정 + 그에 따른 `/signup` 이후 분기(자동 로그인 vs 메일 안내) 정합성 한 번 더 점검
-- **마이페이지 STATS 5번째 카드 레이아웃** — v9 에서 책장 카드를 추가해 2열 그리드의 row 3 column 1 에 단독 배치됨. row 3 col 2 가 비어 있어서 약간 어색 — 5번째 카드를 full-width 로 spanning 하거나 6번째(예: "받은 후기" 평균 별점) 를 채워서 정리 가능
 - **책장 status 전이 자동화** — `useUpdateShelfItem` 의 `onSuccess` 가 `shelf.lists` invalidate 하지만, status 변경은 BottomSheet 가 닫힐 때 한 번에 보내야 메모/별점 draft 가 안 날아감. 현재는 changeStatus 가 persistDraft 후 status patch 를 따로 보내는 2-step — 한 번에 묶으면 네트워크 1회 절감 가능 (작은 최적화)
 
 ---

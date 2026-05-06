@@ -603,6 +603,9 @@ export function mockCancelBook(bookId: string): boolean {
   const book = s.books.find((b) => b.id === bookId);
   if (!book) return false;
   book.status = "canceled";
+  // 0014 대응 — DB 트리거가 하던 일을 mock 에서도 재현:
+  // 연결된 책장 항목이 FOR_SALE 이면 OWNED 로 자동 정리
+  syncShelfOnBookStatusChange(bookId);
   return true;
 }
 
@@ -612,7 +615,27 @@ export function mockDeleteBook(bookId: string): boolean {
   const before = s.books.length;
   s.books = s.books.filter((b) => b.id !== bookId);
   s.likedBookIds.delete(bookId);
+  // 책이 사라지면 책장의 linked_book_id 는 null 화 (FK ON DELETE SET NULL 동작)
+  // 책장 자체는 유지 — 사용자의 개인 컬렉션이므로
+  for (const it of s.shelf) {
+    if (it.linkedBookId === bookId) it.linkedBookId = undefined;
+  }
   return s.books.length < before;
+}
+
+// 0014 트리거 mock 등가: books.status 가 SOLD/HIDDEN 으로 바뀐 직후 호출.
+// linked_book_id 로 연결된 FOR_SALE 책장 항목만 OWNED 로 옮긴다.
+function syncShelfOnBookStatusChange(bookId: string) {
+  const s = getStore();
+  const book = s.books.find((b) => b.id === bookId);
+  if (!book) return;
+  if (book.status !== "canceled" && book.status !== "sold") return;
+  for (const it of s.shelf) {
+    if (it.linkedBookId === bookId && it.status === "FOR_SALE") {
+      it.status = "OWNED";
+      it.updatedAt = new Date().toISOString();
+    }
+  }
 }
 
 // 주문 목록/단일 조회
@@ -646,7 +669,11 @@ export function mockCreateOrder(input: {
   };
   s.orders = [order, ...s.orders];
   // 주문이 생성되면 해당 책은 더 이상 판매중이 아님
-  if (book) book.status = "sold";
+  if (book) {
+    book.status = "sold";
+    // 0014 대응 — 책이 sold 로 바뀌면 연결된 FOR_SALE 책장 항목을 OWNED 로
+    syncShelfOnBookStatusChange(book.id);
+  }
   return order;
 }
 
