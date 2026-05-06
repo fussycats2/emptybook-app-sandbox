@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-05-05 (v8.1 — 채팅 unread 뱃지 / 홈 찜 카운트 즉시 반영 픽스)
+> 최종 업데이트: 2026-05-06 (v9 — ISBN 바코드 스캐너 + 내 책장 관리)
 
 ## 프로젝트 개요
 
@@ -14,14 +14,14 @@
 
 ---
 
-## 현재 구현 상태 (2026-05-05 기준)
+## 현재 구현 상태 (2026-05-06 기준)
 
 ### 완료된 것
 
 | 영역 | 내용 |
 |------|------|
-| **라우트 구조** | 20+α 화면 라우트 (`app/` 하위) — 마이페이지 하위에 `/mypage/selling`, `/mypage/likes` 추가 |
-| **공용 UI 컴포넌트** | `components/ui/` 전체 (PhoneFrame, AppHeader, BottomTabNav, BookCard, BookImage, ImageCarousel, BottomSheet, ConfirmDialog, StatusBadge, MannerTemperature, LikeButton, LocationChip, Fab, EmptyState, Skeleton, ToastProvider, Section, ImgPlaceholder). 전 컴포넌트에 한글 주석 추가 완료 |
+| **라우트 구조** | 22+α 화면 라우트 (`app/` 하위) — 마이페이지 하위에 `/mypage/selling`, `/mypage/likes`, `/mypage/shelf`, `/mypage/shelf/add` 추가 |
+| **공용 UI 컴포넌트** | `components/ui/` 전체 (PhoneFrame, AppHeader, BottomTabNav, BookCard, BookImage, ImageCarousel, BottomSheet, ConfirmDialog, StatusBadge, MannerTemperature, LikeButton, LocationChip, Fab, EmptyState, Skeleton, ToastProvider, Section, ImgPlaceholder, **BarcodeScanner**(v9), **BookSpine**(v9)). 전 컴포넌트에 한글 주석 추가 완료 |
 | **MUI 테마** | `lib/theme.ts` 완성 — 색상 토큰, 라운드 스케일, 그림자 토큰 |
 | **Mock 데이터 계층** | `lib/mockData.ts` + `lib/repo.ts` — Supabase 없이도 전 화면 동작. likes/reviews 인메모리 저장 포함 |
 | **DB 스키마** | `0001_init.sql` ~ `0008_anonymize_notification_names.sql`. RLS·Realtime·Storage 포함. ERD 와 트리거 상세는 [`ERD.md`](./ERD.md) |
@@ -80,6 +80,9 @@
 | **활성 채팅방 알림 자동 read (v4)** | `markRoomChatNotificationsRead(roomId)` repo 추가 — `payload->>room_id` 로 그 방의 MESSAGE kind 알림만 일괄 read_at 갱신. `/chat/[id]` 가 `markRoomMessagesRead` 와 병렬 호출. 사용자가 채팅방을 보고 있는 동안엔 알림 목록 빨간점이 다시 켜지지 않음. mock 동등 구현 `mockMarkRoomChatNotificationsRead`. presence 테이블이나 heartbeat 없는 단순 해법 — 추후 디바이스 푸시(FCM) 도입 시 presence 기반 옵션으로 업그레이드 가능 |
 | **전 화면 모던 UI 리프레시 (v8)** | 스플래시(`app/page.tsx`) 제외 24개 페이지 + 11개 공용 컴포넌트 + theme/globals 일괄 다듬음. **토큰**: 라운드 스케일 +2~4px (xs 6 / sm 12 / md 16 / lg 20 / xl 28), 그림자 6단계 재설계 (`card`/`cardHover`/`sticky`/`raised`/`pop`/`ring`), 버튼 minHeight 48 + sizeLarge 56, contained 에 inset highlight + hover glow, input focus 시 4px primaryGlow ring, Chip outlined hover primaryTint 전환, `success`/`accentDark`/`primaryGlow` 토큰 추가. **공용**: `AppHeader`/`BottomTabNav`/`FixedFooter` 글래시(backdrop-blur 8px), 탭바 + 버튼 56px 4px 보더 + dot 인디케이터, `StatusBadge` 색상 dot, `BookCard` hover lift, `MannerTemperature` 그라데이션 막대, `EmptyState` 84px 아이콘 + 라디얼 글로우, `BottomSheet`/`ConfirmDialog` backdrop blur. **페이지**: 홈 이벤트배너 글래시 EVENT 칩 + 다중 데코, 도서상세 sticky 헤더 글래시 전환 + 가격 30px, 결제 결제수단 ring, 채팅 말풍선 18px + 송신 그라데이션, 마이페이지 프로필 그라데이션 보더 + 라디얼 글로우, 알림 unread 좌측 3px accent 줄, 로그인/가입/비번찾기 dot eyebrow + 헤드라인 30px, 후기 평균별점 hero, 등록완료/결제완료 88px scale-in + 라디얼 hero, 약관/개인정보 ARTICLE/SECTION eyebrow + 카드형. globals.css 에 `card-lift`/`fade-in-up`/`scale-in`/`text-gradient` 유틸 + 스크롤바 톤다운. 스플래시는 v7 그대로 유지 |
 | **실시간 반영 지연 픽스 (v8.1)** | 두 군데서 사용자 액션이 5-10초 늦게 반영되던 체감 버그 정리. **(1) 홈 찜 카운트** — `BookFeedItem` 이 `book.likes`(서버 캐시) 만 보고 있어서, 토글 후 `likeKeys.list/ids` 만 invalidate 되고 `book.recent` 캐시는 다음 자연 refetch 까지 멈춰 있었음. 이제 `useLikesStore` 의 `counts[bookId]` 를 우선 구독하고, 첫 노출 시 `book.likes` 로 store 시드(`useEffect`) 해 `useBookLike.onMutate` 의 낙관적 +-1 가 정상 동작 → 클릭 즉시 숫자 변동. **(2) 채팅 unread 뱃지** — `app/chat/[id]/page.tsx` 의 useEffect 가 `markRoomMessagesRead`+`markRoomChatNotificationsRead` 후 invalidate 하는 구조였는데 `cancelled` 가드 때문에 사용자가 빨리 뒤로 가면 invalidate 가 스킵 + Realtime 은 `messages` UPDATE 미구독이라 `read_at` 변경으론 캐시 갱신이 절대 안 일어남. 진입 즉시 `qc.setQueryData(queryKeys.chat.list(), ...)` 로 해당 방 unread 0 직접 패치 + 알림 캐시 / `notificationsStore.setUnreadCount` 도 같이 패치 → 헤더 빨간점/방 카드 뱃지 즉시 사라짐. 백그라운드 read UPDATE 는 `cancelled` 가드 제거해 끝까지 반영 후 invalidate 로 정정 |
+| **ISBN 바코드 스캐너 (v9)** | `/register` 의 도서 검색 섹션 상단에 "📷 바코드로 찾기" 점선 버튼. 클릭 시 풀스크린 카메라 모달(`components/ui/BarcodeScanner.tsx`)로 책 뒷면 EAN-13 바코드 인식. 라이브러리는 `@zxing/browser` + `@zxing/library` — **동적 import** 라 초기 페이지 번들에 미포함. 카메라는 `decodeFromConstraints({ facingMode: { ideal: "environment" } })` 로 뒷면 카메라 우선, 인식 hint 는 EAN_13 / EAN_8 만 등록. 스캔 윈도우(86% × 16:7) + 코너 가이드 + 1.6s 스캔 라인 애니 + 인식 시 `navigator.vibrate(60)` 햅틱. 인식된 텍스트는 `lib/isbn.ts` 의 `normalizeIsbn()` 으로 체크섬 검증 — ISBN-10 은 13 으로 변환, EAN-13 은 도서 prefix(978/979) + mod10 검증. 통과한 ISBN-13 만 onDetected 콜백 발사 → `/register` 의 `handleSearch(override)` 가 즉시 네이버 API 호출 (`/api/books/search` 가 `looksLikeIsbn` 으로 자동 ISBN 모드 분기). 권한 거부(`NotAllowedError`) / 미지원 브라우저 / 카메라 없음 케이스 모두 풀백 — 키보드 아이콘으로 토글되는 "ISBN 직접 입력" 패널이 같은 검증을 재사용. iOS Safari 호환을 위해 `<video>` 에 `playsInline muted autoPlay`. /mypage/shelf/add 도 같은 BarcodeScanner 컴포넌트를 그대로 재사용 |
+| **내 책장 관리 (v9)** | `/mypage/shelf` 신규 — 사용자가 가진 책을 4가지 상태(**READING**/**FINISHED**/**FOR_SALE**/**OWNED**)로 분류해 관리. **DB**: `0012_shelf_items.sql` — `shelf_items(user_id, title, author, publisher, isbn, category, cover_url, status, started_at, finished_at, rating(1-5), memo, linked_book_id)` + `shelf_status` enum + RLS(본인만 R/W) + ISBN partial unique(같은 ISBN 중복 추가 차단, NULL 은 제외) + `(user_id, status, updated_at desc)` 인덱스 + updated_at 자동 트리거. books 와 분리된 개인 컬렉션이라 메타데이터를 denormalize 저장 — books lifecycle(SOLD/HIDDEN) 에 종속되지 않음. **Repo**: `listMyShelf(filter?)` / `getShelfItem` / `addShelfItem` / `updateShelfItem` / `removeShelfItem` (Supabase + mock 폴백). updateShelfItem 은 status → READING/FINISHED 전이 시 시작·완독 일자를 자동 채움. **UI**: 상단 5탭(전체+4상태, 카운트 배지) → "나무 받침대" 톤 책장 행에 `BookSpine` 진열 (카테고리별 색상 띠 + 표지 이미지 폴백 + 별점 뱃지). 책 클릭 → BottomSheet (4분할 상태 segmented + 별점 1-5 + 300자 메모 + 삭제/판매등록 액션). FOR_SALE 항목의 "판매 등록하기" 는 `/register?shelfId=xxx` 로 라우팅 — 등록 폼이 책장 메타데이터로 prefill 되고 등록 성공 시 `linked_book_id` 로 두 행을 연결 (실패해도 등록은 성공으로 진행). **추가 화면**: `/mypage/shelf/add` 는 네이버 검색 + BarcodeScanner 재사용 + 4상태 초기 선택. **카운트 동기화**: `lib/store/shelfStore.ts` (Zustand) total / status별 카운트 — `useMyShelf()` 가 결과 도착 시 hydrate 해 마이페이지 STATS 5번째 카드 / 홈 바로가기 카드가 같은 카운트 즉시 반영. mock 모드에서는 4가지 상태가 한 권씩 시드되어 비로그인 사용자도 책장 UI 를 바로 체험 |
+| **홈 / 마이페이지 책장 진입점 (v9)** | **홈** (`app/home/page.tsx`): 이벤트 배너 바로 아래에 "내 책장" 바로가기 카드 추가 — 미니 책등 데코 3장(sage/terracotta/golden, 한 장은 살짝 기울임) + 라이트 우드 톤 받침대 라인 + "총 N권 · 읽는 중 N · 판매예정 N" 요약 + 화살표 CTA. `useMyShelf()` 호출만 트리거하고 카운트는 `shelfStore` 에서 구독해 다른 곳 토글 시도 즉시 반영. **마이페이지** (`app/mypage/page.tsx`): SECTIONS "내 활동" 첫 항목으로 "내 책장" 추가 (AutoStoriesRoundedIcon, /mypage/shelf 라우팅) + STATS 그리드 5번째 카드 "책장(N권)" 추가. 5번째 카드는 2열 그리드의 row 3 column 1 에 단독 배치 |
 
 ### 미완성 / 연결 안 된 것
 
@@ -130,6 +133,8 @@ app/                              # 화면 라우트
   mypage/reviews/page.tsx         # /mypage/reviews — 받은 후기
   mypage/settings/page.tsx        # /mypage/settings — 프로필/알림/개인정보
   mypage/coupons/page.tsx         # /mypage/coupons — 쿠폰함 (빈 상태)
+  mypage/shelf/page.tsx           # /mypage/shelf — 내 책장 (4상태 분류 + 책등 진열 + 상세 시트)
+  mypage/shelf/add/page.tsx       # /mypage/shelf/add — 책장에 책 추가 (네이버 검색 + 바코드 스캔)
   notifications/page.tsx          # /notifications
   notices/page.tsx                # /notices — 공지사항 목록
   notices/[id]/page.tsx           # /notices/[id] — 공지사항 상세
@@ -138,15 +143,18 @@ app/                              # 화면 라우트
   privacy/page.tsx                # /privacy — 개인정보 처리방침
 
 components/
-  ui/                             # 공용 UI (상단 표 참고)
+  ui/                             # 공용 UI (상단 표 참고) — v9 추가: BarcodeScanner, BookSpine
   search/FilterSheet.tsx          # 검색 필터 BottomSheet
 
 lib/
   theme.ts                        # MUI 테마 + 색상 토큰
-  mockData.ts                     # 더미 데이터 + in-memory store (likes/reviews/messages/profile)
+  mockData.ts                     # 더미 데이터 + in-memory store (likes/reviews/messages/profile/shelf)
   repo.ts                         # 데이터 계층 — Supabase/Mock 자동 분기
   categoryMap.ts                  # 제목/설명 → 8개 카테고리 추정 휴리스틱
   staticContent.ts                # 공지/약관/지원 안내 — 정적 컨텐츠
+  isbn.ts                         # ISBN-10/13 체크섬 검증 + 정규화 (바코드 스캐너용)
+  store/shelfStore.ts             # 책장 카운트 (Zustand) — 홈/마이페이지 STATS 동기화
+  query/shelfHooks.ts             # 책장 React Query 훅 (useMyShelf / useAdd/Update/Remove)
   auth/
     AuthProvider.tsx              # 클라이언트 user/session Context + useAuth() 훅
   realtime/
@@ -174,6 +182,7 @@ supabase/migrations/
   0009_update_with_check.sql               # books/profiles UPDATE 정책에 with check 추가 (양도 차단)
   0010_transactions_fsm.sql                # transactions 상태 머신 (PAID→COMPLETED, buyer 만 / CANCELED 차단)
   0011_book_metadata.sql                   # books 에 synopsis/pub_date/source_url 추가 (네이버 메타데이터 통합)
+  0012_shelf_items.sql                     # shelf_items 테이블 + shelf_status enum + RLS + ISBN partial unique
 ```
 
 ---
@@ -218,6 +227,12 @@ supabase/migrations/
 | `listReceivedReviews(userId?)` | 받은 후기 목록 (`/mypage/reviews`) |
 | `getMyProfile()` / `updateMyProfile(input)` / `updateAppPrefs(prefs)` | 내 프로필 조회/수정 + app_prefs 토글 |
 | `withDefaultPrefs(prefs?)` | app_prefs 누락 키를 DEFAULT_APP_PREFS 로 채워서 반환 |
+| `listMyShelf(filter?)` | 내 책장 항목 — filter(`READING`/`FINISHED`/`FOR_SALE`/`OWNED`) 가 있으면 해당 status 만 |
+| `getShelfItem(id)` | 책장 항목 단건 — `/register?shelfId=xxx` prefill 에 사용 |
+| `addShelfItem(input)` | 책장에 추가. 같은 ISBN 이 이미 있으면 기존 행 반환(`duplicate: true`) — DB UNIQUE 충돌 사전 차단 |
+| `updateShelfItem(id, patch)` | 상태/별점/메모/시작·완독 일자/linkedBookId 부분 수정. status → READING/FINISHED 전이 시 일자 자동 채움 |
+| `removeShelfItem(id)` | 책장에서 영구 삭제 |
+| `normalizeIsbn(raw)` *(`lib/isbn.ts`)* | ISBN-10/13 체크섬 검증 + ISBN-10 → 13 변환. 도서 prefix(978/979) 강제. 유효하지 않으면 null |
 | `meta.{CATEGORIES, …}` | 정적 메타데이터 |
 
 ---
@@ -236,6 +251,7 @@ supabase/migrations/
 | `chat_rooms` | `book_id`, `buyer_id`, `seller_id`, `last_message_at` |
 | `messages` | `room_id`, `sender_id`, `body`, `type`, `read_at` |
 | `notifications` | `user_id`, `kind`, `payload(jsonb)`, `read_at` |
+| `shelf_items` | `user_id`, `title`/`author`/`publisher`/`isbn`/`category`/`cover_url`(denormalized), `status(READING/FINISHED/FOR_SALE/OWNED)`, `started_at`, `finished_at`, `rating(1-5)`, `memo`, `linked_book_id` |
 
 Realtime 구독: `messages`, `chat_rooms`, `notifications`  
 Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
@@ -249,14 +265,14 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 > OAuth 는 v5 에서 구글·네이버 운영 가동 완료. 카카오는 비즈니스앱 전환이 필요해 결제 PG 와 함께 영구 보류.
 > 결제 PG 는 사이드 프로젝트 단계에서는 구현하지 않기로 결정 (PG 사업자 등록·심사 비현실적).
 > v6 메타데이터 마이그레이션(0011)은 운영 적용 완료 — synopsis/pub_date/source_url 정상 동작.
+> v9 (2026-05-06): ISBN 바코드 스캐너 + 내 책장 관리 — 둘 다 구현 완료. 0012_shelf_items.sql 적용 필요.
 
-#### 신규 기능 로드맵 (v9 후보)
+#### 신규 기능 로드맵 (v10 후보)
 
-1. **ISBN 바코드 스캐너** — 도서 등록 폼(`/register`)에서 카메라로 책 뒷면 바코드를 찍으면 ISBN 자동 인식 → 기존 네이버 검색 API 에 `query=ISBN` 으로 그대로 던져 결과 카드 자동 채움. 후보 라이브러리: `@zxing/browser`(웹 표준, 의존성 가벼움) 또는 ML Kit. 모바일 사파리 / 안드로이드 크롬에서 `getUserMedia` 권한 요청 + iOS PWA 추가 후 카메라 권한 fallback UX 필요. 등록 폼 상단에 "📷 바코드로 찾기" 버튼 → 풀스크린 BottomSheet 카메라 미리보기 + 스캔 라인 + 인식 시 햅틱 → ISBN 검증(체크섬) 후 기존 검색 결과 자동 채움 흐름. 권한 거부 / 인식 실패 시 수동 입력으로 폴백
-2. **내 책장 관리** — `/mypage/shelf` 신규 화면. 사용자가 가진 책을 4가지 상태로 분류해 관리: **읽는 중 / 완독 / 판매예정 / 소장**. 실제 책장 같은 비주얼 — 가로 슬롯에 책등(스파인) 으로 책을 진열하고 탭하면 책 정보 카드 펼침. 상태 전환은 BottomSheet 액션(예: "판매예정 → 등록하기" 가 `/register` 로 이동하며 책 정보 prefill). 새 테이블 `shelf_items(user_id, book_id, status, started_at, finished_at, rating, memo)` 추가 + RLS(본인만). ISBN 또는 네이버 검색으로 책장에 추가, "판매예정" 상태에서 "등록하기" 누르면 기존 createBook 흐름 재사용. 부수 효과: 마이페이지 STATS 5번째 카드 "책장(N권)" 추가 가능. 디자인: 나무결 배경 + sage 톤 책등, 카테고리별 색상 띠
-3. **도서 상태 등급 상세 템플릿** — 현재 등록 폼은 최상/상/중/하 4단계만 받지만, 판매자/구매자 분쟁의 핵심이 "상태 표기 모호함". 등록 폼의 상태 선택 옆에 "상세 체크" 버튼 → BottomSheet 안에 체크리스트 템플릿: **표지(접힘/긁힘/변색), 책등(꺾임/탈색), 모서리(닳음), 본문(낙서/형광펜/얼룩/페이지누락), 부속(띠지/엽서/CD)**. 항목 체크 결과로 등급을 자동 추천(예: 본문 낙서 있으면 최대 "중") + `books.condition_detail` jsonb 컬럼 신설해 상세 항목 저장 → 도서 상세에서 "상태 상세 보기" 토글로 노출. 0012 마이그레이션 + 상태 추정 로직(`lib/conditionGrade.ts`) + 도서 상세 신규 섹션. 분쟁 발생 시 객관적 근거가 됨
-4. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
-5. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
+1. **도서 상태 등급 상세 템플릿** — 현재 등록 폼은 최상/상/중/하 4단계만 받지만, 판매자/구매자 분쟁의 핵심이 "상태 표기 모호함". 등록 폼의 상태 선택 옆에 "상세 체크" 버튼 → BottomSheet 안에 체크리스트 템플릿: **표지(접힘/긁힘/변색), 책등(꺾임/탈색), 모서리(닳음), 본문(낙서/형광펜/얼룩/페이지누락), 부속(띠지/엽서/CD)**. 항목 체크 결과로 등급을 자동 추천(예: 본문 낙서 있으면 최대 "중") + `books.condition_detail` jsonb 컬럼 신설해 상세 항목 저장 → 도서 상세에서 "상태 상세 보기" 토글로 노출. 0013 마이그레이션 + 상태 추정 로직(`lib/conditionGrade.ts`) + 도서 상세 신규 섹션. 분쟁 발생 시 객관적 근거가 됨
+2. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
+3. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
+4. **책장 ↔ 매물 양방향 동기화** — v9 에서 `shelf_items.linked_book_id` 만 채우는 단방향이라, 연결된 매물이 SOLD/HIDDEN 으로 바뀌어도 책장 status 는 그대로. 트리거(`books` UPDATE → `shelf_items` 자동 OWNED 전이) 또는 클라이언트 동기화 한 줄. 책장 상세 시트에서 linkedBookId 가 있으면 "이미 판매 등록됨" 배지 + 매물로 점프하는 링크도 함께 추가
 
 #### 영구 보류 (사이드 프로젝트 범위 밖)
 
@@ -268,6 +284,8 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 - **홈 LocationChip 동네 변경** — 현재 토스트만. 사용자 활성 지역 목록(`profiles.region` 또는 별도 `user_regions` 테이블) 연동 시 BottomSheet 로 선택 UI 가능
 - **/orders/[id] 운송장 단계** — `STEPS` 더미 배열 기반. 외부 배송사 API(우체국/CJ) 연동 전까지는 PAID 시점에 정해진 단계만 노출
 - **signup → 이메일 인증 정책** — Supabase Auth "Confirm email" ON/OFF 결정 + 그에 따른 `/signup` 이후 분기(자동 로그인 vs 메일 안내) 정합성 한 번 더 점검
+- **마이페이지 STATS 5번째 카드 레이아웃** — v9 에서 책장 카드를 추가해 2열 그리드의 row 3 column 1 에 단독 배치됨. row 3 col 2 가 비어 있어서 약간 어색 — 5번째 카드를 full-width 로 spanning 하거나 6번째(예: "받은 후기" 평균 별점) 를 채워서 정리 가능
+- **책장 status 전이 자동화** — `useUpdateShelfItem` 의 `onSuccess` 가 `shelf.lists` invalidate 하지만, status 변경은 BottomSheet 가 닫힐 때 한 번에 보내야 메모/별점 draft 가 안 날아감. 현재는 changeStatus 가 persistDraft 후 status patch 를 따로 보내는 2-step — 한 번에 묶으면 네트워크 1회 절감 가능 (작은 최적화)
 
 ---
 

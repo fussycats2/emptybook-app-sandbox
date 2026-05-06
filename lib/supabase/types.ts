@@ -125,3 +125,74 @@ export const TX_LABEL: Record<TxStatus, string> = {
   COMPLETED: "거래완료",
   CANCELED: "취소",
 };
+
+// 0012_shelf_items.sql — 사용자 개인 책장
+// READING(읽는 중) / FINISHED(완독) / FOR_SALE(판매예정) / OWNED(소장)
+export type ShelfStatus = "READING" | "FINISHED" | "FOR_SALE" | "OWNED";
+
+export const SHELF_STATUS_LABEL: Record<ShelfStatus, string> = {
+  READING: "읽는 중",
+  FINISHED: "완독",
+  FOR_SALE: "판매예정",
+  OWNED: "소장",
+};
+
+// shelf_items 테이블 한 행. books 와 분리된 개인 컬렉션이라
+// 메타데이터(title/author/...)는 denormalize 해서 저장한다.
+export interface ShelfItemRow {
+  id: string;
+  user_id: string;
+  title: string;
+  author: string | null;
+  publisher: string | null;
+  isbn: string | null;
+  category: string | null;
+  cover_url: string | null;
+  status: ShelfStatus;
+  started_at: string | null; // YYYY-MM-DD
+  finished_at: string | null; // YYYY-MM-DD
+  rating: number | null; // 1-5 개인 별점
+  memo: string | null;
+  linked_book_id: string | null; // 판매 등록한 books.id (있을 수도 없을 수도)
+  created_at: string;
+  updated_at: string;
+}
+
+// 화면에서 쓸 정규화된 형태 (camelCase + 비어 있는 값은 undefined)
+export interface ShelfItem {
+  id: string;
+  title: string;
+  author?: string;
+  publisher?: string;
+  isbn?: string;
+  category?: string;
+  coverUrl?: string;
+  status: ShelfStatus;
+  startedAt?: string;
+  finishedAt?: string;
+  rating?: number;
+  memo?: string;
+  linkedBookId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function shelfRowToItem(r: ShelfItemRow): ShelfItem {
+  return {
+    id: r.id,
+    title: r.title,
+    author: r.author ?? undefined,
+    publisher: r.publisher ?? undefined,
+    isbn: r.isbn ?? undefined,
+    category: r.category ?? undefined,
+    coverUrl: r.cover_url ?? undefined,
+    status: r.status,
+    startedAt: r.started_at ?? undefined,
+    finishedAt: r.finished_at ?? undefined,
+    rating: r.rating ?? undefined,
+    memo: r.memo ?? undefined,
+    linkedBookId: r.linked_book_id ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}

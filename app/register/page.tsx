@@ -21,8 +21,8 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import QrCodeScannerRoundedIcon from "@mui/icons-material/QrCodeScannerRounded";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
@@ -32,6 +32,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { meta, uploadBookImages } from "@/lib/repo";
 import { useCreateBook } from "@/lib/query/bookHooks";
 import { useNaverBookSearch } from "@/lib/query/naverBookHooks";
+import { useShelfItem, useUpdateShelfItem } from "@/lib/query/shelfHooks";
 import { inferCategory } from "@/lib/categoryMap";
 import type { BookSearchItem } from "@/app/api/books/search/route";
 
@@ -51,9 +52,26 @@ const TRADE = [
   { key: "BOTH", label: "둘 다" },
 ];
 
+// 페이지 export — Suspense 경계로 useSearchParams 의 CSR bailout 요구사항 충족
+// (Next.js 14 의 prerender 단계에서 hooks 가 평가될 때 Suspense 가 없으면 빌드 에러)
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterPageInner />
+    </Suspense>
+  );
+}
+
+function RegisterPageInner() {
   const router = useRouter();
   const toast = useToast();
+  // /mypage/shelf 에서 "판매 등록하기" 누르면 ?shelfId=xxx 로 prefill
+  const searchParams = useSearchParams();
+  const shelfId = searchParams?.get("shelfId") ?? undefined;
+  const { data: shelfItem } = useShelfItem(shelfId);
+  const updateShelfMut = useUpdateShelfItem();
+  // 책장→등록 prefill 을 한 번만 적용하기 위한 가드
+  const prefilledRef = useRef(false);
   // 선택한 실제 파일들 + blob 미리보기 URL 한 쌍씩 보관
   // 파일 추가/삭제 시 createObjectURL/revokeObjectURL 으로 라이프사이클 관리
   const [photos, setPhotos] = useState<
@@ -91,6 +109,26 @@ export default function RegisterPage() {
     // photos 가 바뀔 때마다 정리하지 않음 — 각 항목 제거 시점에 개별 revoke 처리
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 책장 항목으로부터 prefill — shelfId 가 있고 책장 데이터가 도착하면 폼 채움
+  // selected 에 BookSearchItem 형태로 박아 매칭 카드 UI 가 그대로 노출되도록
+  useEffect(() => {
+    if (!shelfItem || prefilledRef.current) return;
+    prefilledRef.current = true;
+    setTitle(shelfItem.title);
+    setSelected({
+      title: shelfItem.title,
+      author: shelfItem.author ?? "",
+      publisher: shelfItem.publisher ?? "",
+      isbn: shelfItem.isbn ?? "",
+      image: shelfItem.coverUrl ?? "",
+      price: 0,
+      description: "",
+      pubdate: "",
+      link: "",
+    });
+    if (shelfItem.category) setCategory(shelfItem.category);
+  }, [shelfItem]);
 
   // 파일 선택 — 한도/타입/크기 검증 후 photos 에 누적
   const handleFilesPicked = (fileList: FileList | null) => {
@@ -225,6 +263,17 @@ export default function RegisterPage() {
         // mock 모드(ok=false, urls=[]) 면 조용히 통과 — 등록 자체는 성공
         if (result.ok && result.urls.length < photos.length) {
           toast?.show("일부 사진은 업로드되지 않았어요", "warning");
+        }
+      }
+      // 책장에서 진입한 경우 — 새 books 행과 shelf 항목을 연결 (실패해도 등록은 성공으로 진행)
+      if (shelfId) {
+        try {
+          await updateShelfMut.mutateAsync({
+            id: shelfId,
+            patch: { linkedBookId: id },
+          });
+        } catch {
+          /* noop — 연결 실패는 등록 성공을 막지 않음 */
         }
       }
       toast?.show("등록되었어요!");

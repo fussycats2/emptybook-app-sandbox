@@ -43,4 +43,11 @@ export const queryKeys = {
     all: ["naverBooks"] as const,
     search: (q: string) => [...queryKeys.naverBooks.all, q] as const,
   },
+  shelf: {
+    all: ["shelf"] as const,
+    lists: () => [...queryKeys.shelf.all, "list"] as const,
+    list: (filter?: string) =>
+      [...queryKeys.shelf.lists(), filter ?? "all"] as const,
+    detail: (id: string) => [...queryKeys.shelf.all, "detail", id] as const,
+  },
 };

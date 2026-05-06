@@ -17,6 +17,7 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 import LocalFireDepartmentRoundedIcon from "@mui/icons-material/LocalFireDepartmentRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
+import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import { useRouter } from "next/navigation";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import LocationChip from "@/components/ui/LocationChip";
@@ -30,6 +31,9 @@ import { palette, radius, shadow } from "@/lib/theme";
 import { meta } from "@/lib/repo";
 import { useRecentBooks } from "@/lib/query/bookHooks";
 import { useNotificationsStore } from "@/lib/store/notificationsStore";
+import { useMyShelf } from "@/lib/query/shelfHooks";
+import { useShelfStore } from "@/lib/store/shelfStore";
+import { SHELF_STATUS_LABEL } from "@/lib/supabase/types";
 
 const { CATEGORIES, POPULAR_SELLERS } = meta;
 import MannerTemperature from "@/components/ui/MannerTemperature";
@@ -41,6 +45,11 @@ export default function HomePage() {
   const { data: books, isLoading } = useRecentBooks(10);
   // 알림 unread 개수 — 0 이면 헤더의 빨간점을 숨긴다
   const unreadCount = useNotificationsStore((s) => s.unreadCount);
+  // 책장 카운트 — 홈 바로가기 카드에 권수/상태별 요약 노출
+  // useMyShelf 가 결과를 받아 shelfStore 에 카운트를 동기화하므로 여기서 직접 데이터는 안 씀
+  useMyShelf();
+  const shelfTotal = useShelfStore((s) => s.total);
+  const shelfByStatus = useShelfStore((s) => s.byStatus);
 
   return (
     <>
@@ -203,6 +212,139 @@ export default function HomePage() {
               참여하기
               <ArrowForwardRoundedIcon sx={{ fontSize: 14 }} />
             </Stack>
+          </Box>
+        </Box>
+
+        {/* 내 책장 바로가기 — 이벤트 배너 바로 아래, 카테고리 위에 배치 */}
+        <Box
+          onClick={() => router.push("/mypage/shelf")}
+          className="card-lift"
+          sx={{
+            mx: 2,
+            mt: 2,
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            background: `linear-gradient(135deg, ${palette.surface} 0%, ${palette.surfaceAlt} 100%)`,
+            border: `1px solid ${palette.lineSoft}`,
+            borderRadius: `${radius.lg}px`,
+            p: 1.75,
+            cursor: "pointer",
+            position: "relative",
+            overflow: "hidden",
+            boxShadow: shadow.card,
+            "&:hover": {
+              borderColor: palette.line,
+              boxShadow: shadow.cardHover,
+            },
+          }}
+        >
+          {/* 미니 책등 데코 — 3장이 살짝 겹친 모양 */}
+          <Box
+            sx={{
+              flexShrink: 0,
+              position: "relative",
+              width: 64,
+              height: 56,
+              display: "flex",
+              alignItems: "flex-end",
+            }}
+          >
+            <Box
+              sx={{
+                position: "absolute",
+                left: 4,
+                bottom: 0,
+                width: 16,
+                height: 50,
+                borderRadius: 1,
+                background: `linear-gradient(180deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
+                transform: "rotate(-4deg)",
+                transformOrigin: "bottom",
+                boxShadow: shadow.card,
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                left: 22,
+                bottom: 0,
+                width: 18,
+                height: 56,
+                borderRadius: 1,
+                background: `linear-gradient(180deg, ${palette.accent} 0%, ${palette.accentDark} 100%)`,
+                boxShadow: shadow.card,
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                left: 42,
+                bottom: 0,
+                width: 16,
+                height: 48,
+                borderRadius: 1,
+                background: `linear-gradient(180deg, ${palette.warn} 0%, #9B6B1F 100%)`,
+                transform: "rotate(3deg)",
+                transformOrigin: "bottom",
+                boxShadow: shadow.card,
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: -2,
+                height: 4,
+                borderRadius: 999,
+                background: "linear-gradient(180deg, #B59B6E 0%, #8C7350 100%)",
+                opacity: 0.85,
+              }}
+            />
+          </Box>
+
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Stack direction="row" alignItems="center" gap={0.5}>
+              <AutoStoriesRoundedIcon sx={{ fontSize: 16, color: palette.primary }} />
+              <Typography
+                sx={{
+                  fontSize: 14,
+                  fontWeight: 800,
+                  letterSpacing: "-0.025em",
+                }}
+              >
+                내 책장
+              </Typography>
+            </Stack>
+            <Typography
+              sx={{
+                fontSize: 11.5,
+                color: palette.inkSubtle,
+                mt: 0.25,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {shelfTotal === 0
+                ? "읽고 있는 책, 정리할 책을 한 곳에 모아보세요."
+                : `총 ${shelfTotal}권 · 읽는 중 ${shelfByStatus.READING} · ${SHELF_STATUS_LABEL.FOR_SALE} ${shelfByStatus.FOR_SALE}`}
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              flexShrink: 0,
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              background: palette.primaryTint,
+              color: palette.primary,
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            <ArrowForwardRoundedIcon sx={{ fontSize: 18 }} />
           </Box>
         </Box>
 

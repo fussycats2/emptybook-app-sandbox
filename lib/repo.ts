@@ -8,6 +8,7 @@ import {
   POPULAR_SEARCHES,
   POPULAR_SELLERS,
   RECENT_SEARCHES,
+  mockAddShelfItem,
   mockCancelBook,
   mockCreateBook,
   mockCreateOrder,
@@ -18,11 +19,13 @@ import {
   mockGetOrder,
   mockGetReviewByTx,
   mockGetReviewContext,
+  mockGetShelfItem,
   mockIsLiked,
   mockListBooks,
   mockListChats,
   mockListLikedIds,
   mockListNotifications,
+  mockListShelf,
   mockMarkAllNotificationsRead,
   mockMarkNotificationRead,
   mockMarkRoomChatNotificationsRead,
@@ -32,12 +35,14 @@ import {
   mockListMessages,
   mockListReceivedReviews,
   mockMarkRoomRead,
+  mockRemoveShelfItem,
   mockSendMessage,
   mockToggleLike,
   mockUnreadByRoom,
   mockUpdateAppPrefs,
   mockUpdateOrderStatus,
   mockUpdateProfile,
+  mockUpdateShelfItem,
   type MockBook,
   type MockChat,
   type MockMessage,
@@ -50,11 +55,15 @@ import type { BookSummary } from "@/components/ui/BookCard";
 import {
   DEFAULT_APP_PREFS,
   STATE_LABEL,
+  shelfRowToItem,
   type AppPrefs,
   type BookRow,
   type BookState,
   type BookStatus,
   type Profile,
+  type ShelfItem,
+  type ShelfItemRow,
+  type ShelfStatus,
 } from "./supabase/types";
 import type { SaleStatus } from "@/components/ui/StatusBadge";
 
@@ -1470,4 +1479,192 @@ export async function toggleLike(
   const nextCount = (book as { like_count?: number } | null)?.like_count ?? 0;
 
   return { liked: !wasLiked, likeCount: nextCount };
+}
+
+// ---------- Shelf (개인 책장 — 0012) ----------
+
+// 책장 항목 조회. filter 가 있으면 해당 status 만 (READING/FINISHED/FOR_SALE/OWNED)
+// 비로그인 / Supabase 미설정 → mock 저장소 폴백
+export async function listMyShelf(
+  filter?: ShelfStatus
+): Promise<ShelfItem[]> {
+  const supabase = await tryClient();
+  if (!supabase) return mockListShelf(filter);
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return mockListShelf(filter);
+  let q = supabase.from("shelf_items").select("*").eq("user_id", uid);
+  if (filter) q = q.eq("status", filter);
+  const { data, error } = await q.order("updated_at", { ascending: false });
+  if (error || !data) return [];
+  return (data as ShelfItemRow[]).map(shelfRowToItem);
+}
+
+export async function getShelfItem(id: string): Promise<ShelfItem | null> {
+  const supabase = await tryClient();
+  if (!supabase) return mockGetShelfItem(id) ?? null;
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return mockGetShelfItem(id) ?? null;
+  const { data } = await supabase
+    .from("shelf_items")
+    .select("*")
+    .eq("id", id)
+    .eq("user_id", uid)
+    .maybeSingle();
+  if (!data) return null;
+  return shelfRowToItem(data as ShelfItemRow);
+}
+
+// 책장에 추가. ISBN 이 같으면 기존 행을 반환 (DB UNIQUE 도 동일 동작)
+// status 기본값은 OWNED — 이전에 안 읽은 소장 책으로 분류
+export async function addShelfItem(input: {
+  title: string;
+  author?: string;
+  publisher?: string;
+  isbn?: string;
+  category?: string;
+  coverUrl?: string;
+  status?: ShelfStatus;
+  rating?: number;
+  memo?: string;
+}): Promise<{ ok: boolean; item?: ShelfItem; duplicate?: boolean }> {
+  const supabase = await tryClient();
+  if (!supabase) {
+    const item = mockAddShelfItem(input);
+    return { ok: true, item };
+  }
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) {
+    const item = mockAddShelfItem(input);
+    return { ok: true, item };
+  }
+  // 이미 같은 ISBN 의 책장 항목이 있는지 확인 — UNIQUE 위반 전에 사전 차단
+  if (input.isbn) {
+    const { data: existing } = await supabase
+      .from("shelf_items")
+      .select("*")
+      .eq("user_id", uid)
+      .eq("isbn", input.isbn)
+      .maybeSingle();
+    if (existing) {
+      return {
+        ok: true,
+        item: shelfRowToItem(existing as ShelfItemRow),
+        duplicate: true,
+      };
+    }
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const status = input.status ?? "OWNED";
+  const { data, error } = await supabase
+    .from("shelf_items")
+    .insert({
+      user_id: uid,
+      title: input.title,
+      author: input.author ?? null,
+      publisher: input.publisher ?? null,
+      isbn: input.isbn ?? null,
+      category: input.category ?? null,
+      cover_url: input.coverUrl ?? null,
+      status,
+      started_at: status === "READING" ? today : null,
+      finished_at: status === "FINISHED" ? today : null,
+      rating: input.rating ?? null,
+      memo: input.memo ?? null,
+    })
+    .select("*")
+    .single();
+  if (error || !data) return { ok: false };
+  return { ok: true, item: shelfRowToItem(data as ShelfItemRow) };
+}
+
+// 책장 항목 부분 수정 — 상태 / 메모 / 별점 / 시작·완독 일자 / 판매연결
+// 상태가 READING/FINISHED 로 바뀌면 시작/완독 일자를 자동 채움 (이미 있으면 유지)
+export async function updateShelfItem(
+  id: string,
+  patch: {
+    status?: ShelfStatus;
+    startedAt?: string | null;
+    finishedAt?: string | null;
+    rating?: number | null;
+    memo?: string | null;
+    linkedBookId?: string | null;
+  }
+): Promise<ShelfItem | null> {
+  const supabase = await tryClient();
+  if (!supabase) {
+    return (
+      mockUpdateShelfItem(id, {
+        status: patch.status,
+        startedAt: patch.startedAt ?? undefined,
+        finishedAt: patch.finishedAt ?? undefined,
+        rating: patch.rating ?? undefined,
+        memo: patch.memo ?? undefined,
+        linkedBookId: patch.linkedBookId ?? undefined,
+      }) ?? null
+    );
+  }
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) {
+    return (
+      mockUpdateShelfItem(id, {
+        status: patch.status,
+        startedAt: patch.startedAt ?? undefined,
+        finishedAt: patch.finishedAt ?? undefined,
+        rating: patch.rating ?? undefined,
+        memo: patch.memo ?? undefined,
+        linkedBookId: patch.linkedBookId ?? undefined,
+      }) ?? null
+    );
+  }
+  // 현재 행을 먼저 읽어 상태 자동 일자 채움 — 클라가 해야 트리거 없이도 일관 처리
+  const { data: current } = await supabase
+    .from("shelf_items")
+    .select("started_at, finished_at")
+    .eq("id", id)
+    .eq("user_id", uid)
+    .maybeSingle();
+  const today = new Date().toISOString().slice(0, 10);
+  const next: Record<string, unknown> = {};
+  if (patch.status !== undefined) next.status = patch.status;
+  if (patch.rating !== undefined) next.rating = patch.rating;
+  if (patch.memo !== undefined) next.memo = patch.memo;
+  if (patch.linkedBookId !== undefined) next.linked_book_id = patch.linkedBookId;
+  if (patch.startedAt !== undefined) next.started_at = patch.startedAt;
+  if (patch.finishedAt !== undefined) next.finished_at = patch.finishedAt;
+  // 상태 전환에 따른 일자 자동 채움 (사용자가 명시 안 했을 때만)
+  if (patch.status === "READING" && patch.startedAt === undefined) {
+    const cur = current as { started_at: string | null } | null;
+    if (!cur?.started_at) next.started_at = today;
+  }
+  if (patch.status === "FINISHED" && patch.finishedAt === undefined) {
+    const cur = current as { finished_at: string | null } | null;
+    if (!cur?.finished_at) next.finished_at = today;
+  }
+  const { data, error } = await supabase
+    .from("shelf_items")
+    .update(next)
+    .eq("id", id)
+    .eq("user_id", uid)
+    .select("*")
+    .single();
+  if (error || !data) return null;
+  return shelfRowToItem(data as ShelfItemRow);
+}
+
+export async function removeShelfItem(id: string): Promise<boolean> {
+  const supabase = await tryClient();
+  if (!supabase) return mockRemoveShelfItem(id);
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return mockRemoveShelfItem(id);
+  const { error } = await supabase
+    .from("shelf_items")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", uid);
+  return !error;
 }

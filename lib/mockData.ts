@@ -8,6 +8,8 @@ import {
   DEFAULT_APP_PREFS,
   type AppPrefs,
   type Profile,
+  type ShelfItem,
+  type ShelfStatus,
 } from "./supabase/types";
 
 // BookCard 가 요구하는 필드(BookSummary)에 상세화면용 추가 필드를 합친 확장 타입
@@ -404,6 +406,66 @@ const SEED_REVIEWS: MockReview[] = [
   },
 ];
 
+// /mypage/shelf — 비로그인/mock 모드에서 미리 보여줄 책장 시드
+// 4가지 상태가 모두 한 번씩 노출되도록 다양하게 구성
+const SEED_SHELF: ShelfItem[] = [
+  {
+    id: "sh-1",
+    title: "달러구트 꿈 백화점",
+    author: "이미예",
+    publisher: "팩토리나인",
+    isbn: "9791165341909",
+    category: "소설",
+    coverUrl: undefined,
+    status: "READING",
+    startedAt: "2026-04-20",
+    rating: undefined,
+    memo: "출퇴근 길에 조금씩 읽는 중",
+    createdAt: "2026-04-20T08:00:00.000Z",
+    updatedAt: "2026-05-01T09:00:00.000Z",
+  },
+  {
+    id: "sh-2",
+    title: "아몬드",
+    author: "손원평",
+    publisher: "창비",
+    isbn: "9788936434267",
+    category: "소설",
+    coverUrl: undefined,
+    status: "FINISHED",
+    finishedAt: "2026-03-12",
+    rating: 5,
+    memo: "오랫동안 마음에 남는 책. 완독.",
+    createdAt: "2026-02-01T08:00:00.000Z",
+    updatedAt: "2026-03-12T12:00:00.000Z",
+  },
+  {
+    id: "sh-3",
+    title: "데미안",
+    author: "헤르만 헤세",
+    publisher: "민음사",
+    category: "소설",
+    coverUrl: undefined,
+    status: "OWNED",
+    rating: 4,
+    createdAt: "2025-12-10T08:00:00.000Z",
+    updatedAt: "2025-12-10T08:00:00.000Z",
+  },
+  {
+    id: "sh-4",
+    title: "코스모스",
+    author: "칼 세이건",
+    publisher: "사이언스북스",
+    category: "과학",
+    coverUrl: undefined,
+    status: "FOR_SALE",
+    rating: 5,
+    memo: "두 번 정독 후 정리하려고 해요.",
+    createdAt: "2026-01-04T08:00:00.000Z",
+    updatedAt: "2026-04-30T10:00:00.000Z",
+  },
+];
+
 // 비로그인/mock 모드의 "내 프로필" 기본값 — /mypage/settings 편집 시뮬레이션용
 const SEED_PROFILE: Profile = {
   id: "mock-me",
@@ -430,6 +492,7 @@ type Store = {
   reviews: MockReview[]; // 후기 — transactionId 별 1개 제약
   profile: Profile; // 내 프로필(비로그인/mock 모드용)
   messages: MockMessage[]; // 채팅방 메시지 — roomId 로 필터해서 사용
+  shelf: ShelfItem[]; // 0012 — 사용자 개인 책장
 };
 
 // 처음 호출되면 SEED 데이터를 globalThis 에 박아두고, 이후엔 그걸 재사용한다
@@ -446,6 +509,7 @@ function getStore(): Store {
       reviews: [...SEED_REVIEWS],
       profile: { ...SEED_PROFILE, app_prefs: { ...DEFAULT_APP_PREFS } },
       messages: [...SEED_MESSAGES],
+      shelf: [...SEED_SHELF],
     } satisfies Store;
   }
   return g[STORE_KEY] as Store;
@@ -849,6 +913,104 @@ export function mockMarkRoomChatNotificationsRead(roomId: string): number {
     return noti;
   });
   return n;
+}
+
+// ---------- Shelf (개인 책장 — 0012) ----------
+
+export function mockListShelf(filter?: ShelfStatus): ShelfItem[] {
+  const s = getStore();
+  const list = filter ? s.shelf.filter((it) => it.status === filter) : s.shelf;
+  // 최신 갱신 순 — UI 가 따로 정렬할 필요 없게 여기서 정리
+  return [...list].sort((a, b) =>
+    a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0
+  );
+}
+
+export function mockAddShelfItem(input: {
+  title: string;
+  author?: string;
+  publisher?: string;
+  isbn?: string;
+  category?: string;
+  coverUrl?: string;
+  status?: ShelfStatus;
+  rating?: number;
+  memo?: string;
+}): ShelfItem {
+  const s = getStore();
+  // 같은 ISBN 의 책이 이미 있으면 새로 만들지 않고 기존 행을 반환 — DB UNIQUE 와 동일 동작
+  if (input.isbn) {
+    const existing = s.shelf.find((it) => it.isbn === input.isbn);
+    if (existing) return existing;
+  }
+  const now = new Date().toISOString();
+  const item: ShelfItem = {
+    id: `sh-${Date.now()}`,
+    title: input.title,
+    author: input.author,
+    publisher: input.publisher,
+    isbn: input.isbn,
+    category: input.category,
+    coverUrl: input.coverUrl,
+    status: input.status ?? "OWNED",
+    rating: input.rating,
+    memo: input.memo,
+    startedAt: input.status === "READING" ? now.slice(0, 10) : undefined,
+    finishedAt: input.status === "FINISHED" ? now.slice(0, 10) : undefined,
+    createdAt: now,
+    updatedAt: now,
+  };
+  s.shelf = [item, ...s.shelf];
+  return item;
+}
+
+export function mockUpdateShelfItem(
+  id: string,
+  patch: Partial<
+    Pick<
+      ShelfItem,
+      | "status"
+      | "startedAt"
+      | "finishedAt"
+      | "rating"
+      | "memo"
+      | "linkedBookId"
+    >
+  >
+): ShelfItem | undefined {
+  const s = getStore();
+  const idx = s.shelf.findIndex((it) => it.id === id);
+  if (idx === -1) return undefined;
+  const cur = s.shelf[idx];
+  const next: ShelfItem = {
+    ...cur,
+    ...patch,
+    // 상태 전환 시 자동 날짜 — 사용자가 직접 patch 한 값이 우선
+    startedAt:
+      patch.startedAt ??
+      (patch.status === "READING" && !cur.startedAt
+        ? new Date().toISOString().slice(0, 10)
+        : cur.startedAt),
+    finishedAt:
+      patch.finishedAt ??
+      (patch.status === "FINISHED" && !cur.finishedAt
+        ? new Date().toISOString().slice(0, 10)
+        : cur.finishedAt),
+    updatedAt: new Date().toISOString(),
+  };
+  s.shelf[idx] = next;
+  return next;
+}
+
+export function mockRemoveShelfItem(id: string): boolean {
+  const s = getStore();
+  const before = s.shelf.length;
+  s.shelf = s.shelf.filter((it) => it.id !== id);
+  return s.shelf.length < before;
+}
+
+export function mockGetShelfItem(id: string): ShelfItem | undefined {
+  return getStore().shelf.find((it) => it.id === id);
 }
 
 // 정적 메타데이터 (자주 바뀌지 않는 표시용 데이터)

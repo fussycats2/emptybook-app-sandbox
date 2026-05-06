@@ -15,6 +15,7 @@ import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import LocalActivityRoundedIcon from "@mui/icons-material/LocalActivityRounded";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
+import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/components/ui/AppHeader";
 import BottomTabNav from "@/components/ui/BottomTabNav";
@@ -27,8 +28,10 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { useMyBooks } from "@/lib/query/bookHooks";
 import { useOrders } from "@/lib/query/orderHooks";
 import { useMyProfile } from "@/lib/query/profileHooks";
+import { useMyShelf } from "@/lib/query/shelfHooks";
 import { useLikesStore } from "@/lib/store/likesStore";
 import { useRecentlyViewedStore } from "@/lib/store/recentlyViewedStore";
+import { useShelfStore } from "@/lib/store/shelfStore";
 
 // 메뉴 항목 정의 — href 가 있으면 라우팅, comingSoon 이면 "준비중" 칩 + 토스트로 안내
 type MenuItem = {
@@ -50,6 +53,7 @@ const SECTIONS: { title: string; items: MenuItem[] }[] = [
   {
     title: "내 활동",
     items: [
+      { label: "내 책장", href: "/mypage/shelf", icon: <AutoStoriesRoundedIcon /> },
       { label: "찜한 상품", href: "/mypage/likes", icon: <FavoriteRoundedIcon /> },
       { label: "최근 본 상품", href: "/mypage/recent", icon: <HistoryRoundedIcon /> },
       { label: "내 채팅", href: "/chat", icon: <ChatBubbleRoundedIcon /> },
@@ -85,6 +89,9 @@ export default function MyPage() {
   const likeCount = useLikesStore((s) => s.liked.size);
   // 최근 본 책 개수 — localStorage persist 라 첫 프레임은 0 일 수 있다 (SSR/hydration 안전)
   const recentCount = useRecentlyViewedStore((s) => s.items.length);
+  // 책장 카운트 — useMyShelf 가 결과를 받으면 shelfStore 가 동기화됨 (hydrate 트리거용 호출)
+  useMyShelf();
+  const shelfTotal = useShelfStore((s) => s.total);
 
   // "판매중" 카운트는 실제로 매물에 노출되는 상태만 — sold/canceled 는 제외
   // 로딩 중에는 0 으로 폴백 — 4개 STATS 카드가 모두 number 로 일관 표시되도록 (찜/최근 본 도 0 부터 시작)
@@ -281,6 +288,12 @@ export default function MyPage() {
                   val: recentCount,
                   icon: <HistoryRoundedIcon />,
                   href: "/mypage/recent",
+                },
+                {
+                  label: "책장",
+                  val: shelfTotal,
+                  icon: <AutoStoriesRoundedIcon />,
+                  href: "/mypage/shelf",
                 },
               ] as {
                 label: string;
