@@ -20,11 +20,13 @@ import AddPhotoAlternateRoundedIcon from "@mui/icons-material/AddPhotoAlternateR
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import QrCodeScannerRoundedIcon from "@mui/icons-material/QrCodeScannerRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
+import BarcodeScanner from "@/components/ui/BarcodeScanner";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { meta, uploadBookImages } from "@/lib/repo";
@@ -70,6 +72,8 @@ export default function RegisterPage() {
   // 도서 검색 결과 + 선택된 항목
   const [results, setResults] = useState<BookSearchItem[] | null>(null);
   const [selected, setSelected] = useState<BookSearchItem | null>(null);
+  // 바코드 스캐너 모달 토글
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   // React Query mutations — 등록(useCreateBook) / 네이버 검색(useNaverBookSearch)
   const createBookMutation = useCreateBook();
@@ -123,31 +127,46 @@ export default function RegisterPage() {
   };
 
   // 검색 실행 — 결과 1건이면 자동 선택, 다건이면 리스트 표시
-  const handleSearch = async () => {
-    const q = title.trim();
-    if (!q) {
-      toast?.show("검색어를 입력해주세요", "warning");
-      return;
-    }
-    if (searching) return;
-    setResults(null);
-    setSelected(null);
-    try {
-      const items = (await naverSearch.mutateAsync(q)) as BookSearchItem[];
-      if (items.length === 0) {
-        toast?.show("검색 결과가 없어요");
-      } else if (items.length === 1) {
-        setSelected(items[0]);
-        setTitle(items[0].title);
-        setCategory(inferCategory(`${items[0].title} ${items[0].description}`));
-        toast?.show("도서 정보를 가져왔어요");
-      } else {
-        setResults(items);
+  // override 가 있으면 그 쿼리로 검색하고 title 도 동기화 (바코드 스캔 경로)
+  const handleSearch = useCallback(
+    async (override?: string) => {
+      const q = (override ?? title).trim();
+      if (!q) {
+        toast?.show("검색어를 입력해주세요", "warning");
+        return;
       }
-    } catch {
-      toast?.show("검색에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
-    }
-  };
+      if (searching) return;
+      setResults(null);
+      setSelected(null);
+      if (override) setTitle(override);
+      try {
+        const items = (await naverSearch.mutateAsync(q)) as BookSearchItem[];
+        if (items.length === 0) {
+          toast?.show("검색 결과가 없어요");
+        } else if (items.length === 1) {
+          setSelected(items[0]);
+          setTitle(items[0].title);
+          setCategory(inferCategory(`${items[0].title} ${items[0].description}`));
+          toast?.show("도서 정보를 가져왔어요");
+        } else {
+          setResults(items);
+        }
+      } catch {
+        toast?.show("검색에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
+      }
+    },
+    [naverSearch, searching, title, toast]
+  );
+
+  // 바코드 스캔 성공 — 모달 닫고 ISBN-13 으로 즉시 검색
+  const handleBarcodeDetected = useCallback(
+    (isbn: string) => {
+      setScannerOpen(false);
+      toast?.show("바코드를 인식했어요");
+      void handleSearch(isbn);
+    },
+    [handleSearch, toast]
+  );
 
   // 검색 결과 중 한 건 선택 — 폼에 반영
   const handlePick = (item: BookSearchItem) => {
@@ -357,6 +376,28 @@ export default function RegisterPage() {
           <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
             도서 검색
           </Typography>
+          {/* 카메라로 책 뒷면 EAN-13 바코드 인식 → 자동 검색 */}
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<QrCodeScannerRoundedIcon />}
+            onClick={() => setScannerOpen(true)}
+            sx={{
+              mb: 1.25,
+              borderStyle: "dashed",
+              borderWidth: 1.5,
+              borderColor: palette.primary,
+              color: palette.primary,
+              background: palette.primaryTint,
+              "&:hover": {
+                borderStyle: "dashed",
+                borderWidth: 1.5,
+                background: palette.primarySoft,
+              },
+            }}
+          >
+            바코드로 찾기
+          </Button>
           <OutlinedInput
             fullWidth
             placeholder="ISBN 또는 책 제목으로 검색"
@@ -378,7 +419,7 @@ export default function RegisterPage() {
             endAdornment={
               <Button
                 size="small"
-                onClick={handleSearch}
+                onClick={() => handleSearch()}
                 disabled={searching}
                 sx={{ minWidth: 60 }}
               >
@@ -728,6 +769,11 @@ export default function RegisterPage() {
           {free ? "무료나눔 등록하기" : "판매 등록하기"}
         </Button>
       </FixedFooter>
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetected={handleBarcodeDetected}
+      />
     </>
   );
 }
