@@ -24,6 +24,9 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
+import RuleRoundedIcon from "@mui/icons-material/RuleRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
@@ -46,6 +49,8 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLikesStore, selectLikeCount } from "@/lib/store/likesStore";
 import { useRecentlyViewedStore } from "@/lib/store/recentlyViewedStore";
+import { flattenChecked, hasAnyChecked } from "@/lib/conditionGrade";
+import type { ConditionDetail } from "@/lib/supabase/types";
 
 export default function BookDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -384,6 +389,9 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
             도서 정보
           </Typography>
           <InfoRow label="상태" value={book.state} />
+          {hasAnyChecked(book.conditionDetail) && (
+            <ConditionDetailRow detail={book.conditionDetail!} />
+          )}
           <InfoRow label="거래방식" value={book.tradeMethod ?? "직거래/택배"} />
           <InfoRow label="ISBN" value={book.isbn ?? "-"} />
           {book.pubDate && <InfoRow label="발행일" value={book.pubDate} />}
@@ -731,5 +739,91 @@ function InfoRow({ label, value }: { label: string; value?: string }) {
         {value}
       </Typography>
     </Stack>
+  );
+}
+
+// 0013 — "도서 정보" 의 "상태" InfoRow 아래에 끼워 넣는 토글 섹션.
+// 판매자가 등록 시 체크한 상세 항목을 카테고리별로 칩 형태로 노출 — 분쟁 시 객관적 근거.
+// 기본 접힘 + "상세 보기" 클릭 시 펼쳐짐. 체크된 항목이 0개면 부모에서 아예 렌더하지 않음.
+function ConditionDetailRow({ detail }: { detail: ConditionDetail }) {
+  const [open, setOpen] = useState(false);
+  const groups = flattenChecked(detail);
+  const totalCount = groups.reduce((acc, g) => acc + g.items.length, 0);
+  return (
+    <Box sx={{ py: 0.5 }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        onClick={() => setOpen((v) => !v)}
+        sx={{
+          cursor: "pointer",
+          gap: 0.5,
+          py: 0.25,
+          color: palette.primary,
+          "&:hover": { opacity: 0.85 },
+        }}
+      >
+        <RuleRoundedIcon sx={{ fontSize: 15 }} />
+        <Typography sx={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "-0.01em" }}>
+          상태 상세 보기 ({totalCount})
+        </Typography>
+        {open ? (
+          <ExpandLessRoundedIcon sx={{ fontSize: 16 }} />
+        ) : (
+          <ExpandMoreRoundedIcon sx={{ fontSize: 16 }} />
+        )}
+      </Stack>
+      {open && (
+        <Box
+          sx={{
+            mt: 0.75,
+            p: 1.25,
+            borderRadius: 2,
+            background: palette.surfaceAlt,
+            border: `1px solid ${palette.lineSoft}`,
+          }}
+        >
+          <Stack gap={0.85}>
+            {groups.map((g) => (
+              <Box key={g.category}>
+                <Typography
+                  sx={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: palette.inkSubtle,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    mb: 0.4,
+                  }}
+                >
+                  {g.category}
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                  {g.items.map((label) => (
+                    <Box
+                      key={label}
+                      sx={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        color: palette.warn,
+                        background: palette.warnSoft,
+                        borderRadius: 999,
+                        px: 0.85,
+                        py: 0.25,
+                      }}
+                    >
+                      {label}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            ))}
+          </Stack>
+          <Typography sx={{ fontSize: 11, color: palette.inkSubtle, mt: 1 }}>
+            판매자가 등록 시 체크한 항목이에요.
+          </Typography>
+        </Box>
+      )}
+    </Box>
   );
 }

@@ -60,6 +60,7 @@ import {
   type BookRow,
   type BookState,
   type BookStatus,
+  type ConditionDetail,
   type Profile,
   type ShelfItem,
   type ShelfItemRow,
@@ -191,6 +192,7 @@ function rowToDetail(b: BookRow): BookDetail {
     likes: b.like_count,
     chats: 0,
     coverUrl: b.cover_url ?? undefined,
+    conditionDetail: b.condition_detail ?? undefined,
   };
 }
 
@@ -477,6 +479,8 @@ export async function createBook(input: {
   synopsis?: string;
   pubDate?: string; // YYYY-MM-DD
   sourceUrl?: string;
+  // 0013 — 도서 상태 상세 체크리스트 (선택). 미체크 / 미입력이면 NULL 로 INSERT
+  conditionDetail?: ConditionDetail;
 }): Promise<{ id: string }> {
   const supabase = await tryClient();
   if (!supabase) {
@@ -512,6 +516,7 @@ export async function createBook(input: {
       synopsis: input.synopsis ?? null,
       pub_date: input.pubDate ?? null,
       source_url: input.sourceUrl ?? null,
+      condition_detail: input.conditionDetail ?? null,
     })
     .select("id")
     .single();

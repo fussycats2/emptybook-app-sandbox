@@ -7,6 +7,7 @@ import type { SaleStatus } from "@/components/ui/StatusBadge";
 import {
   DEFAULT_APP_PREFS,
   type AppPrefs,
+  type ConditionDetail,
   type Profile,
   type ShelfItem,
   type ShelfStatus,
@@ -36,6 +37,8 @@ export type MockBook = BookSummary & {
   region?: string;
   coverUrl?: string; // 외부(네이버 등) 표지 URL
   imageUrls?: string[]; // 업로드된 사용자 사진 URL — 캐러셀에서 슬라이드별로 사용
+  // 0013 — 도서 상태 상세 체크리스트. 도서 상세에서 "상태 상세 보기" 토글로 노출
+  conditionDetail?: ConditionDetail;
 };
 
 export type MockOrder = {
@@ -547,6 +550,8 @@ export function mockCreateBook(input: {
   synopsis?: string;
   pubDate?: string;
   sourceUrl?: string;
+  // 0013 도서 상태 상세 체크리스트 — Supabase 쪽과 동일하게 보관
+  conditionDetail?: ConditionDetail;
 }): MockBook {
   const s = getStore();
   // 'u-{timestamp}' 형태로 임시 ID 발급 (실제 DB 라면 UUID 사용)
@@ -584,6 +589,7 @@ export function mockCreateBook(input: {
     likes: 0,
     chats: 0,
     coverUrl: input.coverUrl,
+    conditionDetail: input.conditionDetail,
   };
   // 새로 등록한 책이 목록 맨 위에 보이도록 prepend
   s.books = [book, ...s.books];

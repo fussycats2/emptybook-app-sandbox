@@ -21,12 +21,14 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import QrCodeScannerRoundedIcon from "@mui/icons-material/QrCodeScannerRounded";
+import RuleRoundedIcon from "@mui/icons-material/RuleRounded";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import BarcodeScanner from "@/components/ui/BarcodeScanner";
+import ConditionDetailSheet from "@/components/ui/ConditionDetailSheet";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { meta, uploadBookImages } from "@/lib/repo";
@@ -34,6 +36,8 @@ import { useCreateBook } from "@/lib/query/bookHooks";
 import { useNaverBookSearch } from "@/lib/query/naverBookHooks";
 import { useShelfItem, useUpdateShelfItem } from "@/lib/query/shelfHooks";
 import { inferCategory } from "@/lib/categoryMap";
+import { hasAnyChecked } from "@/lib/conditionGrade";
+import type { ConditionDetail } from "@/lib/supabase/types";
 import type { BookSearchItem } from "@/app/api/books/search/route";
 
 const MAX_PHOTOS = 10;
@@ -92,6 +96,12 @@ function RegisterPageInner() {
   const [selected, setSelected] = useState<BookSearchItem | null>(null);
   // 바코드 스캐너 모달 토글
   const [scannerOpen, setScannerOpen] = useState(false);
+  // 도서 상태 상세 체크리스트 — 시트에서 적용 누르면 detail 저장 + state 자동 추천
+  const [conditionDetail, setConditionDetail] = useState<ConditionDetail | undefined>(
+    undefined
+  );
+  const [conditionSheetOpen, setConditionSheetOpen] = useState(false);
+  const conditionSet = hasAnyChecked(conditionDetail);
 
   // React Query mutations — 등록(useCreateBook) / 네이버 검색(useNaverBookSearch)
   const createBookMutation = useCreateBook();
@@ -237,6 +247,8 @@ function RegisterPageInner() {
         synopsis: selected?.description || undefined,
         pubDate: selected?.pubdate || undefined,
         sourceUrl: selected?.link || undefined,
+        // 0013 — 사용자가 상세 체크 시트에서 적용한 detail (없으면 undefined → NULL)
+        conditionDetail: conditionSet ? conditionDetail : undefined,
         category,
         state,
         priceNumber,
@@ -680,9 +692,31 @@ function RegisterPageInner() {
         </Box>
 
         <Box sx={{ p: 2 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
-            도서 상태
-          </Typography>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 1 }}
+          >
+            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+              도서 상태
+            </Typography>
+            <Button
+              size="small"
+              variant="text"
+              startIcon={<RuleRoundedIcon sx={{ fontSize: 16 }} />}
+              onClick={() => setConditionSheetOpen(true)}
+              sx={{
+                minWidth: 0,
+                px: 1,
+                fontSize: 12,
+                fontWeight: 700,
+                color: conditionSet ? palette.primary : palette.inkMute,
+              }}
+            >
+              {conditionSet ? "상세 체크 완료" : "상세 체크"}
+            </Button>
+          </Stack>
           <Stack direction="row" gap={1}>
             {STATES.map((s) => {
               const on = state === s.key;
@@ -822,6 +856,17 @@ function RegisterPageInner() {
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onDetected={handleBarcodeDetected}
+      />
+      <ConditionDetailSheet
+        open={conditionSheetOpen}
+        onClose={() => setConditionSheetOpen(false)}
+        initial={conditionDetail}
+        onApply={(detail, suggested) => {
+          setConditionDetail(detail);
+          // 사용자에게 자동 추천된 등급을 적용 — 사용자가 폼에서 다시 다른 등급을 고를 수 있음
+          setState(suggested);
+          toast?.show(`상태가 "${suggested}" 으로 추천됐어요`);
+        }}
       />
     </>
   );

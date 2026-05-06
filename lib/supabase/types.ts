@@ -57,6 +57,26 @@ export const DEFAULT_APP_PREFS: Required<{
   privacy: { location: true, wishlist_public: false, trades_public: true },
 };
 
+// 0013_books_condition_detail.sql — 도서 상태 상세 체크리스트.
+// 분쟁 시 근거가 되도록 항목별 체크 결과를 jsonb 로 보관. 카테고리별 그룹은
+// `lib/conditionGrade.ts` 의 정의와 1:1 매칭된다 — 항목 추가 시 양쪽을 함께 갱신할 것.
+export interface ConditionDetail {
+  cover?: { fold?: boolean; scratch?: boolean; discolor?: boolean };
+  spine?: { bend?: boolean; fade?: boolean };
+  corner?: { wear?: boolean };
+  body?: {
+    pen?: boolean;
+    highlight?: boolean;
+    stain?: boolean;
+    missing?: boolean;
+  };
+  extras?: {
+    band_missing?: boolean;
+    postcard_missing?: boolean;
+    cd_missing?: boolean;
+  };
+}
+
 // books 테이블 한 행(row)에 대응하는 타입
 export interface BookRow {
   id: string;
@@ -80,6 +100,8 @@ export interface BookRow {
   synopsis: string | null; // 책 줄거리 (네이버 description)
   pub_date: string | null; // 발행일 (YYYY-MM-DD)
   source_url: string | null; // 외부 정보 출처(네이버 도서 페이지) URL
+  // 0013 — 도서 상태 상세 체크리스트 (jsonb). 미체크 / 기존 데이터는 null
+  condition_detail: ConditionDetail | null;
   created_at: string;
   updated_at: string;
 }
