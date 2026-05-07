@@ -16,6 +16,7 @@ import {
   mockDeleteBook,
   mockGetBook,
   mockGetChat,
+  mockGetCoupon,
   mockGetOrder,
   mockGetReviewByTx,
   mockGetReviewContext,
@@ -24,8 +25,10 @@ import {
   mockListBooks,
   mockListChats,
   mockListLikedIds,
+  mockListMyCoupons,
   mockListNotifications,
   mockListShelf,
+  mockMarkCouponUsed,
   mockMarkAllNotificationsRead,
   mockMarkNotificationRead,
   mockMarkRoomChatNotificationsRead,
@@ -65,6 +68,7 @@ import {
   type ShelfItem,
   type ShelfItemRow,
   type ShelfStatus,
+  type UserCoupon,
 } from "./supabase/types";
 import type { SaleStatus } from "@/components/ui/StatusBadge";
 
@@ -430,16 +434,31 @@ export async function listBooksByIds(ids: string[]): Promise<BookSummary[]> {
 
 // 단일 도서 상세 조회 (도서 상세 페이지에서 호출)
 // book_images 도 함께 join 해서 storage_path → public URL 로 변환된 imageUrls 를 채운다
+// 판매자 profiles 도 join — display_name/rating_avg/trade_count 를 카드에 노출 (0003 트리거가 자동 갱신)
 export async function fetchBook(id: string): Promise<BookDetail | null> {
   const supabase = await tryClient();
   if (!supabase) return mockGetBook(id) ?? null;
   const { data } = await supabase
     .from("books")
-    .select("*, book_images(storage_path, sort_order)")
+    .select(
+      `*,
+       book_images(storage_path, sort_order),
+       seller:profiles!books_seller_id_fkey(display_name, rating_avg, trade_count)`
+    )
     .eq("id", id)
     .maybeSingle();
   if (!data) return mockGetBook(id) ?? null;
   const detail = rowToDetail(data as BookRow);
+  // 판매자 정보 보강 — display_name 은 마스킹해서 노출, rating/trade_count 는 그대로
+  const seller = (data as any).seller as
+    | { display_name?: string; rating_avg?: number; trade_count?: number }
+    | null;
+  if (seller) {
+    detail.seller = anonymizeName(seller.display_name, "판매자");
+    detail.sellerRating = seller.rating_avg ?? 0;
+    detail.sellerTradeCount = seller.trade_count ?? 0;
+    detail.sellerStats = `거래 ${seller.trade_count ?? 0}회`;
+  }
   // sort_order 오름차순으로 정렬해 캐러셀 슬라이드 순서 보장
   const imgs = ((data as any).book_images ?? []) as {
     storage_path: string;
@@ -731,8 +750,10 @@ export async function fetchOrder(id: string): Promise<OrderRow | null> {
 
 // 결제 시점에 호출 — 트랜잭션을 PAID 상태로 만들고 책은 SOLD 처리
 // FIXME: 실제 PG(결제 게이트웨이) 연동 없음. 현재는 결제 성공으로 간주하고 바로 PAID 로 기록
+// userCouponId 가 같이 넘어오면 user_coupons.status 를 USED 로 옮겨 사용 이력 기록.
 export async function createOrder(input: {
   bookId: string;
+  userCouponId?: string;
 }): Promise<{ id: string }> {
   const supabase = await tryClient();
   if (!supabase) {
@@ -740,6 +761,7 @@ export async function createOrder(input: {
       bookId: input.bookId,
       status: "배송중",
     });
+    if (input.userCouponId) mockMarkCouponUsed(input.userCouponId, created.id);
     return { id: created.id };
   }
   const { data: auth } = await supabase.auth.getUser();
@@ -748,6 +770,7 @@ export async function createOrder(input: {
       bookId: input.bookId,
       status: "배송중",
     });
+    if (input.userCouponId) mockMarkCouponUsed(input.userCouponId, created.id);
     return { id: created.id };
   }
   const { data: book } = await supabase
@@ -760,6 +783,7 @@ export async function createOrder(input: {
       bookId: input.bookId,
       status: "배송중",
     });
+    if (input.userCouponId) mockMarkCouponUsed(input.userCouponId, created.id);
     return { id: created.id };
   }
   const b = book as any;
@@ -780,11 +804,27 @@ export async function createOrder(input: {
       bookId: input.bookId,
       status: "배송중",
     });
+    if (input.userCouponId) mockMarkCouponUsed(input.userCouponId, created.id);
     return { id: created.id };
+  }
+  const txId = (data as { id: string }).id;
+  // 쿠폰 사용 처리 — RLS 가 본인 쿠폰만 UPDATE 를 허용한다 (user_coupons_own_update).
+  // 실패해도 결제 자체는 성공으로 보고 (사용자에게 두 번 청구되는 일은 없으니), 로그만 남긴다.
+  if (input.userCouponId) {
+    const { error: couponErr } = await supabase
+      .from("user_coupons")
+      .update({
+        status: "USED",
+        used_at: new Date().toISOString(),
+        used_transaction_id: txId,
+      })
+      .eq("id", input.userCouponId)
+      .eq("status", "AVAILABLE"); // race 방어 (이미 USED/EXPIRED 면 skip)
+    if (couponErr) console.error("[createOrder] coupon mark used failed", couponErr);
   }
   // books.status='SOLD' 전이는 0015 트리거(SECURITY DEFINER) 가 책임진다.
   // buyer 가 직접 books UPDATE 를 시도하면 books_update_own RLS 가 0행으로 막아 silent 실패.
-  return { id: (data as { id: string }).id };
+  return { id: txId };
 }
 
 // 거래 확정 — 구매자가 "거래완료" 버튼을 눌렀을 때 호출
@@ -1330,20 +1370,28 @@ export async function createReview(input: {
   return { id: (data as { id: string }).id };
 }
 
-// 내가 받은 후기 목록 — /mypage/reviews 화면용
+// 내가 받은 후기 목록 — /mypage/reviews 화면용 (전체) + /books/[id] 판매자 카드 (limit)
 // reviews(reviewee_id = 나) ⨝ reviewer profile ⨝ transactions ⨝ books 한 번에
 // 비로그인/Supabase 미설정이면 mock 저장소의 시드 데이터를 반환
-// userId 인자가 없으면 현재 로그인 사용자(auth.uid) 기준
+// userId 인자가 없으면 현재 로그인 사용자(auth.uid) 기준. limit 으로 미리보기 모드.
 export async function listReceivedReviews(
-  userId?: string
+  userId?: string,
+  limit?: number
 ): Promise<ReceivedReview[]> {
   const supabase = await tryClient();
-  if (!supabase) return mockListReceivedReviews();
+  if (!supabase) {
+    // mock 모드 — userId 가 들어오면 그 사용자(예: 셀러 이름) 의 후기를, 없으면 "나" 의 후기.
+    const all = mockListReceivedReviews(userId);
+    return limit != null ? all.slice(0, limit) : all;
+  }
   const { data: auth } = await supabase.auth.getUser();
   const uid = userId ?? auth.user?.id;
-  if (!uid) return mockListReceivedReviews();
+  if (!uid) {
+    const all = mockListReceivedReviews(userId);
+    return limit != null ? all.slice(0, limit) : all;
+  }
 
-  const { data, error } = await supabase
+  let q = supabase
     .from("reviews")
     .select(
       `id, rating, tags, comment, created_at,
@@ -1352,6 +1400,8 @@ export async function listReceivedReviews(
     )
     .eq("reviewee_id", uid)
     .order("created_at", { ascending: false });
+  if (limit != null) q = q.limit(limit);
+  const { data, error } = await q;
 
   if (error || !data) return [];
   return (data as any[]).map((r): ReceivedReview => {
@@ -1672,4 +1722,77 @@ export async function removeShelfItem(id: string): Promise<boolean> {
     .eq("id", id)
     .eq("user_id", uid);
   return !error;
+}
+
+// ---------- Coupons (0017) ----------
+
+// user_coupons + coupon_templates join 결과를 화면 친화적인 평탄 객체로 변환
+function rowToUserCoupon(r: any): UserCoupon {
+  const t = r.template ?? r.coupon_templates ?? {};
+  return {
+    id: r.id,
+    templateId: r.template_id,
+    status: r.status,
+    issuedAt: r.issued_at,
+    expiresAt: r.expires_at,
+    usedAt: r.used_at ?? undefined,
+    usedTransactionId: r.used_transaction_id ?? undefined,
+    name: t.name ?? "쿠폰",
+    description: t.description ?? undefined,
+    discountType: t.discount_type ?? "FIXED",
+    discountValue: t.discount_value ?? 0,
+    minOrderAmount: t.min_order_amount ?? 0,
+    maxDiscount: t.max_discount ?? undefined,
+    code: t.code ?? undefined,
+  };
+}
+
+// 내 쿠폰 전부 조회 — 화면에서 status 별로 그룹핑.
+// expire_old_coupons() 를 먼저 호출해 expires_at 지난 행을 EXPIRED 로 정리한다.
+export async function listMyCoupons(): Promise<UserCoupon[]> {
+  const supabase = await tryClient();
+  if (!supabase) return mockListMyCoupons();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return mockListMyCoupons();
+  // 만료 처리 — 실패해도 조회는 계속 (오래된 행이 AVAILABLE 로 잠깐 보일 뿐)
+  try {
+    await supabase.rpc("expire_old_coupons");
+  } catch {
+    /* noop */
+  }
+  const { data } = await supabase
+    .from("user_coupons")
+    .select(
+      `id, template_id, status, issued_at, expires_at, used_at, used_transaction_id,
+       template:coupon_templates!user_coupons_template_id_fkey(
+         code, name, description, discount_type, discount_value,
+         min_order_amount, max_discount
+       )`
+    )
+    .eq("user_id", auth.user.id)
+    .order("issued_at", { ascending: false });
+  if (!data) return mockListMyCoupons();
+  return data.map(rowToUserCoupon);
+}
+
+// 단건 조회 — 결제 시 적용하려는 쿠폰의 최신 상태를 검증할 때 사용 (race 방어)
+export async function getCoupon(id: string): Promise<UserCoupon | null> {
+  const supabase = await tryClient();
+  if (!supabase) return mockGetCoupon(id) ?? null;
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return mockGetCoupon(id) ?? null;
+  const { data } = await supabase
+    .from("user_coupons")
+    .select(
+      `id, template_id, status, issued_at, expires_at, used_at, used_transaction_id,
+       template:coupon_templates!user_coupons_template_id_fkey(
+         code, name, description, discount_type, discount_value,
+         min_order_amount, max_discount
+       )`
+    )
+    .eq("id", id)
+    .eq("user_id", auth.user.id)
+    .maybeSingle();
+  if (!data) return mockGetCoupon(id) ?? null;
+  return rowToUserCoupon(data);
 }

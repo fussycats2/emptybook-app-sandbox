@@ -218,3 +218,68 @@ export function shelfRowToItem(r: ShelfItemRow): ShelfItem {
     updatedAt: r.updated_at,
   };
 }
+
+// ---------------- 쿠폰 (0017) ----------------
+export type CouponDiscountType = "FIXED" | "PERCENT";
+export type CouponIssueKind = "SIGNUP" | "EVENT" | "MANUAL";
+export type UserCouponStatus = "AVAILABLE" | "USED" | "EXPIRED";
+
+export const USER_COUPON_STATUS_LABEL: Record<UserCouponStatus, string> = {
+  AVAILABLE: "사용 가능",
+  USED: "사용 완료",
+  EXPIRED: "기간 만료",
+};
+
+// /mypage/coupons / /checkout 에서 함께 쓰는 평탄화된 형태.
+// template 필드를 분리하지 않고 한 객체에 합쳐 화면이 단순해지게.
+export interface UserCoupon {
+  id: string;
+  templateId: string;
+  status: UserCouponStatus;
+  issuedAt: string;
+  expiresAt: string;
+  usedAt?: string;
+  usedTransactionId?: string;
+  // template 메타데이터 (denormalize)
+  name: string;
+  description?: string;
+  discountType: CouponDiscountType;
+  discountValue: number;
+  minOrderAmount: number;
+  maxDiscount?: number;
+  code?: string;
+}
+
+// 결제 시 쿠폰을 적용했을 때 실제 깎이는 금액 계산.
+// PERCENT 는 max_discount 상한이 있으면 클램프. min_order_amount 미달이면 0.
+export function calcCouponDiscount(
+  coupon: Pick<
+    UserCoupon,
+    "discountType" | "discountValue" | "minOrderAmount" | "maxDiscount"
+  >,
+  goodsAmount: number
+): number {
+  if (goodsAmount < coupon.minOrderAmount) return 0;
+  if (coupon.discountType === "FIXED") {
+    return Math.min(coupon.discountValue, goodsAmount);
+  }
+  // PERCENT
+  const raw = Math.floor((goodsAmount * coupon.discountValue) / 100);
+  const capped =
+    coupon.maxDiscount != null ? Math.min(raw, coupon.maxDiscount) : raw;
+  return Math.min(capped, goodsAmount);
+}
+
+// 사용자에게 보여주는 할인 표기 (카드/적용 영역 공용)
+export function formatCouponDiscount(
+  coupon: Pick<UserCoupon, "discountType" | "discountValue" | "maxDiscount">
+): string {
+  if (coupon.discountType === "FIXED") {
+    return `${coupon.discountValue.toLocaleString()}원 할인`;
+  }
+  const max =
+    coupon.maxDiscount != null
+      ? ` (최대 ${coupon.maxDiscount.toLocaleString()}원)`
+      : "";
+  return `${coupon.discountValue}%${max} 할인`;
+}

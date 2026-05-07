@@ -11,21 +11,29 @@ import {
   Button,
   Checkbox,
   Divider,
-  OutlinedInput,
   Stack,
   Typography,
 } from "@mui/material";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
+import LocalActivityRoundedIcon from "@mui/icons-material/LocalActivityRounded";
+import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
+import BottomSheet from "@/components/ui/BottomSheet";
 import { useBook } from "@/lib/query/bookHooks";
 import { useCreateOrder } from "@/lib/query/orderHooks";
-import { palette } from "@/lib/theme";
+import { useMyCoupons } from "@/lib/query/couponHooks";
+import { palette, radius } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
+import {
+  calcCouponDiscount,
+  formatCouponDiscount,
+  type UserCoupon,
+} from "@/lib/supabase/types";
 
 const PAYMENTS: {
   key: string;
@@ -51,16 +59,42 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
   const toast = useToast();
   const { data: book } = useBook(params.id);
   const createOrderMutation = useCreateOrder();
+  const { data: myCoupons } = useMyCoupons();
   const [pay, setPay] = useState("kakao");
   const [agreed, setAgreed] = useState(false);
+  const [couponSheetOpen, setCouponSheetOpen] = useState(false);
+  const [couponId, setCouponId] = useState<string | undefined>(undefined);
   const submitting = createOrderMutation.isPending;
 
   // 결제 금액 계산: 상품가 + 배송비 - 쿠폰 (음수가 되지 않도록 0으로 클램프)
   // 무료나눔은 배송비/쿠폰 모두 0
   const goods = useMemo(() => book?.priceNumber ?? 0, [book]);
   const ship = book?.free ? 0 : 3000;
-  const coupon = book?.free ? 0 : 1000;
-  const total = Math.max(0, goods + ship - coupon);
+
+  // 사용 가능 + 최소 주문 금액 충족 + 만료 안 됐는지 — 셋 다 만족하는 쿠폰만 노출
+  const usableCoupons = useMemo<UserCoupon[]>(() => {
+    if (!myCoupons || book?.free) return [];
+    return myCoupons.filter(
+      (c) =>
+        c.status === "AVAILABLE" &&
+        goods >= c.minOrderAmount &&
+        Date.parse(c.expiresAt) >= Date.now()
+    );
+  }, [myCoupons, book?.free, goods]);
+
+  const selectedCoupon = useMemo(
+    () => usableCoupons.find((c) => c.id === couponId),
+    [usableCoupons, couponId]
+  );
+
+  // 쿠폰 적용 시 깎이는 금액 — types 의 calcCouponDiscount 가 책임
+  // (FIXED 면 그대로, PERCENT 면 maxDiscount 상한)
+  const couponDiscount = book?.free
+    ? 0
+    : selectedCoupon
+    ? calcCouponDiscount(selectedCoupon, goods)
+    : 0;
+  const total = Math.max(0, goods + ship - couponDiscount);
 
   // 거래 불가 상태인 책은 결제로 진행 못 하게 — sold/canceled 일 때 버튼 비활성
   // (도서 상세에서 이미 막혀 있지만, 직접 URL 진입 / 캐시 갱신 늦은 경우의 안전망)
@@ -85,7 +119,10 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
   const submit = async () => {
     if (submitting || !book) return;
     try {
-      const { id } = await createOrderMutation.mutateAsync({ bookId: book.id });
+      const { id } = await createOrderMutation.mutateAsync({
+        bookId: book.id,
+        userCouponId: selectedCoupon?.id,
+      });
       toast?.show(book.free ? "신청이 완료되었어요" : "결제가 완료되었어요");
       // replace 로 stack 에서 결제 폼을 제거 — 완료 페이지에서 뒤로 가면 결제 폼으로
       // 다시 떨어지던 어색함 제거. 사용자는 완료 페이지의 CTA(주문내역/홈/채팅)로만 진행.
@@ -282,17 +319,73 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
 
         {!book.free && (
         <Section title="쿠폰 / 포인트">
-          <Stack direction="row" gap={1}>
-            <OutlinedInput
-              placeholder="신규가입 1,000원 쿠폰"
-              sx={{ flex: 1 }}
-              defaultValue="신규가입 1,000원"
-              readOnly
-            />
-            <Button variant="outlined" sx={{ minWidth: 70 }}>
-              변경
-            </Button>
-          </Stack>
+          <Box
+            onClick={() => setCouponSheetOpen(true)}
+            sx={{
+              border: `1.5px solid ${
+                selectedCoupon ? palette.primary : palette.lineSoft
+              }`,
+              background: selectedCoupon ? palette.primaryTint : palette.surface,
+              borderRadius: `${radius.md}px`,
+              p: 1.5,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              cursor: "pointer",
+              transition: "all 140ms ease",
+              "&:hover": { borderColor: palette.primary },
+            }}
+          >
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                background: selectedCoupon ? palette.primary : palette.lineSoft,
+                color: selectedCoupon ? "#fff" : palette.inkSubtle,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              <LocalActivityRoundedIcon sx={{ fontSize: 20 }} />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              {selectedCoupon ? (
+                <>
+                  <Typography
+                    sx={{
+                      fontSize: 13.5,
+                      fontWeight: 800,
+                      color: palette.primary,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {selectedCoupon.name}
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25 }}>
+                    {couponDiscount.toLocaleString()}원 할인 적용 중
+                  </Typography>
+                </>
+              ) : (
+                <>
+                  <Typography sx={{ fontSize: 13.5, fontWeight: 700 }}>
+                    {usableCoupons.length > 0
+                      ? `사용 가능한 쿠폰 ${usableCoupons.length}장`
+                      : "사용 가능한 쿠폰이 없어요"}
+                  </Typography>
+                  {usableCoupons.length > 0 && (
+                    <Typography sx={{ fontSize: 11.5, color: palette.inkSubtle, mt: 0.25 }}>
+                      쿠폰을 선택해 결제 금액을 줄일 수 있어요
+                    </Typography>
+                  )}
+                </>
+              )}
+            </Box>
+            <KeyboardArrowRightRoundedIcon sx={{ color: palette.inkSubtle }} />
+          </Box>
         </Section>
         )}
 
@@ -315,8 +408,12 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
                 <Row label="배송비" value={ship.toLocaleString() + "원"} />
                 <Row
                   label="쿠폰 할인"
-                  value={`-${coupon.toLocaleString()}원`}
-                  accent
+                  value={
+                    couponDiscount > 0
+                      ? `-${couponDiscount.toLocaleString()}원`
+                      : "0원"
+                  }
+                  accent={couponDiscount > 0}
                 />
                 <Divider sx={{ my: 1 }} />
                 <Row
@@ -382,7 +479,134 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
             : `${total.toLocaleString()}원 결제하기`}
         </Button>
       </FixedFooter>
+
+      <BottomSheet
+        open={couponSheetOpen}
+        onClose={() => setCouponSheetOpen(false)}
+        title="쿠폰 선택"
+      >
+        <Stack gap={1} sx={{ p: 2, pb: 0 }}>
+          {/* "쿠폰 사용 안 함" 옵션 — 적용 해제 */}
+          <CouponPickRow
+            selected={!couponId}
+            label="쿠폰 사용 안 함"
+            onClick={() => {
+              setCouponId(undefined);
+              setCouponSheetOpen(false);
+            }}
+          />
+          {usableCoupons.length === 0 && (
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                color: palette.inkSubtle,
+                textAlign: "center",
+                py: 3,
+              }}
+            >
+              이 결제에 사용할 수 있는 쿠폰이 없어요
+            </Typography>
+          )}
+          {usableCoupons.map((c) => {
+            const discount = calcCouponDiscount(c, goods);
+            return (
+              <CouponPickRow
+                key={c.id}
+                selected={couponId === c.id}
+                label={c.name}
+                sub={`${formatCouponDiscount(c)} · ${discount.toLocaleString()}원 할인`}
+                onClick={() => {
+                  setCouponId(c.id);
+                  setCouponSheetOpen(false);
+                }}
+              />
+            );
+          })}
+        </Stack>
+        <Box sx={{ p: 2, pt: 1.5 }}>
+          <Button
+            fullWidth
+            variant="outlined"
+            onClick={() => setCouponSheetOpen(false)}
+          >
+            닫기
+          </Button>
+        </Box>
+      </BottomSheet>
     </>
+  );
+}
+
+// 쿠폰 선택 시트의 한 행 — 선택 / 미선택 톤만 다른 가벼운 카드
+function CouponPickRow({
+  selected,
+  label,
+  sub,
+  onClick,
+}: {
+  selected: boolean;
+  label: string;
+  sub?: string;
+  onClick: () => void;
+}) {
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        p: "12px 14px",
+        borderRadius: `${radius.sm}px`,
+        border: `1.5px solid ${selected ? palette.primary : palette.lineSoft}`,
+        background: selected ? palette.primaryTint : palette.surface,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: 1.25,
+        transition: "all 140ms ease",
+        "&:active": { transform: "scale(0.99)" },
+      }}
+    >
+      <Box
+        sx={{
+          width: 18,
+          height: 18,
+          borderRadius: "50%",
+          border: `2px solid ${selected ? palette.primary : palette.line}`,
+          display: "grid",
+          placeItems: "center",
+          flexShrink: 0,
+        }}
+      >
+        {selected && (
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: palette.primary,
+            }}
+          />
+        )}
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography
+          sx={{
+            fontSize: 13.5,
+            fontWeight: 700,
+            color: selected ? palette.primary : palette.ink,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {label}
+        </Typography>
+        {sub && (
+          <Typography sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25 }}>
+            {sub}
+          </Typography>
+        )}
+      </Box>
+    </Box>
   );
 }
 

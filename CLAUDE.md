@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-05-07 (v9.5 — 거래확정 흐름 마무리 + 뒤로가기 로직 정리)
+> 최종 업데이트: 2026-05-07 (v9.7 — 도서 상세 판매자 카드 보강)
 
 ## 프로젝트 개요
 
@@ -87,6 +87,8 @@
 | **마이페이지 STATS 책장 풀폭 + 매물 연결 표시 (v9.2)** | v9 에서 책장 카드를 5번째 STATS 로 추가했더니 2열 그리드 row 3 col 2 가 비어 어색했던 부분 정리. 책장을 STATS 배열에서 빼고 그리드 아래 풀폭 카드로 분리 — 좌측 아이콘 + 큰 카운트(`shelfTotal`) + 우측 4상태 미니 분포(`READING`/`FINISHED`/`FOR_SALE`/`OWNED` 각각 dot+카운트, sage/success/accent/warn 톤) + KeyboardArrowRight CTA. 책장 분포가 한 줄 안에 다 보여 "어떤 상태가 많은지" 즉각 파악 가능. **책장 ↔ 매물 표시 연동**: 책장 상세 시트에서 `linkedBookId` 가 있으면 헤더에 sage 톤 "매물로 등록됨" 배지 + footer CTA 가 "판매 등록하기"/"저장하고 닫기" → "**등록된 매물 보기**"(outlined) 로 전환되어 클릭 시 `/books/{linkedBookId}` 로 점프. 같은 책을 두 번 등록하는 실수를 막고, 책장 → 매물 흐름의 마지막 한 칸을 마무리 |
 | **동네 변경 BottomSheet (v9.3)** | 홈 헤더 LocationChip 이 토스트만 띄우던 placeholder 를 실제 동네 선택 UI 로 풀음. **Store** (`lib/store/regionStore.ts`): Zustand + localStorage persist (`emptybook:region`, default "마포구") + `SEOUL_DISTRICTS` 25개 자치구 시드. **UI** (`components/ui/RegionPickerSheet.tsx`): BottomSheet 안에 검색 입력 + 자치구 리스트(아이콘 + 라벨 + 선택된 항목 sage 톤 강조 + 체크 아이콘). 검색은 단순 substring 매칭 — 25개라 충분히 빠름. 선택 즉시 store 갱신 후 자동 close. **홈 페이지** (`app/home/page.tsx`): `useRegionStore` 구독 → LocationChip label + 섹션 헤더 "{region}의 따끈한 책" 둘 다 동기화. localStorage persist 라 새로고침/재방문 시에도 마지막 선택 유지. 추후 `profiles.region` 또는 `user_regions` 테이블 연동 시 store 만 갈아끼우면 됨 |
 | **책장↔매물 status 자동 동기화 (v9.4)** | v9 의 마지막 한 칸 — 매물이 SOLD/HIDDEN 으로 바뀌면 연결된 책장 항목도 자동 정리. **DB** (`0014_shelf_books_sync.sql`): `sync_shelf_on_book_status_change()` SECURITY DEFINER 트리거. `books` AFTER UPDATE OF status 에서 status 가 SOLD 또는 HIDDEN 으로 바뀌면 `shelf_items.linked_book_id = book.id` AND `status = 'FOR_SALE'` 행만 OWNED 로 전이 (READING/FINISHED/이미 OWNED 는 사용자 명시 분류이므로 보존). `linked_book_id` 자체는 유지 — 사용자가 책장에서 "등록된 매물 보기" 링크로 과거 거래 추적 가능. 마이그레이션 시점에 이미 SOLD/HIDDEN 인 매물에 연결된 FOR_SALE 행을 일괄 백필. **Mock 모드**: `mockCancelBook` / `mockCreateOrder`(SOLD 전이) 가 같은 동작을 재현하는 `syncShelfOnBookStatusChange()` 헬퍼 호출 + `mockDeleteBook` 은 `linked_book_id` 를 undefined 로 정리(FK ON DELETE SET NULL 동등). **클라이언트 캐시**: `useCancelBook` / `useDeleteBook` / `useCreateOrder` 의 `onSuccess` 가 `queryKeys.shelf.lists()` 도 invalidate — 책장 화면이 열려 있어도 다음 fetch 에 자동 갱신 |
+| **도서 상세 판매자 카드 보강 (v9.7)** | 기존 도서 상세의 판매자 영역(이름 + 매너온도 38.6 하드코딩) 을 거래 신뢰성을 보여주는 카드로 확장. **데이터 계층**: `fetchBook` 의 select 에 `seller:profiles!books_seller_id_fkey(display_name, rating_avg, trade_count)` join 추가 — 0003 트리거가 자동 갱신하는 평균 별점/거래수를 그대로 노출. `BookDetail` 타입에 `sellerRating` / `sellerTradeCount` 추가, anonymizeName 으로 이름 마스킹. mock SEED_BOOKS 4종에도 sellerRating/sellerTradeCount 시드 채움. **받은 후기 미리보기**: `listReceivedReviews(userId?, limit?)` 에 limit 인자 추가, `useReceivedReviews` 훅도 limit 받게 보강 + 캐시 키에 limit 포함해 분리 캐싱. mock 의 `mockListReceivedReviews(revieweeId?)` 도 인자 받아 다른 사용자의 후기 매칭 가능. SEED_REVIEWS 에 mock 시드 셀러 4명(책방마니아/독서왕/북헌터/리딩클럽) 의 받은 후기 5건 추가. **UI**: 판매자 영역을 `SellerCard` 컴포넌트로 분리 (book early-return 가드와 useReceivedReviews 훅 호출 순서 충돌 방지). 카드 구성 — 아바타 + 이름 + 메타라인(동네 · 거래 N회 · ★4.8) + 매너온도(거래수 기반 자연 보정 휴리스틱). 본인 책 아닐 때만 후기 미리보기 2장(점선 분리선 위에 "구매자가 남긴 후기" eyebrow + "전체 보기" 칩 + 별점 행 + 코멘트 2줄 클램프). 후기가 없으면 미리보기 영역 자체 숨김. **mock 키 매핑**: Supabase 모드는 sellerId(UUID) 로, mock 모드는 sellerName 으로 후기를 lookup — `reviewLookupKey = isMine ? undefined : sellerId ?? sellerName`. 본인 책에는 미리보기 호출 자체 스킵 (불필요 요청 방지) |
+| **쿠폰 시스템 (v9.6)** | 그동안 빈 상태 안내만 보여주던 `/mypage/coupons` 와 `/checkout` 의 placeholder OutlinedInput 을 실제 발급/사용 흐름으로 교체. **DB** (`0017_coupons.sql`): `coupon_templates` (관리자 발행 쿠폰 정의 — 이름/설명/할인 방식(FIXED·PERCENT)/할인값/최소주문/최대할인/발급종류(SIGNUP·EVENT·MANUAL)/유효일수) + `user_coupons` (사용자별 발급된 인스턴스 — status(AVAILABLE·USED·EXPIRED)/expires_at/used_at/used_transaction_id). RLS: 본인만 R/W, coupon_templates 는 active=true 인 행을 누구나 read. 시드 3종(WELCOME1000 / SPRING3000 / PERCENT10). **자동 발급**: profiles AFTER INSERT 트리거 `issue_signup_coupons()` (SECURITY DEFINER) 가 active 한 SIGNUP 템플릿을 일괄 발급 + ON CONFLICT 로 중복 차단. 마이그레이션 시점에 기존 사용자에게도 백필. **만료 처리**: `expire_old_coupons()` SQL 함수 — `/mypage/coupons` 진입 시 클라이언트가 RPC 호출해 expires_at 지난 행을 EXPIRED 로 정리. **타입/계산** (`lib/supabase/types.ts`): `UserCoupon` 평탄형 + `calcCouponDiscount(coupon, goods)` (FIXED 는 그대로, PERCENT 는 maxDiscount 상한, 최소주문 미달이면 0) + `formatCouponDiscount` 표기 헬퍼. **Repo** (`listMyCoupons` / `getCoupon`): user_coupons + coupon_templates join. **mock 모드** (`mockListMyCoupons` / `mockMarkCouponUsed`): 시드 3종(AVAILABLE 2장 + EXPIRED 1장) + 조회 시 자동 만료 처리. **/mypage/coupons UI**: 사용 가능 / 사용 완료 / 기간 만료 3탭 + 카운트 배지. 쿠폰 카드는 좌측 sage 그라데이션 할인 영역(FIXED 는 큰 금액 / PERCENT 는 "OFF" + 최대 한도) + 점선 분리 + 우측 이름/설명/메타칩(최소주문/만료 d-day). 7일 이내 만료는 accent 톤으로 강조. dim 처리는 USED/EXPIRED. **/checkout/[id]**: 더미 OutlinedInput 을 BottomSheet 트리거 카드로 교체 — 사용 가능한 쿠폰 N장 표시 + 클릭 시 BottomSheet 에서 라디오 선택. "쿠폰 사용 안 함" 옵션 + 최소주문 미충족/만료 쿠폰은 자동 필터링. 적용 시 `total = goods + ship - couponDiscount` 자동 재계산 + 결제 금액 영역의 "쿠폰 할인" 행이 동적. **결제 사용 처리**: `repo.createOrder({ bookId, userCouponId? })` 가 transactions INSERT 후 `user_coupons` UPDATE (`status='USED'`, `used_at=now()`, `used_transaction_id=tx.id`) — eq("status","AVAILABLE") 가드로 race 방어. mock 모드는 `mockMarkCouponUsed` 동등. `useCreateOrder.onSuccess` 가 쿠폰 사용 시 `queryKeys.coupon.list()` 도 invalidate. **마이페이지 메뉴**: 기존 "쿠폰함" 항목은 그대로 유지 (이미 /mypage/coupons 라우팅 연결돼 있었음). **결제 PG 미연동 한계**: 환불/취소 시 USED → AVAILABLE 으로 되돌리는 분기는 0010 FSM 이 CANCELED 직행을 차단해 의미 없음. PG 도입 시점에 같이 풀어야 함 |
 | **거래확정 흐름 마무리 + 뒤로가기 정리 (v9.5)** | 사용자 테스트 보고(2026-05-06) 3건을 한 번에 정리. **(1) PAID → books.SOLD 자동 전이** (`0015_books_sold_on_paid.sql`): 기존 `repo.createOrder` 가 buyer 권한으로 `books.status='SOLD'` UPDATE 를 시도해 `books_update_own` RLS 가 silent 0행 차단. 결제 성공해도 책이 SELLING 으로 남아 홈/검색/판매내역에 계속 노출되던 버그. transactions AFTER INSERT 에서 status=PAID 면 SECURITY DEFINER 함수가 books 를 SOLD 로 옮긴다 (`status not in ('SOLD','HIDDEN')` 가드 → idempotent). 0014 의 책장 동기화 트리거가 후속으로 셀러의 FOR_SALE → OWNED 까지 연쇄 정리. 마이그레이션 시점에 이미 PAID/SHIPPING/COMPLETED 인 트랜잭션 책을 일괄 백필. `repo.createOrder` 의 books UPDATE 라인은 제거(트리거가 책임). **(2) PAID → buyer 책장 자동 추가** (`0016_buyer_shelf_on_paid.sql`): 같은 INSERT 시점에 `add_book_to_buyer_shelf_on_paid()` SECURITY DEFINER 트리거가 books 메타데이터(title/author/publisher/isbn/category/cover_url) 를 buyer 의 `shelf_items` 에 OWNED 로 INSERT + linked_book_id 연결. 0012 ISBN partial unique 와 충돌하면 `on conflict (user_id, isbn) where isbn is not null do nothing` 으로 스킵 → 이미 책장에 있던 책을 사도 사용자의 status/별점/메모 보존. mock 모드 `mockCreateOrder` 도 같은 동작 재현. **(3) /orders/[id] 거래완료 후 막다른 길 해소**: 기존엔 거래확정 누르면 자동으로 `/orders/[id]/review` 로 redirect — 후기 안 쓰는 사용자는 뒤로가기로만 빠져나가야 했음. 이제 자동 redirect 제거 + 페이지를 거래완료 상태로 잠그고 footer CTA 를 "후기 작성하기" + "홈으로" 두 갈래로 교체. 상단 안내문도 warn 톤 → primary 톤 "거래가 확정됐어요" 로 전환. **(4) 공용 헤더 홈 바로가기**: `AppHeader` 에 `homeButton?: boolean` prop + `left="home"` 옵션 추가 (HomeRoundedIcon). 깊은 흐름 페이지(`/orders/[id]`, `/orders/[id]/review`, `/mypage/shelf/add`) 에 homeButton 켬. `/chat/[id]` 자체 헤더에도 홈 아이콘 추가 — 알림에서 deep-link 진입한 사용자가 한 번에 빠져나갈 수단 보장. **(5) 결제완료 페이지 홈 CTA**: `/checkout/[id]/complete` footer 에 "홈으로 돌아가기" 텍스트 버튼 추가 (기존 채팅/주문내역 두 CTA 옆 보조). **(6) 작업 완료 후 stack 정리 — `router.replace` 일괄 적용**: 완료 페이지에서 뒤로가기 시 시작 폼으로 다시 떨어지던 어색함을 패턴화해서 정리. `/checkout/[id]` → `/complete`, `/register` → `/complete`, `/mypage/shelf/add` → `/mypage/shelf` (사용자 보고 추가 케이스 — 책장에서 뒤로 가면 add 폼으로 떨어지던 문제), `/orders/[id]/review` 후기 저장 후 → `/mypage`. 인증 흐름도 동일 원칙 적용 — 스플래시 → `/login`/`/home`, `/login` mock 분기 → next, `/signup` mock·메일안내 분기 → `/home`/`/login`. /register/complete 는 이전부터 footer 에 "홈으로" 가 있었음 |
 
 ### 미완성 / 연결 안 된 것
@@ -97,7 +99,8 @@
 | **이메일 인증 플로우** | 부분 | 가입 시 `data.session` 없으면 `/login`으로 안내. Supabase 대시보드 "Confirm email" 정책 확정 필요 |
 | **결제 PG** | 구현 안 함 | Mock UI 만 유지 (사이드 프로젝트 단계에서는 PG 사업자 등록·심사가 비현실적). 0010 FSM 트리거는 PAID→COMPLETED 만 허용하고 CANCELED 진입을 차단. 추후 도입 시 트리거에 `PAID → CANCELED` 전이(권한 정책 포함) 추가 필요 |
 | **알림 푸시(Push)** | 없음 | 인앱 알림은 트리거+Realtime 으로 완성. 디바이스 푸시(FCM/Web Push)는 Edge Functions 미작성 |
-| **쿠폰 / 공지 / 문의 / 약관** | 정적 페이지 | UI 는 모두 연결됨. 쿠폰 발급·사용 시스템 + 공지 CMS 는 미구현 (현재 staticContent.ts 의 더미 데이터) |
+| **쿠폰** | 운영 가동 (v9.6) | 0017 마이그레이션으로 user_coupons / coupon_templates + 신규가입 자동 발급 + 결제 적용 흐름까지 연결. 환불/취소 시 USED→AVAILABLE 복구는 결제 PG 도입 시 같이. |
+| **공지 / 문의 / 약관** | 정적 페이지 | UI 는 모두 연결됨. 공지 CMS 는 미구현 (현재 staticContent.ts 의 더미 데이터) |
 
 ---
 
@@ -162,6 +165,7 @@ lib/
   store/shelfStore.ts             # 책장 카운트 (Zustand) — 홈/마이페이지 STATS 동기화
   store/regionStore.ts            # 사용자 동네 (Zustand + localStorage) — 홈 헤더/섹션 라벨 동기화
   query/shelfHooks.ts             # 책장 React Query 훅 (useMyShelf / useAdd/Update/Remove)
+  query/couponHooks.ts            # 쿠폰 React Query 훅 (useMyCoupons / useCoupon)
   auth/
     AuthProvider.tsx              # 클라이언트 user/session Context + useAuth() 훅
   realtime/
@@ -194,6 +198,7 @@ supabase/migrations/
   0014_shelf_books_sync.sql                # books.status SOLD/HIDDEN → 연결된 shelf_items FOR_SALE → OWNED 자동 전이
   0015_books_sold_on_paid.sql              # transactions PAID INSERT → books.status=SOLD 자동 전이 (RLS 우회)
   0016_buyer_shelf_on_paid.sql             # transactions PAID INSERT → buyer 책장에 OWNED 로 자동 추가
+  0017_coupons.sql                         # coupon_templates / user_coupons + 신규가입 자동 발급 트리거 + expire_old_coupons() RPC
 ```
 
 ---
@@ -210,7 +215,7 @@ supabase/migrations/
 |------|------|
 | `listRecentBooks(limit?)` | 홈 피드 |
 | `searchBooks({ q?, category?, state? })` | 검색 |
-| `fetchBook(id)` | 도서 상세 |
+| `fetchBook(id)` | 도서 상세 — books + book_images + 판매자 profiles(display_name/rating_avg/trade_count) join. 판매자 카드 노출용으로 v9.7 에서 보강 |
 | `createBook(input)` | 도서 등록 (coverUrl 포함) |
 | `listMyBooks()` | 내가 등록한 책 (`/mypage/selling`, 마이페이지 STATS) |
 | `cancelBook(bookId)` | 판매 취소 (status → HIDDEN). UI 에서는 "취소" 배지로 표시 |
@@ -235,7 +240,7 @@ supabase/migrations/
 | `markNotificationRead(id)` / `markAllNotificationsRead()` | 알림 read_at 단건/일괄 갱신 |
 | `isLiked(bookId)` / `listLikedBookIds()` / `listLikedBooks()` / `toggleLike(bookId)` | 찜 |
 | `fetchReviewContext(transactionId)` / `createReview(input)` | 후기 작성 컨텍스트 + 저장 |
-| `listReceivedReviews(userId?)` | 받은 후기 목록 (`/mypage/reviews`) |
+| `listReceivedReviews(userId?, limit?)` | 받은 후기 목록. `/mypage/reviews` 는 인자 없이(=내 것 전체), `/books/[id]` SellerCard 는 sellerId(또는 mock 모드에선 sellerName) + limit=2 |
 | `getMyProfile()` / `updateMyProfile(input)` / `updateAppPrefs(prefs)` | 내 프로필 조회/수정 + app_prefs 토글 |
 | `withDefaultPrefs(prefs?)` | app_prefs 누락 키를 DEFAULT_APP_PREFS 로 채워서 반환 |
 | `listMyShelf(filter?)` | 내 책장 항목 — filter(`READING`/`FINISHED`/`FOR_SALE`/`OWNED`) 가 있으면 해당 status 만 |
@@ -243,6 +248,10 @@ supabase/migrations/
 | `addShelfItem(input)` | 책장에 추가. 같은 ISBN 이 이미 있으면 기존 행 반환(`duplicate: true`) — DB UNIQUE 충돌 사전 차단 |
 | `updateShelfItem(id, patch)` | 상태/별점/메모/시작·완독 일자/linkedBookId 부분 수정. status → READING/FINISHED 전이 시 일자 자동 채움 |
 | `removeShelfItem(id)` | 책장에서 영구 삭제 |
+| `listMyCoupons()` | 내 쿠폰 전체 — Supabase 모드는 `expire_old_coupons()` RPC 먼저 호출해 만료 갱신 후 user_coupons + templates join 결과 반환. mock 모드는 시드 + in-memory 만료 처리 |
+| `getCoupon(id)` | 쿠폰 단건 — 결제 시 적용 검증용 |
+| `calcCouponDiscount(coupon, goods)` *(`lib/supabase/types.ts`)* | FIXED 는 그대로, PERCENT 는 `floor(goods × value / 100)` 후 maxDiscount 상한. 최소주문 미달 시 0. goodsAmount 보다 큰 값은 자동 클램프 |
+| `formatCouponDiscount(coupon)` | "1,000원 할인" / "10% (최대 5,000원) 할인" 표기 헬퍼 |
 | `normalizeIsbn(raw)` *(`lib/isbn.ts`)* | ISBN-10/13 체크섬 검증 + ISBN-10 → 13 변환. 도서 prefix(978/979) 강제. 유효하지 않으면 null |
 | `meta.{CATEGORIES, …}` | 정적 메타데이터 |
 
@@ -263,6 +272,8 @@ supabase/migrations/
 | `messages` | `room_id`, `sender_id`, `body`, `type`, `read_at` |
 | `notifications` | `user_id`, `kind`, `payload(jsonb)`, `read_at` |
 | `shelf_items` | `user_id`, `title`/`author`/`publisher`/`isbn`/`category`/`cover_url`(denormalized), `status(READING/FINISHED/FOR_SALE/OWNED)`, `started_at`, `finished_at`, `rating(1-5)`, `memo`, `linked_book_id` |
+| `coupon_templates` | `code`, `name`, `description`, `discount_type(FIXED/PERCENT)`, `discount_value`, `min_order_amount`, `max_discount`, `issue_kind(SIGNUP/EVENT/MANUAL)`, `valid_days`, `active` |
+| `user_coupons` | `user_id`, `template_id`, `status(AVAILABLE/USED/EXPIRED)`, `issued_at`, `expires_at`, `used_at`, `used_transaction_id` |
 
 Realtime 구독: `messages`, `chat_rooms`, `notifications`  
 Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
@@ -283,7 +294,7 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 #### 신규 기능 로드맵 (v10 후보)
 
 1. **푸시 알림(디바이스)** — 인앱(Realtime) 은 완성. FCM/Web Push 발송용 Edge Function + service worker. 도입 시 활성 채팅방 알림 정책을 옵션 A(presence 기반) 로 업그레이드 권장 — 현재는 클라가 진입 시 read 처리하는 단순 해법
-2. **쿠폰 시스템** — `user_coupons` 테이블 + 발급/사용 플로우. 현재 `/mypage/coupons` 는 빈 상태 안내만
+2. ~~**쿠폰 시스템**~~ → **v9.6 완료**. 0017 + /mypage/coupons + /checkout 흐름 모두 연결
 3. **상태 상세 체크 — 검색 필터 연동** — 0013 의 `condition_detail` 은 현재 표시용. 향후 검색 필터에 "본문 깨끗" 같은 빠른 필터를 추가하면 jsonb 인덱스(`gin (condition_detail)`) + 쿼리(예: `condition_detail->'body'->>'pen' is not true`) 로 분기 가능. 운영 데이터가 쌓이면 검토
 
 #### 영구 보류 (사이드 프로젝트 범위 밖)

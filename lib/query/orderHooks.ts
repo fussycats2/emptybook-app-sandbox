@@ -33,7 +33,8 @@ export function useOrder(id: string | undefined) {
 export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { bookId: string }) => createOrder(input),
+    mutationFn: (input: { bookId: string; userCouponId?: string }) =>
+      createOrder(input),
     onSuccess: (_res, input) => {
       qc.invalidateQueries({ queryKey: queryKeys.order.list() });
       // 책 status 가 SOLD 로 바뀌므로 도서 리스트/상세 + 채팅 목록(책 배지) 갱신
@@ -43,7 +44,12 @@ export function useCreateOrder() {
       });
       qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
       // 0014 트리거가 책장 FOR_SALE → OWNED 로 자동 전이시키므로 책장 캐시도 갱신
+      // 0016 트리거가 buyer 책장에 OWNED 로 자동 추가하므로 같은 invalidate 가 반영
       qc.invalidateQueries({ queryKey: queryKeys.shelf.lists() });
+      // 쿠폰을 같이 적용했으면 status 가 USED 로 바뀌었으니 쿠폰 목록 캐시도 갱신
+      if (input.userCouponId) {
+        qc.invalidateQueries({ queryKey: queryKeys.coupon.list() });
+      }
     },
   });
 }

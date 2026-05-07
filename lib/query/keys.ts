@@ -32,8 +32,13 @@ export const queryKeys = {
   profile: {
     all: ["profile"] as const,
     me: () => [...queryKeys.profile.all, "me"] as const,
-    receivedReviews: (uid?: string) =>
-      [...queryKeys.profile.all, "receivedReviews", uid ?? "self"] as const,
+    receivedReviews: (uid?: string, limit?: number) =>
+      [
+        ...queryKeys.profile.all,
+        "receivedReviews",
+        uid ?? "self",
+        limit ?? "all",
+      ] as const,
   },
   review: {
     all: ["review"] as const,
@@ -49,5 +54,10 @@ export const queryKeys = {
     list: (filter?: string) =>
       [...queryKeys.shelf.lists(), filter ?? "all"] as const,
     detail: (id: string) => [...queryKeys.shelf.all, "detail", id] as const,
+  },
+  coupon: {
+    all: ["coupon"] as const,
+    list: () => [...queryKeys.coupon.all, "list"] as const,
+    detail: (id: string) => [...queryKeys.coupon.all, "detail", id] as const,
   },
 };

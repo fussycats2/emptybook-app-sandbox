@@ -11,6 +11,7 @@ import {
   type Profile,
   type ShelfItem,
   type ShelfStatus,
+  type UserCoupon,
 } from "./supabase/types";
 
 // BookCard 가 요구하는 필드(BookSummary)에 상세화면용 추가 필드를 합친 확장 타입
@@ -30,6 +31,9 @@ export type MockBook = BookSummary & {
   seller?: string;
   sellerId?: string; // 실제 auth user.id (Supabase 모드). mock에선 미사용
   sellerStats?: string;
+  // 판매자 카드 보강 (v9.7) — profiles 의 rating_avg / trade_count 직접 노출
+  sellerRating?: number; // 0~5 (소수 한 자리)
+  sellerTradeCount?: number;
   registeredAt?: string;
   tradeMethod?: string;
   category?: string;
@@ -141,6 +145,8 @@ const SEED_BOOKS: MockBook[] = [
       "한 번 정독 후 책장에 보관했던 책입니다. 깨끗하게 사용했어요. 빠른 거래 환영합니다 :)",
     seller: "책방마니아",
     sellerStats: "거래 42회 · ★ 4.9",
+    sellerRating: 4.9,
+    sellerTradeCount: 42,
     registeredAt: "2024.01.15",
     tradeMethod: "직거래 (마포구), 택배 가능",
     status: "selling",
@@ -160,6 +166,8 @@ const SEED_BOOKS: MockBook[] = [
     region: "서대문구",
     date: "3시간 전",
     seller: "독서왕",
+    sellerRating: 4.7,
+    sellerTradeCount: 24,
     status: "selling",
     likes: 7,
     chats: 2,
@@ -177,6 +185,8 @@ const SEED_BOOKS: MockBook[] = [
     region: "용산구",
     date: "어제",
     seller: "북헌터",
+    sellerRating: 4.6,
+    sellerTradeCount: 36,
     status: "selling",
     likes: 24,
     chats: 5,
@@ -194,6 +204,8 @@ const SEED_BOOKS: MockBook[] = [
     region: "성동구",
     date: "2일 전",
     seller: "리딩클럽",
+    sellerRating: 4.8,
+    sellerTradeCount: 48,
     status: "free",
     free: true,
     likes: 41,
@@ -407,6 +419,65 @@ const SEED_REVIEWS: MockReview[] = [
     tags: ["설명이 정확해요"],
     createdAt: "2023-12-15T09:20:00.000Z",
   },
+  // 다른 판매자(=mock 시드 책의 seller 이름)들의 받은 후기 — 도서 상세의 SellerCard 가 노출
+  // mock 모드에서는 sellerId 가 없어 reviewee 매칭이 어려우므로 reviewerName=구매자 / revieweeId=셀러이름 형태로 시드
+  {
+    id: "rv-seed-seller-1a",
+    transactionId: "o-seed-seller-1a",
+    reviewerId: "민지",
+    revieweeId: "책방마니아",
+    reviewerName: "민지",
+    bookTitle: "채식주의자",
+    bookId: "1",
+    rating: 5,
+    tags: ["도서 상태가 좋아요", "응답이 빨라요"],
+    comment: "한강 작가 책을 깨끗한 상태로 받았어요. 포장도 꼼꼼해서 만족스럽습니다.",
+    createdAt: "2026-04-21T11:00:00.000Z",
+  },
+  {
+    id: "rv-seed-seller-1b",
+    transactionId: "o-seed-seller-1b",
+    reviewerId: "정우",
+    revieweeId: "책방마니아",
+    reviewerName: "정우",
+    rating: 5,
+    tags: ["친절해요", "약속을 잘 지켜요"],
+    comment: "친절하게 응답해주셔서 편하게 거래했습니다. 추천!",
+    createdAt: "2026-04-10T14:00:00.000Z",
+  },
+  {
+    id: "rv-seed-seller-2a",
+    transactionId: "o-seed-seller-2a",
+    reviewerId: "수민",
+    revieweeId: "독서왕",
+    reviewerName: "수민",
+    rating: 5,
+    tags: ["설명이 정확해요"],
+    comment: "사진과 동일한 상태였고 설명도 자세해서 좋았어요.",
+    createdAt: "2026-04-05T16:00:00.000Z",
+  },
+  {
+    id: "rv-seed-seller-3a",
+    transactionId: "o-seed-seller-3a",
+    reviewerId: "지윤",
+    revieweeId: "북헌터",
+    reviewerName: "지윤",
+    rating: 4,
+    tags: ["응답이 빨라요"],
+    comment: "응답이 빨라서 거래가 매끄러웠어요.",
+    createdAt: "2026-04-15T10:30:00.000Z",
+  },
+  {
+    id: "rv-seed-seller-4a",
+    transactionId: "o-seed-seller-4a",
+    reviewerId: "지수",
+    revieweeId: "리딩클럽",
+    reviewerName: "지수",
+    rating: 5,
+    tags: ["친절해요", "포장이 꼼꼼해요"],
+    comment: "무료 나눔인데도 정말 잘 포장해서 보내주셨어요. 감사합니다!",
+    createdAt: "2026-04-18T12:00:00.000Z",
+  },
 ];
 
 // /mypage/shelf — 비로그인/mock 모드에서 미리 보여줄 책장 시드
@@ -469,6 +540,52 @@ const SEED_SHELF: ShelfItem[] = [
   },
 ];
 
+// /mypage/coupons — 0017 시드의 mock 동등.
+// 신규가입(WELCOME1000) + 이벤트(SPRING3000) + 만료된 쿠폰(EXPIRED) 한 장씩 보여
+// 모든 상태 케이스가 최소 1번은 화면에 등장하게 한다.
+const SEED_COUPONS: UserCoupon[] = [
+  {
+    id: "uc-1",
+    templateId: "ct-welcome",
+    status: "AVAILABLE",
+    issuedAt: "2026-04-15T08:00:00.000Z",
+    expiresAt: "2026-07-14T08:00:00.000Z",
+    name: "신규가입 환영 1,000원 쿠폰",
+    description: "회원가입을 환영합니다. 첫 거래에 사용해보세요.",
+    discountType: "FIXED",
+    discountValue: 1000,
+    minOrderAmount: 5000,
+    code: "WELCOME1000",
+  },
+  {
+    id: "uc-2",
+    templateId: "ct-spring",
+    status: "AVAILABLE",
+    issuedAt: "2026-05-01T08:00:00.000Z",
+    expiresAt: "2026-05-31T08:00:00.000Z",
+    name: "봄맞이 책장 정리 3,000원 쿠폰",
+    description: "10,000원 이상 결제 시 사용 가능해요.",
+    discountType: "FIXED",
+    discountValue: 3000,
+    minOrderAmount: 10000,
+    code: "SPRING3000",
+  },
+  {
+    id: "uc-3",
+    templateId: "ct-percent",
+    status: "EXPIRED",
+    issuedAt: "2026-03-01T08:00:00.000Z",
+    expiresAt: "2026-04-01T08:00:00.000Z",
+    name: "10% 할인 쿠폰",
+    description: "7,000원 이상, 최대 5,000원까지 할인돼요.",
+    discountType: "PERCENT",
+    discountValue: 10,
+    minOrderAmount: 7000,
+    maxDiscount: 5000,
+    code: "PERCENT10",
+  },
+];
+
 // 비로그인/mock 모드의 "내 프로필" 기본값 — /mypage/settings 편집 시뮬레이션용
 const SEED_PROFILE: Profile = {
   id: "mock-me",
@@ -496,6 +613,7 @@ type Store = {
   profile: Profile; // 내 프로필(비로그인/mock 모드용)
   messages: MockMessage[]; // 채팅방 메시지 — roomId 로 필터해서 사용
   shelf: ShelfItem[]; // 0012 — 사용자 개인 책장
+  coupons: UserCoupon[]; // 0017 — 사용자 쿠폰
 };
 
 // 처음 호출되면 SEED 데이터를 globalThis 에 박아두고, 이후엔 그걸 재사용한다
@@ -513,6 +631,7 @@ function getStore(): Store {
       profile: { ...SEED_PROFILE, app_prefs: { ...DEFAULT_APP_PREFS } },
       messages: [...SEED_MESSAGES],
       shelf: [...SEED_SHELF],
+      coupons: [...SEED_COUPONS],
     } satisfies Store;
   }
   return g[STORE_KEY] as Store;
@@ -766,10 +885,19 @@ export function mockCreateReview(input: {
 
 // 받은 후기 — mock 모드의 사용자("나")를 reviewee 로 가진 후기들
 // 최신순 정렬, 카드용 형태로 가공
-export function mockListReceivedReviews(): ReceivedReviewCard[] {
+// revieweeId 인자가 있으면 그 사용자의 받은 후기를, 없으면 "나"/"me" 의 받은 후기를 반환.
+// /mypage/reviews 는 인자 없이(=내 것), /books/[id] SellerCard 는 sellerName(mock) 또는 sellerId(supabase) 로 호출.
+export function mockListReceivedReviews(
+  revieweeId?: string
+): ReceivedReviewCard[] {
   const s = getStore();
+  const matchSelf = (r: MockReview) =>
+    r.revieweeId === "나" || r.revieweeId === "me";
+  const filter = revieweeId
+    ? (r: MockReview) => r.revieweeId === revieweeId
+    : matchSelf;
   return [...s.reviews]
-    .filter((r) => r.revieweeId === "나" || r.revieweeId === "me")
+    .filter(filter)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
     .map((r) => ({
       id: r.id,
@@ -1084,6 +1212,45 @@ export const POPULAR_SELLERS = [
   { name: "북헌터", trades: 36, manner: 39.4 },
   { name: "리딩클럽", trades: 48, manner: 42.0 },
 ];
+
+// ---------- Coupons (0017) ----------
+
+// 만료 일자가 지난 AVAILABLE 쿠폰을 EXPIRED 로 옮긴다 — DB 의 expire_old_coupons() 동등.
+// 조회 시점에 호출하므로 별도 cron 없이도 화면이 정확한 status 를 보여준다.
+function expireOldCoupons() {
+  const s = getStore();
+  const now = Date.now();
+  for (const c of s.coupons) {
+    if (c.status === "AVAILABLE" && Date.parse(c.expiresAt) < now) {
+      c.status = "EXPIRED";
+    }
+  }
+}
+
+export function mockListMyCoupons(): UserCoupon[] {
+  expireOldCoupons();
+  // 최신 발급 순 — 같은 status 안에서 issued_at 내림차순
+  return [...getStore().coupons].sort((a, b) =>
+    a.issuedAt < b.issuedAt ? 1 : a.issuedAt > b.issuedAt ? -1 : 0
+  );
+}
+
+export function mockGetCoupon(id: string): UserCoupon | undefined {
+  expireOldCoupons();
+  return getStore().coupons.find((c) => c.id === id);
+}
+
+// 결제 시 호출 — 쿠폰을 USED 로 옮기고 사용 거래 id 를 기록.
+// 이미 USED/EXPIRED 면 변경하지 않음 (race 방어).
+export function mockMarkCouponUsed(couponId: string, transactionId: string) {
+  const s = getStore();
+  const c = s.coupons.find((x) => x.id === couponId);
+  if (!c) return;
+  if (c.status !== "AVAILABLE") return;
+  c.status = "USED";
+  c.usedAt = new Date().toISOString();
+  c.usedTransactionId = transactionId;
+}
 
 export const RECENT_SEARCHES = ["한강", "달러구트", "82년생", "데미안", "코스모스"];
 export const POPULAR_SEARCHES = [

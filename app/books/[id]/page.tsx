@@ -27,6 +27,8 @@ import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import RuleRoundedIcon from "@mui/icons-material/RuleRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
+import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
@@ -44,7 +46,8 @@ import {
   useRecentBooks,
 } from "@/lib/query/bookHooks";
 import { useGetOrCreateChatRoom } from "@/lib/query/chatHooks";
-import { palette } from "@/lib/theme";
+import { useReceivedReviews } from "@/lib/query/profileHooks";
+import { palette, radius } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLikesStore, selectLikeCount } from "@/lib/store/likesStore";
@@ -130,6 +133,12 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
   const isCanceled = status === "canceled";
   // 거래완료/취소된 책은 본인이 아니어도 구매 불가
   const ctaDisabled = isMine || isSold || isCanceled;
+
+  // 판매자 카드의 받은 후기 미리보기 — 본인 책이면 안 가져옴(불필요한 요청 방지).
+  // mock 모드에서는 sellerId 가 없을 수 있어 항상 시드 후기로 폴백.
+  // ⚠️ React 훅 규칙상 useReceivedReviews 는 컴포넌트 본문 첫 렌더부터 호출돼야 하지만,
+  //    book 이 없을 때 page 가 early-return 하므로 컴포넌트 분리 없이는 호출 위치를 옮기기 어렵다.
+  //    SellerCard 를 별도 컴포넌트로 빼서 그 안에서 훅을 호출 (아래 정의)
 
   // "판매 취소" — books.status → HIDDEN. 매물 목록/검색에서 사라지지만 데이터는 보존
   const handleCancel = async () => {
@@ -247,35 +256,24 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
 
         <Box sx={{ p: 2 }}>
           <Stack
-            direction="row"
-            gap={1.25}
-            alignItems="center"
+            direction="column"
             sx={{
-              borderRadius: 3,
+              borderRadius: `${radius.md}px`,
               border: `1px solid ${palette.lineSoft}`,
               background: palette.surfaceAlt,
               p: 1.5,
               transition: "border-color 160ms ease, background 160ms ease",
-              cursor: "pointer",
               "&:hover": { borderColor: palette.line, background: palette.surface },
             }}
           >
-            <BookImage seed={book.seller} width={44} height={44} radius={999} />
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontSize: 14, fontWeight: 800, letterSpacing: "-0.02em" }}>
-                {book.seller || "책방마니아"}
-              </Typography>
-              <Stack
-                direction="row"
-                alignItems="center"
-                gap={0.25}
-                sx={{ color: palette.inkSubtle, fontSize: 11.5, mt: 0.25 }}
-              >
-                <LocationOnRoundedIcon sx={{ fontSize: 13 }} />
-                <span>{book.loc ?? "마포구"}</span>
-              </Stack>
-            </Box>
-            <MannerTemperature value={38.6} size="sm" />
+            <SellerCard
+              sellerName={book.seller || "책방마니아"}
+              sellerId={book.sellerId}
+              sellerRating={book.sellerRating}
+              sellerTradeCount={book.sellerTradeCount}
+              loc={book.loc ?? book.region ?? "마포구"}
+              isMine={isMine}
+            />
           </Stack>
 
           <Box sx={{ pt: 2.5 }}>
@@ -823,6 +821,173 @@ function ConditionDetailRow({ detail }: { detail: ConditionDetail }) {
             판매자가 등록 시 체크한 항목이에요.
           </Typography>
         </Box>
+      )}
+    </Box>
+  );
+}
+
+// 도서 상세의 판매자 영역 — 프로필 + 거래수/별점/매너온도 + 받은 후기 미리보기 2개.
+// 도서 상세 본문 안에서 useReceivedReviews 를 직접 호출하면 book 가드(early return)
+// 와 훅 호출 순서가 꼬일 수 있어 별도 컴포넌트로 분리했다 (book 이 있을 때만 렌더됨).
+function SellerCard({
+  sellerName,
+  sellerId,
+  sellerRating,
+  sellerTradeCount,
+  loc,
+  isMine,
+}: {
+  sellerName: string;
+  sellerId?: string;
+  sellerRating?: number;
+  sellerTradeCount?: number;
+  loc: string;
+  isMine: boolean;
+}) {
+  // 본인 책이면 후기 미리보기 호출을 스킵 — 본인 화면에서는 '받은 후기' 가 의미 없고,
+  // 마이페이지 > 받은 후기 메뉴를 따로 쓰는 게 자연스럽다.
+  // 받은 후기는 BookCard 위에 보조 정보로만 들어가는 거라 limit 2 로 충분.
+  // mock 모드에서는 sellerId 가 보통 비어 있어 sellerName 을 revieweeId 매칭에 사용한다.
+  const reviewLookupKey = isMine ? undefined : sellerId ?? sellerName;
+  const { data: reviews } = useReceivedReviews(reviewLookupKey, 2);
+  const showReviews = !isMine && (reviews?.length ?? 0) > 0;
+  // 매너온도는 trade_count 에 따라 자연스럽게 보정 — 거래가 많을수록 살짝 높게.
+  // (실제로는 reviews/manner 모델이 별도여야 하지만 현재 단계엔 가짜 휴리스틱)
+  const manner = 36.5 + Math.min(sellerTradeCount ?? 0, 50) * 0.18;
+
+  return (
+    <>
+      <Stack direction="row" gap={1.25} alignItems="center">
+        <BookImage seed={sellerName} width={44} height={44} radius={999} />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            sx={{
+              fontSize: 14,
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {sellerName}
+          </Typography>
+          <Stack
+            direction="row"
+            alignItems="center"
+            gap={0.25}
+            sx={{ color: palette.inkSubtle, fontSize: 11.5, mt: 0.25 }}
+          >
+            <LocationOnRoundedIcon sx={{ fontSize: 13 }} />
+            <span>{loc}</span>
+            {sellerTradeCount != null && (
+              <>
+                <span style={{ margin: "0 4px" }}>·</span>
+                <span>거래 {sellerTradeCount}회</span>
+              </>
+            )}
+            {sellerRating != null && sellerRating > 0 && (
+              <Stack direction="row" gap={0.15} alignItems="center" sx={{ ml: 0.25 }}>
+                <StarRoundedIcon sx={{ fontSize: 13, color: "#FFC53D" }} />
+                <span>{sellerRating.toFixed(1)}</span>
+              </Stack>
+            )}
+          </Stack>
+        </Box>
+        <MannerTemperature value={Number(manner.toFixed(1))} size="sm" />
+      </Stack>
+
+      {showReviews && (
+        <Box sx={{ mt: 1.25, pt: 1.25, borderTop: `1px dashed ${palette.lineSoft}` }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.75}>
+            <Typography
+              sx={{
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: palette.inkSubtle,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              구매자가 남긴 후기
+            </Typography>
+            {sellerTradeCount != null && sellerTradeCount > 0 && (
+              <Stack direction="row" alignItems="center" gap={0.25} sx={{ color: palette.inkSubtle }}>
+                <Typography sx={{ fontSize: 11 }}>전체 보기</Typography>
+                <KeyboardArrowRightRoundedIcon sx={{ fontSize: 14 }} />
+              </Stack>
+            )}
+          </Stack>
+          <Stack gap={0.75}>
+            {(reviews ?? []).map((r) => (
+              <ReviewPreviewRow key={r.id} review={r} />
+            ))}
+          </Stack>
+        </Box>
+      )}
+    </>
+  );
+}
+
+function ReviewPreviewRow({
+  review,
+}: {
+  review: {
+    id: string;
+    rating: number;
+    comment?: string;
+    tags?: string[];
+    reviewerName: string;
+  };
+}) {
+  // 코멘트 없으면 첫 태그를 대신 노출 (둘 다 없으면 별점만)
+  const fallback = review.tags?.[0];
+  const text = review.comment?.trim() || fallback;
+  return (
+    <Box
+      sx={{
+        background: palette.surface,
+        borderRadius: `${radius.sm}px`,
+        border: `1px solid ${palette.lineSoft}`,
+        p: 1,
+      }}
+    >
+      <Stack direction="row" gap={0.5} alignItems="center" sx={{ mb: 0.25 }}>
+        <Stack direction="row" gap={0.1}>
+          {[1, 2, 3, 4, 5].map((i) => (
+            <StarRoundedIcon
+              key={i}
+              sx={{
+                fontSize: 12,
+                color: i <= review.rating ? "#FFC53D" : palette.lineSoft,
+              }}
+            />
+          ))}
+        </Stack>
+        <Typography
+          sx={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: palette.inkMute,
+          }}
+        >
+          {review.reviewerName}
+        </Typography>
+      </Stack>
+      {text && (
+        <Typography
+          sx={{
+            fontSize: 12.5,
+            color: palette.ink,
+            lineHeight: 1.5,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {text}
+        </Typography>
       )}
     </Box>
   );

@@ -47,9 +47,9 @@ export function useUpdateAppPrefs() {
   });
 }
 
-export function useReceivedReviews(userId?: string) {
+export function useReceivedReviews(userId?: string, limit?: number) {
   return useQuery({
-    queryKey: queryKeys.profile.receivedReviews(userId),
-    queryFn: () => listReceivedReviews(userId),
+    queryKey: queryKeys.profile.receivedReviews(userId, limit),
+    queryFn: () => listReceivedReviews(userId, limit),
   });
 }
