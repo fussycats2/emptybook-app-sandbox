@@ -135,8 +135,9 @@ export default function PhoneFrame({
         sx={{
           width: { xs: "100vw", md: 420 },
           maxWidth: "100vw",
-          // 데스크톱에선 화면 높이에 맞춰 최대 860px 까지만, 좌우/상하 여유 확보
-          height: { xs: "100dvh", md: "min(860px, calc(100dvh - 32px))" },
+          // 데스크톱에선 화면 높이에 맞춰 최대 760px 까지만 (이전 860 → 메인이 비어 보여 축소).
+          // 일반 모바일 디바이스 세로(~800) 와 비슷한 비율을 유지
+          height: { xs: "100dvh", md: "min(760px, calc(100dvh - 32px))" },
           background: palette.bg,
           borderRadius: { xs: 0, md: `${radius.xl}px` },
           overflow: "hidden",
