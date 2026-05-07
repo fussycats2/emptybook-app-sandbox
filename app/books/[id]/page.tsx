@@ -49,6 +49,7 @@ import {
 } from "@/lib/query/bookHooks";
 import { useGetOrCreateChatRoom } from "@/lib/query/chatHooks";
 import { useReceivedReviews } from "@/lib/query/profileHooks";
+import { useAddShelfItem } from "@/lib/query/shelfHooks";
 import { palette, radius } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -68,6 +69,8 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
   const related = (recent ?? []).filter((x) => x.id !== id);
   const cancelMutation = useCancelBook();
   const deleteMutation = useDeleteBook();
+  // 판매 취소 / 삭제→cancel 폴백 시 책을 책장으로 자동 이동시키기 위해 사용
+  const addShelfMutation = useAddShelfItem();
   const chatRoom = useGetOrCreateChatRoom();
 
   const [scrolled, setScrolled] = useState(false);
@@ -142,15 +145,38 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
   //    book 이 없을 때 page 가 early-return 하므로 컴포넌트 분리 없이는 호출 위치를 옮기기 어렵다.
   //    SellerCard 를 별도 컴포넌트로 빼서 그 안에서 훅을 호출 (아래 정의)
 
-  // "판매 취소" — books.status → HIDDEN. 매물 목록/검색에서 사라지지만 데이터는 보존
+  // 책을 책장에 OWNED 로 보장 (판매 취소 시 사용).
+  // 0014 트리거가 linked shelf_item 이 있으면 FOR_SALE → OWNED 로 자동 옮겨주지만,
+  // 사용자가 /register 로 직접 등록한 책은 shelf 에 흔적이 없을 수 있음 → 명시적 추가.
+  // ISBN UNIQUE (0012) 가 같은 책의 중복 추가를 막아 idempotent.
+  const ensureBookOnShelf = async () => {
+    if (!book) return;
+    try {
+      await addShelfMutation.mutateAsync({
+        title: book.title,
+        author: book.author,
+        publisher: book.publisher,
+        isbn: book.isbn,
+        category: book.category,
+        coverUrl: book.coverUrl,
+        status: "OWNED",
+      });
+    } catch {
+      /* noop — 책장 이동 실패가 cancel 자체를 막진 않음 */
+    }
+  };
+
+  // "판매 취소" — books.status → HIDDEN. 매물 목록/검색에서 사라지지만 데이터는 보존.
+  // 사용자 멘탈 모델: "판매 취소 = 다시 내 소유로 돌아옴" → 책장으로 redirect.
   const handleCancel = async () => {
     if (busy || !book) return;
     const ok = await cancelMutation.mutateAsync(book.id);
     setConfirm(null);
     setMenuOpen(false);
     if (ok) {
-      toast?.show("판매를 취소했어요");
-      router.replace("/mypage/selling");
+      await ensureBookOnShelf();
+      toast?.show("판매를 취소하고 책장으로 옮겼어요");
+      router.replace("/mypage/shelf");
       router.refresh();
     } else {
       toast?.show("취소에 실패했어요");
@@ -166,8 +192,10 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
       setConfirm(null);
       setMenuOpen(false);
       if (hidden) {
-        toast?.show("거래 이력이 있어 숨김 처리했어요");
-        router.replace("/mypage/selling");
+        // 실질적으로 cancel 동작 — 책장으로 보내는 흐름과 일치시킴
+        await ensureBookOnShelf();
+        toast?.show("거래 이력이 있어 책장으로 옮겼어요");
+        router.replace("/mypage/shelf");
         router.refresh();
       } else {
         toast?.show("삭제에 실패했어요");
@@ -227,20 +255,42 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           {book.title}
         </Typography>
         <IconButton
-          onClick={() => toast?.show("링크를 복사했어요")}
+          onClick={async () => {
+            // 모바일 환경이면 OS 공유 시트, 아니면 클립보드 복사로 폴백.
+            // 이전엔 토스트만 띄우고 실제 복사가 안 돼서 거짓말 UI 였음.
+            const url = typeof window !== "undefined" ? window.location.href : "";
+            if (!url) return;
+            try {
+              if (typeof navigator !== "undefined" && navigator.share) {
+                await navigator.share({
+                  title: book.title,
+                  url,
+                });
+                return;
+              }
+              if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(url);
+                toast?.show("링크를 복사했어요");
+                return;
+              }
+              toast?.show("공유를 지원하지 않는 환경이에요", "warning");
+            } catch {
+              // 사용자가 공유 시트를 닫은 케이스도 catch 됨 — 토스트는 띄우지 않음
+            }
+          }}
           sx={{ color: scrolled ? palette.ink : "#fff" }}
         >
           <IosShareRoundedIcon fontSize="small" />
         </IconButton>
-        <IconButton
-          onClick={() => {
-            if (isMine) setMenuOpen(true);
-            else toast?.show("준비중이에요");
-          }}
-          sx={{ color: scrolled ? palette.ink : "#fff" }}
-        >
-          <MoreVertRoundedIcon />
-        </IconButton>
+        {/* MoreVert — 본인 책일 때만 노출. 다른 사람 책에서 누르면 의미 없는 토스트만 뜨던 거 제거. */}
+        {isMine && (
+          <IconButton
+            onClick={() => setMenuOpen(true)}
+            sx={{ color: scrolled ? palette.ink : "#fff" }}
+          >
+            <MoreVertRoundedIcon />
+          </IconButton>
+        )}
       </Box>
 
       {/* 200px 스크롤되면 헤더 스타일을 전환하는 트리거 */}

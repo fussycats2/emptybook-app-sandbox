@@ -17,6 +17,7 @@ import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
 import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import { ScrollBody } from "@/components/ui/Section";
@@ -29,7 +30,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useMyBooks } from "@/lib/query/bookHooks";
 import { useOrders } from "@/lib/query/orderHooks";
-import { useMyProfile } from "@/lib/query/profileHooks";
+import { useMyProfile, useReceivedReviews } from "@/lib/query/profileHooks";
 import { useMyShelf } from "@/lib/query/shelfHooks";
 import { useLikesStore } from "@/lib/store/likesStore";
 import { useRecentlyViewedStore } from "@/lib/store/recentlyViewedStore";
@@ -88,6 +89,20 @@ export default function MyPage() {
   const { data: myBooks } = useMyBooks();
   const { data: orders } = useOrders();
   const { data: profile } = useMyProfile();
+  // 받은 후기에서 tags 빈도 집계 — 매너 칩(아래)을 동적으로 그린다.
+  // 이전엔 "응답이 빨라요/친절해요/도서 상태 좋아요" 가 모든 사용자에게 동일하게 박혀 있었음.
+  const { data: receivedReviews } = useReceivedReviews();
+  const topMannerTags = useMemo(() => {
+    if (!receivedReviews?.length) return [] as string[];
+    const freq = new Map<string, number>();
+    for (const r of receivedReviews) {
+      for (const t of r.tags ?? []) freq.set(t, (freq.get(t) ?? 0) + 1);
+    }
+    return [...freq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([t]) => t);
+  }, [receivedReviews]);
   const likeCount = useLikesStore((s) => s.liked.size);
   // 최근 본 책 개수 — localStorage persist 라 첫 프레임은 0 일 수 있다 (SSR/hydration 안전)
   const recentCount = useRecentlyViewedStore((s) => s.items.length);
@@ -251,8 +266,11 @@ export default function MyPage() {
               size="lg"
             />
           </Box>
+          {/* 매너 칩 — 받은 후기의 tags 빈도 상위 3개. 후기가 없으면 영역 자체 숨김.
+              (이전엔 모든 사용자에게 동일한 3개 문자열이 박혀 있었음) */}
+          {topMannerTags.length > 0 && (
           <Stack direction="row" gap={0.75} mt={1.75} flexWrap="wrap" sx={{ position: "relative" }}>
-            {["응답이 빨라요", "친절해요", "도서 상태 좋아요"].map((t) => (
+            {topMannerTags.map((t) => (
               <Box
                 key={t}
                 sx={{
@@ -270,6 +288,7 @@ export default function MyPage() {
               </Box>
             ))}
           </Stack>
+          )}
         </Box>
 
         <Box sx={{ p: 2 }}>

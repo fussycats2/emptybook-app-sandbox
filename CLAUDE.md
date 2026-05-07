@@ -143,6 +143,7 @@ Realtime: `messages`, `chat_rooms`, `notifications` · Storage 버킷: `book-ima
 - **Storage 업로드**: `book-images` 버킷, 단일 8MB 한도, public URL.
 - **새 마이그레이션**: 다음 번호 + RLS 정책/트리거에는 `SECURITY DEFINER` 명시. 마이그레이션 시점 백필 SQL 도 같은 파일에.
 - **셀러 책 상태 관리 단일 출처**: `books.status` (RESERVED/SOLD/HIDDEN) 변경은 `/books/[id]` MoreVert(수정/판매취소/삭제) 한 곳에서만. 다른 화면(예: 채팅)에 동일 액션 메뉴를 중복으로 띄우면 ① 로컬 state 만 토글되는 placeholder 가 되거나 ② 도메인 id 충돌이 생긴다. 새 액션은 그 단일 출처에 추가.
+- **판매 취소 → 책장 redirect**: `cancelBook` 성공 후엔 `/mypage/selling` 이 아니라 `/mypage/shelf` 로 보낸다. 사용자 멘탈 모델이 "취소 = 다시 내 소유로 돌아옴". 0014 트리거가 linked shelf_item 만 OWNED 로 옮기므로, 직접 등록한 책(shelf 흔적 없음)은 클라이언트가 `addShelfItem(status:"OWNED")` 로 명시 추가해야 일관됨. ISBN partial unique(0012) 가 idempotent 보장. 정상 삭제(영구)는 사용자 의도대로 `/mypage/selling` 유지 — 책장에 추가 안 함.
 - **신규 가입 메타 채움**: profiles 의 추가 필드(phone/preferred_genres 등) 는 `/signup` 의 `signUp({ options: { data: ... } })` 에 담아 보내고 `handle_new_user()` 트리거(0018) 가 흡수. 가입 직후 클라이언트가 `profiles.update()` 를 호출하면 confirm-email ON 환경에서 RLS 가 silent 차단.
 - **BookCard 류 표지**: `BookImage` 에 `seed={book.id} src={book.coverUrl}` 두 prop 모두 넘겨야 한다. `src` 가 있으면 실표지, 없으면 seed 기반 placeholder 로 폴백. 한쪽이라도 빠지면 표지 있는데 placeholder 가 나오거나, 폴백이 일관되지 않게 된다.
 - **세션 마감 git 작업**: 사용자가 직접 처리. 명시적 요청 있을 때만 commit/PR.

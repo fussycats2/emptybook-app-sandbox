@@ -35,6 +35,7 @@ import { meta, uploadBookImages } from "@/lib/repo";
 import { useCreateBook } from "@/lib/query/bookHooks";
 import { useNaverBookSearch } from "@/lib/query/naverBookHooks";
 import { useShelfItem, useUpdateShelfItem } from "@/lib/query/shelfHooks";
+import { useRegionStore } from "@/lib/store/regionStore";
 import { inferCategory } from "@/lib/categoryMap";
 import { hasAnyChecked } from "@/lib/conditionGrade";
 import type { ConditionDetail } from "@/lib/supabase/types";
@@ -87,7 +88,10 @@ function RegisterPageInner() {
   const [free, setFree] = useState(false);
   const [price, setPrice] = useState("6000");
   const [title, setTitle] = useState("");
-  const [region, setRegion] = useState("");
+  // 거래 지역 — 사용자가 홈에서 선택한 동네를 기본값으로 가져옴 (regionStore).
+  // store 가 localStorage persist 라 처음 진입 시에도 마지막 선택값이 들어간다.
+  const currentRegion = useRegionStore((s) => s.region);
+  const [region, setRegion] = useState(currentRegion);
   const [description, setDescription] = useState("");
   // 카테고리 — 검색 결과 선택 시 inferCategory 로 자동 추정, 사용자가 chip 으로 직접 변경 가능
   const [category, setCategory] = useState<string>("소설");
@@ -253,7 +257,7 @@ function RegisterPageInner() {
         state,
         priceNumber,
         free,
-        region: region.trim() || "마포구",
+        region: region.trim() || currentRegion,
         description: description.trim() || undefined,
         comment: description.trim() || undefined,
         tradeMethod:
