@@ -61,6 +61,11 @@ export function useCompleteOrder() {
     onSuccess: (_res, id) => {
       qc.invalidateQueries({ queryKey: queryKeys.order.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.order.list() });
+      // 0020 트리거가 양쪽 trade_count 를 갱신 → 그 값을 join 으로 노출하는 캐시도 함께 비움
+      // (rating_avg / trade_count 캐시 파급 룰 — useCreateReview 와 동일 묶음)
+      qc.invalidateQueries({ queryKey: queryKeys.book.all });
+      qc.invalidateQueries({ queryKey: queryKeys.chat.all });
+      qc.invalidateQueries({ queryKey: queryKeys.profile.me() });
     },
   });
 }

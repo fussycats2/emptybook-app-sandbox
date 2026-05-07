@@ -1057,8 +1057,8 @@ export async function fetchChat(id: string): Promise<ChatRow | null> {
     .from("chat_rooms")
     .select(
       `*, books(title, status),
-        buyer:profiles!chat_rooms_buyer_id_fkey(display_name),
-        seller:profiles!chat_rooms_seller_id_fkey(display_name)`
+        buyer:profiles!chat_rooms_buyer_id_fkey(display_name, rating_avg, trade_count),
+        seller:profiles!chat_rooms_seller_id_fkey(display_name, rating_avg, trade_count)`
     )
     .eq("id", id)
     .maybeSingle();
@@ -1067,9 +1067,8 @@ export async function fetchChat(id: string): Promise<ChatRow | null> {
   const isBuying = r.buyer_id === uid;
   // 상대방 = 내가 buyer면 seller, 내가 seller면 buyer
   // 회원가입 시 실명을 그대로 display_name 에 저장하므로 마스킹해서 표시
-  const counterpartName = anonymizeName(
-    isBuying ? r.seller?.display_name : r.buyer?.display_name
-  );
+  const partner = isBuying ? r.seller : r.buyer;
+  const counterpartName = anonymizeName(partner?.display_name);
   return {
     id: r.id,
     user: counterpartName,
@@ -1087,6 +1086,8 @@ export async function fetchChat(id: string): Promise<ChatRow | null> {
     status: r.books?.status
       ? bookStatusToUI(r.books.status as BookStatus)
       : "selling",
+    partnerRating: partner?.rating_avg ?? undefined,
+    partnerTradeCount: partner?.trade_count ?? undefined,
   };
 }
 
@@ -1409,7 +1410,9 @@ export async function fetchReviewContext(
   const uid = auth.user?.id;
   if (!uid) return mockGetReviewContext(transactionId);
 
-  // 거래 정보 + 책 + 양쪽 프로필 + 기존 후기 여부 동시 조회
+  // 거래 정보 + 책 + 양쪽 프로필 + "내가 이 거래에 이미 쓴 후기" 여부 동시 조회
+  // 0019 이후 (transaction_id, reviewer_id) UNIQUE — 양쪽이 각자 후기 1개씩 가능하므로
+  // alreadyReviewed 판정은 반드시 내 reviewer_id 기준으로 좁혀야 한다.
   const [{ data: tx }, { data: existing }] = await Promise.all([
     supabase
       .from("transactions")
@@ -1425,6 +1428,7 @@ export async function fetchReviewContext(
       .from("reviews")
       .select("id")
       .eq("transaction_id", transactionId)
+      .eq("reviewer_id", uid)
       .maybeSingle(),
   ]);
 
@@ -1448,7 +1452,8 @@ export async function fetchReviewContext(
   };
 }
 
-// 후기 INSERT — UNIQUE(transaction_id) 위반 시 에러 반환
+// 후기 INSERT — UNIQUE(transaction_id, reviewer_id) 위반 시 alreadyExists 분기 (0019).
+// 같은 거래에 양쪽이 1개씩 쓸 수 있으나, 같은 reviewer 가 두 번 쓰는 건 막힌다.
 // reviewee_id 는 호출자가 fetchReviewContext 로 미리 알아낸 값을 넘기는 게 안전
 export async function createReview(input: {
   transactionId: string;

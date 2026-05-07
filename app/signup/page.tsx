@@ -4,7 +4,12 @@
 //   step 0: 계정 정보(이름/이메일/비밀번호/휴대폰)
 //   step 1: 선호 장르 선택
 //   step 2: 약관 동의 → "가입 완료" 버튼으로 Supabase signUp 호출
-// TODO: Supabase Auth "Confirm email" 정책이 켜져 있으면 가입 직후 세션이 없음 → /login 으로 안내
+//
+// Confirm-email 정책 분기:
+//   - ON  → data.session 이 비어 있음. "메일 확인" 토스트 후 /login replace.
+//   - OFF → 즉시 세션. /home replace.
+// 양쪽 모두에서 phone / preferred_genres 가 누락되지 않도록 options.data 에 함께 담아 보내고
+// 0018 트리거(handle_new_user)가 profiles 행에 한 번에 채운다 — 후속 UPDATE 호출 없음.
 
 import {
   Box,
@@ -87,28 +92,17 @@ export default function SignupPage() {
     }
     setSubmitting(true);
     const supabase = supabaseBrowser();
-    // Supabase Auth 에 사용자 생성 (options.data 는 raw_user_meta_data 로 저장)
+    // 모든 프로필 메타데이터를 raw_user_meta_data 에 담아 보낸다.
+    // 0018 트리거가 profiles 에 한 번에 INSERT — confirm-email ON 에서도 RLS 우회되어 안전.
     const { data, error } = await supabase.auth.signUp({
       email,
       password: pw,
-      options: { data: { name, phone } },
+      options: { data: { name, phone, preferred_genres: picked } },
     });
     if (error) {
       setSubmitting(false);
       toast?.show(error.message || "가입에 실패했어요");
       return;
-    }
-    // 가입 성공 시 profiles 테이블의 추가 정보(이름/전화/선호 장르) 업데이트
-    // - profiles.id 는 auth.users.id 와 같으므로 그대로 매칭
-    if (data.user) {
-      await supabase
-        .from("profiles")
-        .update({
-          display_name: name,
-          phone,
-          preferred_genres: picked,
-        })
-        .eq("id", data.user.id);
     }
     setSubmitting(false);
     // 이메일 인증이 켜져 있으면 session 이 비어있다 → 인증 메일 안내 후 로그인 페이지로

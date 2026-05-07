@@ -224,12 +224,28 @@ export default function OrdersPage() {
                     후기 작성
                   </Button>
                 )}
-                {/* 거래 확정은 구매자(받았어요) 액션이라 판매 탭에선 숨긴다 */}
+                {/* 배송중 — 두 버튼을 분리해 의도를 명확히.
+                    · 배송 정보: 운송장/배송 단계만 확인하러 가는 정보 진입 (양쪽 탭 공통)
+                    · 거래 확정: ?confirm=1 로 진입해 페이지가 자동으로 ConfirmDialog 띄움 (구매 탭만)
+                    이전엔 "거래 확정" 한 버튼이 페이지 이동 + 액션 의도를 같이 가져
+                    "배송정보만 보고싶은데 누르면 바로 확정될까" 라는 망설임이 있었음. */}
+                {item.status === "배송중" && (
+                  <Button
+                    variant="outlined"
+                    sx={{ flex: 1 }}
+                    size="small"
+                    onClick={() => router.push(`/orders/${item.id}`)}
+                  >
+                    배송 정보
+                  </Button>
+                )}
                 {item.status === "배송중" && tab === "buy" && (
                   <Button
                     sx={{ flex: 1.5 }}
                     size="small"
-                    onClick={() => router.push(`/orders/${item.id}`)}
+                    onClick={() =>
+                      router.push(`/orders/${item.id}?confirm=1`)
+                    }
                   >
                     거래 확정
                   </Button>

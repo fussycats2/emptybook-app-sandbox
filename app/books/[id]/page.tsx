@@ -34,7 +34,9 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import ImageCarousel from "@/components/ui/ImageCarousel";
 import StatusBadge from "@/components/ui/StatusBadge";
-import MannerTemperature from "@/components/ui/MannerTemperature";
+import MannerTemperature, {
+  calcMannerTemperature,
+} from "@/components/ui/MannerTemperature";
 import LikeButton from "@/components/ui/LikeButton";
 import BookImage from "@/components/ui/BookImage";
 import BottomSheet from "@/components/ui/BottomSheet";
@@ -465,7 +467,15 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
                     onClick={() => router.push(`/books/${b.id}`)}
                     sx={{ flexShrink: 0, width: 110, cursor: "pointer" }}
                   >
-                    <BookImage seed={b.id} width={110} height={140} radius={10} />
+                    {/* coverUrl 이 있으면 (네이버 도서 API 등록 시 자동 저장된 표지) 그걸 사용,
+                        없으면 BookImage 가 seed 기반 placeholder 로 폴백 */}
+                    <BookImage
+                      seed={b.id}
+                      src={b.coverUrl}
+                      width={110}
+                      height={140}
+                      radius={10}
+                    />
                     <Typography
                       sx={{
                         fontSize: 12,
@@ -851,9 +861,9 @@ function SellerCard({
   const reviewLookupKey = isMine ? undefined : sellerId ?? sellerName;
   const { data: reviews } = useReceivedReviews(reviewLookupKey, 2);
   const showReviews = !isMine && (reviews?.length ?? 0) > 0;
-  // 매너온도는 trade_count 에 따라 자연스럽게 보정 — 거래가 많을수록 살짝 높게.
-  // (실제로는 reviews/manner 모델이 별도여야 하지만 현재 단계엔 가짜 휴리스틱)
-  const manner = 36.5 + Math.min(sellerTradeCount ?? 0, 50) * 0.18;
+  // 매너온도 — calcMannerTemperature 단일 헬퍼 사용. /mypage 본인 카드와 동일 공식.
+  // 거래 횟수와 평균 별점 둘 다 가산 — 셀러 카드는 두 값을 join 으로 모두 갖고 있다.
+  const manner = calcMannerTemperature(sellerTradeCount, sellerRating);
 
   return (
     <>
@@ -894,7 +904,7 @@ function SellerCard({
             )}
           </Stack>
         </Box>
-        <MannerTemperature value={Number(manner.toFixed(1))} size="sm" />
+        <MannerTemperature value={manner} size="sm" />
       </Stack>
 
       {showReviews && (

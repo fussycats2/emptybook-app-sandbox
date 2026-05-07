@@ -21,7 +21,9 @@ import AppHeader from "@/components/ui/AppHeader";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import { ScrollBody } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
-import MannerTemperature from "@/components/ui/MannerTemperature";
+import MannerTemperature, {
+  calcMannerTemperature,
+} from "@/components/ui/MannerTemperature";
 import { palette } from "@/lib/theme";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -233,7 +235,21 @@ export default function MyPage() {
             </Box>
           </Stack>
           <Box sx={{ mt: 2.25, position: "relative" }}>
-            <MannerTemperature value={38.6} size="lg" />
+            {/*
+              매너온도 — 본인 profile 의 trade_count + rating_avg 로 동적 계산
+              (이전 38.6 하드코딩 대체).
+                · trade_count : 0020 트리거가 transactions(COMPLETED) 양당사자 갱신
+                · rating_avg  : 0003 트리거가 reviews 의 reviewee 갱신
+              useCompleteOrder / useCreateReview.onSuccess 가 profile.me() invalidate 해서
+              다른 사용자 액션이 끝나면 자동 반영.
+            */}
+            <MannerTemperature
+              value={calcMannerTemperature(
+                profile?.trade_count,
+                profile?.rating_avg
+              )}
+              size="lg"
+            />
           </Box>
           <Stack direction="row" gap={0.75} mt={1.75} flexWrap="wrap" sx={{ position: "relative" }}>
             {["응답이 빨라요", "친절해요", "도서 상태 좋아요"].map((t) => (

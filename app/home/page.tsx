@@ -624,6 +624,9 @@ function MiniBookCard({
           fontWeight: 700,
           letterSpacing: "-0.02em",
           lineHeight: 1.35,
+          // 항상 2줄 분량 공간 확보 — 짧은 제목 카드도 2줄짜리 카드와 같은 높이로 정렬.
+          // (lineHeight 1.35 × 2 = 2.7em). 긴 제목은 line-clamp 로 잘림.
+          minHeight: "2.7em",
           display: "-webkit-box",
           WebkitLineClamp: 2,
           WebkitBoxOrient: "vertical",

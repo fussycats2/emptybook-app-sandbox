@@ -7,7 +7,6 @@
 
 import {
   Box,
-  Button,
   IconButton,
   OutlinedInput,
   Stack,
@@ -18,12 +17,11 @@ import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import BookImage from "@/components/ui/BookImage";
-import StatusBadge, { type SaleStatus } from "@/components/ui/StatusBadge";
-import BottomSheet from "@/components/ui/BottomSheet";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import StatusBadge from "@/components/ui/StatusBadge";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useChat } from "@/lib/query/chatHooks";
@@ -39,12 +37,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query/keys";
 import { useNotificationsStore } from "@/lib/store/notificationsStore";
 
-const ACTIONS = [
-  { key: "reserve", label: "예약하기" },
-  { key: "complete", label: "거래완료" },
-  { key: "cancel", label: "취소" },
-];
-
 export default function ChatDetailPage({
   params,
 }: {
@@ -59,9 +51,6 @@ export default function ChatDetailPage({
   // 실시간 메시지 — 초기 로드 + Realtime INSERT 구독 + send()
   const { messages: msgs, send: sendMsg } = useRealtimeChat(params.id);
   const [draft, setDraft] = useState("");
-  const [status, setStatus] = useState<SaleStatus>("selling");
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const [confirmComplete, setConfirmComplete] = useState(false);
 
   // 새 메시지 들어오면 자동 스크롤 (가장 마지막 메시지가 보이도록)
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -127,19 +116,17 @@ export default function ChatDetailPage({
     }
   };
 
-  // 거래 액션 BottomSheet 에서 항목을 골랐을 때의 처리 (예약/완료/취소)
-  const onAction = (key: string) => {
-    setActionsOpen(false);
-    if (key === "reserve") {
-      setStatus("reserved");
-      toast?.show("예약으로 변경되었어요");
-    }
-    if (key === "complete") setConfirmComplete(true);
-    if (key === "cancel") {
-      setStatus("selling");
-      toast?.show("판매중으로 되돌렸어요");
-    }
-  };
+  // 채팅 헤더 보조 라인 — 동네 + ★rating · 거래 N회 (데이터 없으면 가능한 만큼만)
+  // 이전에는 매너온도 38.6℃ 가 모든 채팅에 동일하게 박혀 있었음. fetchChat 가 partner
+  // profile 의 rating_avg / trade_count 를 같이 가져오므로 실데이터로 교체.
+  const region = book?.region ?? book?.loc ?? null;
+  const rating = chat?.partnerRating;
+  const tradeCount = chat?.partnerTradeCount;
+  const hasReputation =
+    typeof rating === "number" && typeof tradeCount === "number";
+  // 책 상태는 서버 데이터(book.status) 를 직접 그린다 — 거래액션 메뉴 제거 후 로컬 토글 없음.
+  // 책의 status 가 아직 안 들어왔으면 chat 의 status (chat_rooms join 결과) 로 폴백.
+  const bookStatus = book?.status ?? chat?.status ?? "selling";
 
   return (
     <>
@@ -165,9 +152,26 @@ export default function ChatDetailPage({
           <Typography sx={{ fontSize: 14.5, fontWeight: 800, letterSpacing: "-0.02em" }}>
             {chat?.user ?? book?.seller ?? "판매자"}
           </Typography>
-          <Typography sx={{ fontSize: 11, color: palette.inkSubtle, mt: 0.1 }}>
-            {book?.region ?? book?.loc ?? "마포구"} · 매너온도 38.6℃
-          </Typography>
+          <Stack
+            direction="row"
+            alignItems="center"
+            gap={0.5}
+            sx={{ fontSize: 11, color: palette.inkSubtle, mt: 0.1 }}
+          >
+            {region && <span>{region}</span>}
+            {region && hasReputation && <span>·</span>}
+            {hasReputation && (
+              <>
+                <StarRoundedIcon
+                  sx={{ fontSize: 12, color: palette.warn, mr: -0.25 }}
+                />
+                <span style={{ fontWeight: 700, color: palette.ink }}>
+                  {rating!.toFixed(1)}
+                </span>
+                <span>· 거래 {tradeCount}회</span>
+              </>
+            )}
+          </Stack>
         </Box>
         <IconButton
           onClick={() => router.push("/home")}
@@ -195,7 +199,7 @@ export default function ChatDetailPage({
         <BookImage seed={book?.id ?? params.id} width={44} height={56} radius={8} />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" gap={0.5}>
-            <StatusBadge status={status} size="sm" />
+            <StatusBadge status={bookStatus} size="sm" />
             <Typography
               sx={{
                 fontSize: 12.5,
@@ -212,13 +216,12 @@ export default function ChatDetailPage({
             {book?.price ?? ""}
           </Typography>
         </Box>
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={() => setActionsOpen(true)}
-        >
-          거래액션
-        </Button>
+        {/*
+          거래액션 메뉴(예약/완료/취소) 는 제거. 이유:
+          - reserve/cancel 은 로컬 state 만 토글하고 DB 반영이 없어 새로고침하면 사라짐
+          - "거래완료" 는 chat room id 를 /orders/[id]/review 로 넘겨 다른 도메인 id 충돌
+          - 셀러는 /books/[id] 의 MoreVert(수정/판매취소/삭제) 로 책 상태를 관리 — 단일 출처
+        */}
       </Box>
 
       <Box
@@ -232,41 +235,33 @@ export default function ChatDetailPage({
           background: palette.bg,
         }}
       >
-        <Box
-          sx={{
-            alignSelf: "center",
-            fontSize: 10.5,
-            color: palette.inkSubtle,
-            py: 0.4,
-            px: 1.25,
-            background: palette.surface,
-            border: `1px solid ${palette.lineSoft}`,
-            borderRadius: 999,
-            fontWeight: 700,
-            letterSpacing: "-0.01em",
-          }}
-        >
-          2024년 1월 15일
-        </Box>
-        {msgs.map((m) => {
+        {msgs.map((m, i) => {
           const time = formatMsgTime(m.createdAt);
+          // 날짜 구분선 — 직전 메시지와 날짜가 다르면 그룹 시작 위치에 삽입.
+          // 이전엔 정적인 "2024년 1월 15일" 한 칩만 떠 있어 실제 메시지 날짜와 무관했음.
+          const dateLabel = formatMsgDate(m.createdAt);
+          const prevDateLabel =
+            i > 0 ? formatMsgDate(msgs[i - 1].createdAt) : "";
+          const showDateSep = dateLabel && dateLabel !== prevDateLabel;
           if (m.type === "system") {
             return (
-              <Box
-                key={m.id}
-                sx={{
-                  alignSelf: "center",
-                  background: palette.lineSoft,
-                  px: 1.5,
-                  py: 0.5,
-                  borderRadius: 999,
-                  fontSize: 11.5,
-                  color: palette.inkMute,
-                  fontWeight: 600,
-                }}
-              >
-                {m.body}
-              </Box>
+              <Fragment key={m.id}>
+                {showDateSep && <DateSeparator label={dateLabel} />}
+                <Box
+                  sx={{
+                    alignSelf: "center",
+                    background: palette.lineSoft,
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 999,
+                    fontSize: 11.5,
+                    color: palette.inkMute,
+                    fontWeight: 600,
+                  }}
+                >
+                  {m.body}
+                </Box>
+              </Fragment>
             );
           }
           // 말풍선 공통 스타일 — 텍스트 줄바꿈 규칙(Korean 안전)
@@ -282,79 +277,88 @@ export default function ChatDetailPage({
           //  - 외부 wrapper 가 maxWidth(75%) + minWidth:0 을 가짐 → flex 안에서 수축 가능
           //  - 내부 bubble 은 width:auto 라 짧은 글에서는 콘텐츠 크기, 길어지면 wrapper 까지 채움
           //  - 이전 구조는 wrapper 가 콘텐츠 기반으로 줄어들면서 70% 가 글자 한 자 너비로 깎이는 버그가 있었음
-          return m.mine ? (
-            <Stack
-              key={m.id}
-              direction="row"
-              gap={0.75}
-              alignItems="flex-end"
-              justifyContent="flex-end"
-              sx={{ pl: 6 }}
-            >
-              <Box sx={{ fontSize: 10.5, color: palette.inkSubtle, flexShrink: 0 }}>
-                {m.read ? "읽음 · " : ""}
-                {time}
-              </Box>
-              <Stack
-                sx={{
-                  minWidth: 0,
-                  maxWidth: "75%",
-                  alignItems: "flex-end",
-                }}
-              >
-                <Box
-                  sx={{
-                    ...bubbleBase,
-                    background: `linear-gradient(160deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
-                    color: "#fff",
-                    borderRadius: "18px 18px 4px 18px",
-                    maxWidth: "100%",
-                    boxShadow: "0 2px 8px rgba(45, 95, 74, 0.20)",
-                  }}
+          return (
+            <Fragment key={m.id}>
+              {showDateSep && <DateSeparator label={dateLabel} />}
+              {m.mine ? (
+                <Stack
+                  direction="row"
+                  gap={0.75}
+                  alignItems="flex-end"
+                  justifyContent="flex-end"
+                  sx={{ pl: 6 }}
                 >
-                  {m.body}
-                </Box>
-              </Stack>
-            </Stack>
-          ) : (
-            <Stack
-              key={m.id}
-              direction="row"
-              gap={0.75}
-              alignItems="flex-end"
-              sx={{ pr: 6 }}
-            >
-              <BookImage
-                seed={chat?.user ?? book?.seller ?? "seller"}
-                width={28}
-                height={28}
-                radius={999}
-              />
-              <Stack
-                sx={{
-                  minWidth: 0,
-                  maxWidth: "75%",
-                  alignItems: "flex-start",
-                  gap: 0.25,
-                }}
-              >
-                <Box
-                  sx={{
-                    ...bubbleBase,
-                    background: palette.surface,
-                    borderRadius: "18px 18px 18px 4px",
-                    border: `1px solid ${palette.lineSoft}`,
-                    maxWidth: "100%",
-                    boxShadow: "0 1px 2px rgba(26,38,32,0.04)",
-                  }}
+                  <Box
+                    sx={{
+                      fontSize: 10.5,
+                      color: palette.inkSubtle,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {m.read ? "읽음 · " : ""}
+                    {time}
+                  </Box>
+                  <Stack
+                    sx={{
+                      minWidth: 0,
+                      maxWidth: "75%",
+                      alignItems: "flex-end",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        ...bubbleBase,
+                        background: `linear-gradient(160deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
+                        color: "#fff",
+                        borderRadius: "18px 18px 4px 18px",
+                        maxWidth: "100%",
+                        boxShadow: "0 2px 8px rgba(45, 95, 74, 0.20)",
+                      }}
+                    >
+                      {m.body}
+                    </Box>
+                  </Stack>
+                </Stack>
+              ) : (
+                <Stack
+                  direction="row"
+                  gap={0.75}
+                  alignItems="flex-end"
+                  sx={{ pr: 6 }}
                 >
-                  {m.body}
-                </Box>
-                <Box sx={{ fontSize: 10.5, color: palette.inkSubtle }}>
-                  {time}
-                </Box>
-              </Stack>
-            </Stack>
+                  <BookImage
+                    seed={chat?.user ?? book?.seller ?? "seller"}
+                    width={28}
+                    height={28}
+                    radius={999}
+                  />
+                  <Stack
+                    sx={{
+                      minWidth: 0,
+                      maxWidth: "75%",
+                      alignItems: "flex-start",
+                      gap: 0.25,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        ...bubbleBase,
+                        background: palette.surface,
+                        borderRadius: "18px 18px 18px 4px",
+                        border: `1px solid ${palette.lineSoft}`,
+                        maxWidth: "100%",
+                        boxShadow: "0 1px 2px rgba(26,38,32,0.04)",
+                      }}
+                    >
+                      {m.body}
+                    </Box>
+                    <Box sx={{ fontSize: 10.5, color: palette.inkSubtle }}>
+                      {time}
+                    </Box>
+                  </Stack>
+                </Stack>
+              )}
+            </Fragment>
           );
         })}
         <div ref={bottomRef} />
@@ -425,39 +429,6 @@ export default function ChatDetailPage({
         </IconButton>
       </Box>
 
-      <BottomSheet
-        open={actionsOpen}
-        onClose={() => setActionsOpen(false)}
-        title="거래 액션"
-      >
-        <Stack gap={1} pb={2}>
-          {ACTIONS.map((a) => (
-            <Button
-              key={a.key}
-              variant="outlined"
-              fullWidth
-              sx={{ justifyContent: "flex-start", minHeight: 48, fontSize: 14 }}
-              onClick={() => onAction(a.key)}
-            >
-              {a.label}
-            </Button>
-          ))}
-        </Stack>
-      </BottomSheet>
-
-      <ConfirmDialog
-        open={confirmComplete}
-        onCancel={() => setConfirmComplete(false)}
-        onConfirm={() => {
-          setConfirmComplete(false);
-          setStatus("sold");
-          toast?.show("거래완료로 처리됐어요");
-          router.push(`/orders/${params.id}/review`);
-        }}
-        title="거래를 완료할까요?"
-        description="후기 작성 페이지로 이동해요."
-        confirmLabel="완료"
-      />
     </>
   );
 }
@@ -467,4 +438,43 @@ function formatMsgTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+}
+
+// ISO timestamp → 날짜 그룹 라벨. 오늘/어제는 친근한 라벨, 그 외엔 전체 날짜.
+// 잘못된 값이면 빈 문자열 → showDateSep 가 자동으로 false 가 되어 구분선이 안 그려짐.
+function formatMsgDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const ymd = (x: Date) => x.toLocaleDateString("ko-KR");
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  if (ymd(d) === ymd(today)) return "오늘";
+  if (ymd(d) === ymd(yesterday)) return "어제";
+  return d.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+// 메시지 그룹 사이 날짜 칩. 정적으로 박혀 있던 "2024년 1월 15일" 자리를 동적으로 대체.
+function DateSeparator({ label }: { label: string }) {
+  return (
+    <Box
+      sx={{
+        alignSelf: "center",
+        fontSize: 10.5,
+        color: palette.inkSubtle,
+        py: 0.4,
+        px: 1.25,
+        background: palette.surface,
+        border: `1px solid ${palette.lineSoft}`,
+        borderRadius: 999,
+        fontWeight: 700,
+        letterSpacing: "-0.01em",
+      }}
+    >
+      {label}
+    </Box>
+  );
 }

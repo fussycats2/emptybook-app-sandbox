@@ -69,6 +69,9 @@ export type MockChat = {
   unread: number;
   buying: boolean;
   status: SaleStatus;
+  // 상대방 프로필 — 채팅 헤더의 ★별점·거래수 노출용 (이전 38.6℃ 하드코딩 대체)
+  partnerRating?: number;
+  partnerTradeCount?: number;
 };
 
 export type MockNotification = {
@@ -296,6 +299,8 @@ const SEED_CHATS: MockChat[] = [
     unread: 2,
     buying: true,
     status: "reserved",
+    partnerRating: 4.9,
+    partnerTradeCount: 42,
   },
   {
     id: "c-2",
@@ -307,6 +312,8 @@ const SEED_CHATS: MockChat[] = [
     unread: 0,
     buying: false,
     status: "sold",
+    partnerRating: 4.7,
+    partnerTradeCount: 24,
   },
   {
     id: "c-3",
@@ -318,6 +325,8 @@ const SEED_CHATS: MockChat[] = [
     unread: 1,
     buying: true,
     status: "selling",
+    partnerRating: 4.6,
+    partnerTradeCount: 36,
   },
 ];
 
@@ -583,6 +592,74 @@ const SEED_COUPONS: UserCoupon[] = [
     minOrderAmount: 7000,
     maxDiscount: 5000,
     code: "PERCENT10",
+  },
+  // 0021 보강분 — 베타 시연용으로 풍성하게. 액수/할인 방식/최소주문/만료를 다양하게.
+  {
+    id: "uc-4",
+    templateId: "ct-welcome-plus",
+    status: "AVAILABLE",
+    issuedAt: "2026-04-15T08:00:00.000Z",
+    expiresAt: "2026-08-05T08:00:00.000Z",
+    name: "신규가입 추가 환영 쿠폰",
+    description: "15% 할인 (최대 5,000원). 첫 거래 부담을 더 덜어드릴게요.",
+    discountType: "PERCENT",
+    discountValue: 15,
+    minOrderAmount: 7000,
+    maxDiscount: 5000,
+    code: "WELCOME_PLUS",
+  },
+  {
+    id: "uc-5",
+    templateId: "ct-every-3000",
+    status: "AVAILABLE",
+    issuedAt: "2026-05-01T08:00:00.000Z",
+    expiresAt: "2026-07-06T08:00:00.000Z",
+    name: "아무 책에나 쓸 수 있는 3,000원",
+    description: "최소 주문 금액 없음. 무료나눔 빼고 어디든 사용 가능.",
+    discountType: "FIXED",
+    discountValue: 3000,
+    minOrderAmount: 0,
+    code: "EVERY3000",
+  },
+  {
+    id: "uc-6",
+    templateId: "ct-bigsale-7000",
+    status: "AVAILABLE",
+    issuedAt: "2026-05-01T08:00:00.000Z",
+    expiresAt: "2026-06-06T08:00:00.000Z",
+    name: "대형 할인 7,000원",
+    description: "20,000원 이상 결제 시 사용 가능. 두꺼운 책 들이실 때.",
+    discountType: "FIXED",
+    discountValue: 7000,
+    minOrderAmount: 20000,
+    code: "BIGSALE7000",
+  },
+  {
+    id: "uc-7",
+    templateId: "ct-percent-20",
+    status: "AVAILABLE",
+    issuedAt: "2026-05-01T08:00:00.000Z",
+    expiresAt: "2026-05-21T08:00:00.000Z",
+    name: "20% 할인 쿠폰",
+    description: "10,000원 이상, 최대 8,000원까지 할인돼요.",
+    discountType: "PERCENT",
+    discountValue: 20,
+    minOrderAmount: 10000,
+    maxDiscount: 8000,
+    code: "PERCENT20",
+  },
+  {
+    id: "uc-8",
+    templateId: "ct-freeship-2500",
+    status: "AVAILABLE",
+    issuedAt: "2026-05-01T08:00:00.000Z",
+    expiresAt: "2026-08-05T08:00:00.000Z",
+    name: "택배비 부담 해소 2,500원",
+    description: "택배 거래의 작은 부담을 덜어드려요. 최소 주문 금액 없음.",
+    discountType: "FIXED",
+    discountValue: 2500,
+    minOrderAmount: 0,
+    code: "FREESHIP2500",
   },
 ];
 
@@ -864,9 +941,12 @@ export function mockCreateReview(input: {
   comment?: string;
 }): MockReview {
   const s = getStore();
-  // UNIQUE(transaction_id) 제약을 mock에서도 흉내냄
+  // 0019 의 UNIQUE(transaction_id, reviewer_id) 를 mock 에서도 흉내냄.
+  // mock 에서 사용자가 쓰는 후기는 항상 reviewerId="me" 로 기록되므로,
+  // 같은 (거래, 리뷰어) 조합이 이미 있으면 중복으로 보고 기존 행 그대로 반환.
+  const reviewerId = input.reviewerId ?? "me";
   const existing = s.reviews.find(
-    (r) => r.transactionId === input.transactionId
+    (r) => r.transactionId === input.transactionId && r.reviewerId === reviewerId
   );
   if (existing) return existing;
   const review: MockReview = {
@@ -932,7 +1012,11 @@ export function mockGetReviewContext(transactionId: string): {
     bookTitle: order.title,
     bookId: order.bookId,
     completedAt: order.date,
-    alreadyReviewed: !!s.reviews.find((r) => r.transactionId === transactionId),
+    // 0019 이후엔 같은 거래에 buyer/seller 가 각각 한 번씩 쓸 수 있으므로,
+    // alreadyReviewed 는 "내가(=mock 의 me) 이 거래에 이미 쓴 후기가 있는가" 로 좁힌다.
+    alreadyReviewed: !!s.reviews.find(
+      (r) => r.transactionId === transactionId && r.reviewerId === "me"
+    ),
   };
 }
 

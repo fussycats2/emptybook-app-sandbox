@@ -137,10 +137,17 @@ export default function ShelfPage() {
 
   const changeStatus = async (next: ShelfStatus) => {
     if (!selected || selected.status === next) return;
-    await persistDraft();
+    // status 변경과 메모/별점 draft 를 한 번의 PATCH 로 묶어 네트워크 1회로 처리.
+    // undefined 필드는 repo 가 무시하므로 변경된 값만 골라 넣는다.
+    const memoChanged = (memoDraft || "") !== (selected.memo ?? "");
+    const ratingChanged = (ratingDraft ?? null) !== (selected.rating ?? null);
     const updated = await updateMut.mutateAsync({
       id: selected.id,
-      patch: { status: next },
+      patch: {
+        status: next,
+        memo: memoChanged ? memoDraft.trim() || null : undefined,
+        rating: ratingChanged ? ratingDraft ?? null : undefined,
+      },
     });
     if (updated) setSelected(updated);
     toast?.show(`${SHELF_STATUS_LABEL[next]} 으로 옮겼어요`);

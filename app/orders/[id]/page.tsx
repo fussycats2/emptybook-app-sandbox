@@ -20,8 +20,8 @@ import AddPhotoAlternateRoundedIcon from "@mui/icons-material/AddPhotoAlternateR
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
 import RateReviewRoundedIcon from "@mui/icons-material/RateReviewRounded";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
@@ -45,11 +45,22 @@ export default function OrderConfirmPage({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const searchParams = useSearchParams();
   const [confirm, setConfirm] = useState(false);
   // React Query — order 가 먼저 로드되면 그 안의 bookId 로 useBook 활성화 (의존 쿼리)
   const { data: order } = useOrder(params.id);
   const { data: book } = useBook(order?.bookId);
   const completeMutation = useCompleteOrder();
+
+  // /mypage/orders 의 "거래 확정" 버튼이 ?confirm=1 로 진입시키면 자동으로 ConfirmDialog 노출.
+  // 이미 거래완료된 경우엔 무의미하므로 띄우지 않는다. 한 번 띄운 뒤 query 를 정리해서
+  // 사용자가 페이지를 다시 보거나 새로고침했을 때 다이얼로그가 다시 떠 있지 않게 한다.
+  useEffect(() => {
+    if (searchParams?.get("confirm") !== "1") return;
+    if (order?.status === "거래완료") return;
+    setConfirm(true);
+    router.replace(`/orders/${params.id}`);
+  }, [searchParams, order?.status, params.id, router]);
 
   const seedId = book?.id ?? order?.bookId ?? params.id;
   const title = book?.title ?? order?.title ?? "도서";

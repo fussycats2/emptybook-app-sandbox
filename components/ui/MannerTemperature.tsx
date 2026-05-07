@@ -6,6 +6,31 @@
 import { Box, Stack, Typography } from "@mui/material";
 import { palette } from "@/lib/theme";
 
+// 매너온도 휴리스틱 (당근마켓 컨셉의 가짜 평판 점수)
+//
+//   temp = 36.5 + tradeBonus + ratingBonus
+//
+//   tradeBonus  = min(trade, 50) × 0.15   → 거래 0회: 0, 50회: +7.5
+//   ratingBonus = max(0, rating − 3.0) × 1.0   → 별점 3점 이하: 0, 5점: +2.0
+//
+// 예) 거래 12회 / 별점 4.5 → 36.5 + 1.8 + 1.5 = 39.8℃
+//     거래 50회 / 별점 5.0 → 36.5 + 7.5 + 2.0 = 46.0℃
+//     거래 0회  / 후기 없음 → 36.5℃ (체온 베이스)
+//
+// trade_count 는 0020 트리거가 transactions(COMPLETED) 기준으로 갱신,
+// rating_avg 는 0003 트리거가 reviews 기준으로 갱신. 두 입력의 누적이 매너온도.
+// SellerCard / 마이페이지 본인 카드 모두 이 헬퍼 한 곳에서 계산.
+export function calcMannerTemperature(
+  tradeCount: number | null | undefined,
+  rating?: number | null
+): number {
+  const t = Math.max(0, Math.min(50, tradeCount ?? 0));
+  const r = rating ?? 0;
+  const tradeBonus = t * 0.15;
+  const ratingBonus = r > 3 ? (r - 3) * 1.0 : 0;
+  return Number((36.5 + tradeBonus + ratingBonus).toFixed(1));
+}
+
 export default function MannerTemperature({
   value = 36.5,
   size = "md",
