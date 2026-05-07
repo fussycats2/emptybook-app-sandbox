@@ -1,6 +1,6 @@
 # EmptyBook (책장비움) — Claude 참고 문서
 
-> 최종 업데이트: 2026-05-06 (v9.4 — 책장↔매물 status 자동 동기화 트리거)
+> 최종 업데이트: 2026-05-07 (v9.5 — 거래확정 흐름 마무리 + 뒤로가기 로직 정리)
 
 ## 프로젝트 개요
 
@@ -87,6 +87,7 @@
 | **마이페이지 STATS 책장 풀폭 + 매물 연결 표시 (v9.2)** | v9 에서 책장 카드를 5번째 STATS 로 추가했더니 2열 그리드 row 3 col 2 가 비어 어색했던 부분 정리. 책장을 STATS 배열에서 빼고 그리드 아래 풀폭 카드로 분리 — 좌측 아이콘 + 큰 카운트(`shelfTotal`) + 우측 4상태 미니 분포(`READING`/`FINISHED`/`FOR_SALE`/`OWNED` 각각 dot+카운트, sage/success/accent/warn 톤) + KeyboardArrowRight CTA. 책장 분포가 한 줄 안에 다 보여 "어떤 상태가 많은지" 즉각 파악 가능. **책장 ↔ 매물 표시 연동**: 책장 상세 시트에서 `linkedBookId` 가 있으면 헤더에 sage 톤 "매물로 등록됨" 배지 + footer CTA 가 "판매 등록하기"/"저장하고 닫기" → "**등록된 매물 보기**"(outlined) 로 전환되어 클릭 시 `/books/{linkedBookId}` 로 점프. 같은 책을 두 번 등록하는 실수를 막고, 책장 → 매물 흐름의 마지막 한 칸을 마무리 |
 | **동네 변경 BottomSheet (v9.3)** | 홈 헤더 LocationChip 이 토스트만 띄우던 placeholder 를 실제 동네 선택 UI 로 풀음. **Store** (`lib/store/regionStore.ts`): Zustand + localStorage persist (`emptybook:region`, default "마포구") + `SEOUL_DISTRICTS` 25개 자치구 시드. **UI** (`components/ui/RegionPickerSheet.tsx`): BottomSheet 안에 검색 입력 + 자치구 리스트(아이콘 + 라벨 + 선택된 항목 sage 톤 강조 + 체크 아이콘). 검색은 단순 substring 매칭 — 25개라 충분히 빠름. 선택 즉시 store 갱신 후 자동 close. **홈 페이지** (`app/home/page.tsx`): `useRegionStore` 구독 → LocationChip label + 섹션 헤더 "{region}의 따끈한 책" 둘 다 동기화. localStorage persist 라 새로고침/재방문 시에도 마지막 선택 유지. 추후 `profiles.region` 또는 `user_regions` 테이블 연동 시 store 만 갈아끼우면 됨 |
 | **책장↔매물 status 자동 동기화 (v9.4)** | v9 의 마지막 한 칸 — 매물이 SOLD/HIDDEN 으로 바뀌면 연결된 책장 항목도 자동 정리. **DB** (`0014_shelf_books_sync.sql`): `sync_shelf_on_book_status_change()` SECURITY DEFINER 트리거. `books` AFTER UPDATE OF status 에서 status 가 SOLD 또는 HIDDEN 으로 바뀌면 `shelf_items.linked_book_id = book.id` AND `status = 'FOR_SALE'` 행만 OWNED 로 전이 (READING/FINISHED/이미 OWNED 는 사용자 명시 분류이므로 보존). `linked_book_id` 자체는 유지 — 사용자가 책장에서 "등록된 매물 보기" 링크로 과거 거래 추적 가능. 마이그레이션 시점에 이미 SOLD/HIDDEN 인 매물에 연결된 FOR_SALE 행을 일괄 백필. **Mock 모드**: `mockCancelBook` / `mockCreateOrder`(SOLD 전이) 가 같은 동작을 재현하는 `syncShelfOnBookStatusChange()` 헬퍼 호출 + `mockDeleteBook` 은 `linked_book_id` 를 undefined 로 정리(FK ON DELETE SET NULL 동등). **클라이언트 캐시**: `useCancelBook` / `useDeleteBook` / `useCreateOrder` 의 `onSuccess` 가 `queryKeys.shelf.lists()` 도 invalidate — 책장 화면이 열려 있어도 다음 fetch 에 자동 갱신 |
+| **거래확정 흐름 마무리 + 뒤로가기 정리 (v9.5)** | 사용자 테스트 보고(2026-05-06) 3건을 한 번에 정리. **(1) PAID → books.SOLD 자동 전이** (`0015_books_sold_on_paid.sql`): 기존 `repo.createOrder` 가 buyer 권한으로 `books.status='SOLD'` UPDATE 를 시도해 `books_update_own` RLS 가 silent 0행 차단. 결제 성공해도 책이 SELLING 으로 남아 홈/검색/판매내역에 계속 노출되던 버그. transactions AFTER INSERT 에서 status=PAID 면 SECURITY DEFINER 함수가 books 를 SOLD 로 옮긴다 (`status not in ('SOLD','HIDDEN')` 가드 → idempotent). 0014 의 책장 동기화 트리거가 후속으로 셀러의 FOR_SALE → OWNED 까지 연쇄 정리. 마이그레이션 시점에 이미 PAID/SHIPPING/COMPLETED 인 트랜잭션 책을 일괄 백필. `repo.createOrder` 의 books UPDATE 라인은 제거(트리거가 책임). **(2) PAID → buyer 책장 자동 추가** (`0016_buyer_shelf_on_paid.sql`): 같은 INSERT 시점에 `add_book_to_buyer_shelf_on_paid()` SECURITY DEFINER 트리거가 books 메타데이터(title/author/publisher/isbn/category/cover_url) 를 buyer 의 `shelf_items` 에 OWNED 로 INSERT + linked_book_id 연결. 0012 ISBN partial unique 와 충돌하면 `on conflict (user_id, isbn) where isbn is not null do nothing` 으로 스킵 → 이미 책장에 있던 책을 사도 사용자의 status/별점/메모 보존. mock 모드 `mockCreateOrder` 도 같은 동작 재현. **(3) /orders/[id] 거래완료 후 막다른 길 해소**: 기존엔 거래확정 누르면 자동으로 `/orders/[id]/review` 로 redirect — 후기 안 쓰는 사용자는 뒤로가기로만 빠져나가야 했음. 이제 자동 redirect 제거 + 페이지를 거래완료 상태로 잠그고 footer CTA 를 "후기 작성하기" + "홈으로" 두 갈래로 교체. 상단 안내문도 warn 톤 → primary 톤 "거래가 확정됐어요" 로 전환. **(4) 공용 헤더 홈 바로가기**: `AppHeader` 에 `homeButton?: boolean` prop + `left="home"` 옵션 추가 (HomeRoundedIcon). 깊은 흐름 페이지(`/orders/[id]`, `/orders/[id]/review`, `/mypage/shelf/add`) 에 homeButton 켬. `/chat/[id]` 자체 헤더에도 홈 아이콘 추가 — 알림에서 deep-link 진입한 사용자가 한 번에 빠져나갈 수단 보장. **(5) 결제완료 페이지 홈 CTA**: `/checkout/[id]/complete` footer 에 "홈으로 돌아가기" 텍스트 버튼 추가 (기존 채팅/주문내역 두 CTA 옆 보조). **(6) 작업 완료 후 stack 정리 — `router.replace` 일괄 적용**: 완료 페이지에서 뒤로가기 시 시작 폼으로 다시 떨어지던 어색함을 패턴화해서 정리. `/checkout/[id]` → `/complete`, `/register` → `/complete`, `/mypage/shelf/add` → `/mypage/shelf` (사용자 보고 추가 케이스 — 책장에서 뒤로 가면 add 폼으로 떨어지던 문제), `/orders/[id]/review` 후기 저장 후 → `/mypage`. 인증 흐름도 동일 원칙 적용 — 스플래시 → `/login`/`/home`, `/login` mock 분기 → next, `/signup` mock·메일안내 분기 → `/home`/`/login`. /register/complete 는 이전부터 footer 에 "홈으로" 가 있었음 |
 
 ### 미완성 / 연결 안 된 것
 
@@ -191,6 +192,8 @@ supabase/migrations/
   0012_shelf_items.sql                     # shelf_items 테이블 + shelf_status enum + RLS + ISBN partial unique
   0013_books_condition_detail.sql          # books.condition_detail jsonb — 도서 상태 상세 체크리스트
   0014_shelf_books_sync.sql                # books.status SOLD/HIDDEN → 연결된 shelf_items FOR_SALE → OWNED 자동 전이
+  0015_books_sold_on_paid.sql              # transactions PAID INSERT → books.status=SOLD 자동 전이 (RLS 우회)
+  0016_buyer_shelf_on_paid.sql             # transactions PAID INSERT → buyer 책장에 OWNED 로 자동 추가
 ```
 
 ---
@@ -290,13 +293,13 @@ Storage 버킷: `book-images` (public read, 인증된 사용자 upload)
 
 ### 사용자 테스트 보고 — 다음 점검 우선순위 (2026-05-06)
 
-> 사용자가 v9.x 흐름을 직접 시도하면서 보고한 이슈. 다음 세션에서 우선 처리.
+> 사용자가 v9.x 흐름을 직접 시도하면서 보고한 이슈. v9.5 (2026-05-07) 에서 3건 모두 처리 완료.
 
-1. **거래 확정 후 매물이 사라지지 않음** — 사용자가 거래확정(`/orders/[id]` → COMPLETED)을 눌러도 해당 책이 홈 피드 / 검색 / 마이페이지 판매내역에서 SOLD 로 안 빠진다는 보고. **점검 포인트**: ① `lib/repo.ts` `createOrder` 가 supabase 모드에서 `transactions` INSERT 만 하고 `books.status` UPDATE 를 빠뜨렸을 가능성 (mock 의 `mockCreateOrder` 는 즉시 `book.status="sold"` 처리). ② 또는 `completeOrder` 시점에 `books.status` 를 SOLD 로 옮겨야 하는데 안 옮기는 케이스. ③ `0010_transactions_fsm.sql` 은 transactions 상태만 강제하고 books 와의 연동 트리거는 없음. **해결 방향**: (a) `createOrder` 에서 books UPDATE 를 같이 하거나 (RLS 때문에 buyer 가 seller 의 books 를 못 바꿈 → SECURITY DEFINER 트리거 필요), (b) 0015 마이그레이션으로 `transactions` AFTER INSERT(status='PAID') 트리거 만들어 `books.status='SOLD'` 로 옮김. 동시에 `useCreateOrder` 의 invalidate 가 이미 book lists/detail 을 갱신하므로 트리거만 추가하면 화면 동기화는 자동.
+1. ~~**거래 확정 후 매물이 사라지지 않음**~~ → **v9.5 해결**. 0015 트리거(`transactions_sync_book_paid`) 로 PAID INSERT 시 books.status=SOLD 자동 전이. RLS 우회를 위해 SECURITY DEFINER. `repo.createOrder` 의 buyer 측 books UPDATE 라인은 제거(트리거가 책임).
 
-2. **거래확정 후 메인으로 돌아갈 길이 없음** — `/orders/[id]` 에서 거래확정 누르면 같은 페이지에 머물러 사용자가 홈으로 가려면 뒤로가기를 여러 번 눌러야 함. **해결 방향**: `useCompleteOrder` 성공 후 `/orders/[id]` 페이지에서 (a) 자동 `router.replace("/mypage/orders")` 또는 `/home` 으로 이동, 또는 (b) 페이지를 "거래완료" 상태로 잠그고 footer CTA 를 "후기 작성하기" + "홈으로" 두 버튼으로 교체. (b) 가 거래 흐름 자연스러움 — 후기 작성 직후 홈으로 점프하면 끝.
+2. ~~**거래확정 후 메인으로 돌아갈 길이 없음**~~ → **v9.5 해결**. `/orders/[id]` 자동 redirect 제거 + 거래완료 상태로 잠그고 footer 를 "후기 작성하기" + "홈으로" 두 갈래로 교체. 추가로 `AppHeader` 에 `homeButton` prop 신설하여 깊은 흐름 페이지에 우측 홈 아이콘 노출. `/chat/[id]` 자체 헤더에도 홈 아이콘 추가.
 
-3. **구매한 책이 책장에 자동 안 들어감** — 사용자 기대: 책을 사면 buyer 의 책장(`shelf_items`) 에 OWNED 로 자동 추가. 현재는 의도적으로 미구현. **해결 방향**: 0016 마이그레이션 — `transactions` AFTER INSERT(status='PAID') 트리거에서 buyer_id 의 `shelf_items` 에 책 메타데이터(title/author/publisher/isbn/cover_url/category) 를 books 에서 복사해 INSERT(status='OWNED'). ISBN partial unique 와 충돌하지 않게 `on conflict (user_id, isbn) where isbn is not null do nothing` 적용. linked_book_id 도 같이 채움. 1번 이슈의 트리거와 같은 함수에 묶어도 됨 (PAID 시점 1회 호출).
+3. ~~**구매한 책이 책장에 자동 안 들어감**~~ → **v9.5 해결**. 0016 트리거(`transactions_add_buyer_shelf`) 로 PAID INSERT 시 buyer 의 shelf_items 에 OWNED 자동 INSERT. ISBN partial unique 충돌은 `on conflict do nothing` 으로 스킵 → 사용자의 기존 분류 보존. mock 모드 `mockCreateOrder` 도 동일 동작.
 
 ### 작은 점검 후보 (이어갈 때 참고)
 - **settings 의 본인 인증 placeholder** — 아직 토스트만. SMS OTP 또는 PASS 같은 간편 본인확인 SDK 도입 시 활성화. 오픈소스 라이선스(`/licenses`) 와 synopsis "더 보기" 토글, 검색 빈 상태(EmptyState 분기), STATS 카드 정렬은 모두 정리 완료

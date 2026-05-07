@@ -673,6 +673,25 @@ export function mockCreateOrder(input: {
     book.status = "sold";
     // 0014 대응 — 책이 sold 로 바뀌면 연결된 FOR_SALE 책장 항목을 OWNED 로
     syncShelfOnBookStatusChange(book.id);
+    // 0016 대응 — buyer(="나") 의 책장에 OWNED 로 자동 추가.
+    // 같은 ISBN 이 이미 책장에 있으면 mockAddShelfItem 이 기존 행을 그대로 반환(=스킵).
+    mockAddShelfItem({
+      title: book.title,
+      author: book.author,
+      publisher: book.publisher,
+      isbn: book.isbn,
+      category: book.category,
+      coverUrl: book.coverUrl,
+      status: "OWNED",
+    });
+    // linked_book_id 채움 — 방금 추가/매칭된 책장 행을 찾아 books.id 로 연결
+    const just = s.shelf.find(
+      (it) => (book.isbn && it.isbn === book.isbn) || it.title === book.title
+    );
+    if (just && !just.linkedBookId) {
+      just.linkedBookId = book.id;
+      just.updatedAt = new Date().toISOString();
+    }
   }
   return order;
 }

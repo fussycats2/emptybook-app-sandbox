@@ -87,7 +87,9 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
     try {
       const { id } = await createOrderMutation.mutateAsync({ bookId: book.id });
       toast?.show(book.free ? "신청이 완료되었어요" : "결제가 완료되었어요");
-      router.push(`/checkout/${book.id}/complete?orderId=${id}`);
+      // replace 로 stack 에서 결제 폼을 제거 — 완료 페이지에서 뒤로 가면 결제 폼으로
+      // 다시 떨어지던 어색함 제거. 사용자는 완료 페이지의 CTA(주문내역/홈/채팅)로만 진행.
+      router.replace(`/checkout/${book.id}/complete?orderId=${id}`);
     } catch (e) {
       toast?.show("결제 처리에 실패했어요", "error");
     }

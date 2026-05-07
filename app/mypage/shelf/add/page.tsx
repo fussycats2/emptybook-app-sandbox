@@ -102,7 +102,9 @@ export default function ShelfAddPage() {
       } else {
         toast?.show(`${SHELF_STATUS_LABEL[status]} 책장에 추가했어요`);
       }
-      router.push("/mypage/shelf");
+      // replace — 책장에서 뒤로가기 누르면 add 페이지로 다시 떨어지던 어색함 제거.
+      // 책 추가는 끝났으니 stack 에서 add 폼을 빼고 책장 화면이 종착점이 되게.
+      router.replace("/mypage/shelf");
     } catch {
       toast?.show("추가에 실패했어요", "error");
     }
@@ -110,7 +112,7 @@ export default function ShelfAddPage() {
 
   return (
     <>
-      <AppHeader title="책장에 책 추가" left="back" />
+      <AppHeader title="책장에 책 추가" left="back" homeButton />
 
       <ScrollBody>
         <Box sx={{ p: 2 }}>

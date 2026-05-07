@@ -289,7 +289,8 @@ function RegisterPageInner() {
         }
       }
       toast?.show("등록되었어요!");
-      router.push(`/register/complete?id=${id}`);
+      // replace — 완료 페이지에서 뒤로 가면 등록 폼으로 돌아가던 어색함 제거.
+      router.replace(`/register/complete?id=${id}`);
     } catch (e) {
       setUploadingPhotos(false);
       toast?.show("등록에 실패했어요. 다시 시도해주세요.", "error");

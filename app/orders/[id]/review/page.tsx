@@ -64,7 +64,8 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
       } else {
         toast?.show("소중한 후기를 남겨주셔서 감사해요!");
       }
-      router.push("/mypage");
+      // replace — 후기 작성이 끝났으니 review 페이지를 stack 에서 빼서 mypage 가 종착점이 되게.
+      router.replace("/mypage");
     } catch {
       toast?.show("후기 저장에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
     }
@@ -72,7 +73,12 @@ export default function ReviewPage({ params }: { params: { id: string } }) {
 
   return (
     <>
-      <AppHeader title="거래 후기 남기기" left="back" />
+      <AppHeader
+        title="거래 후기 남기기"
+        left="back"
+        // 후기 페이지에 알림에서 직접 진입한 경우 router.back() 이 의미 없을 수 있어 홈으로 빠질 길 보장.
+        homeButton
+      />
       <ScrollBody>
         <Box sx={{ p: 2.5, textAlign: "center" }}>
           <Stack direction="row" gap={1.25} alignItems="center" justifyContent="center" mb={2}>

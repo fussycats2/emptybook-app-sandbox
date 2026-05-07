@@ -27,9 +27,10 @@ export default function SplashPage() {
     setNavigating(true);
     try {
       if (user) await signOut();
-      router.push("/login");
+      // replace — 스플래시는 진입점이라 login 에서 뒤로 누르면 다시 스플래시로 떨어지는 게 어색.
+      router.replace("/login");
     } catch {
-      router.push("/login");
+      router.replace("/login");
     } finally {
       setNavigating(false);
     }
@@ -283,7 +284,8 @@ export default function SplashPage() {
           <Button
             fullWidth
             variant="text"
-            onClick={() => router.push("/home")}
+            // replace — 스플래시는 진입점이라 홈에서 뒤로 누르면 다시 떨어지는 게 어색.
+            onClick={() => router.replace("/home")}
             sx={{
               color: "rgba(252,250,244,0.7)",
               minHeight: 48,

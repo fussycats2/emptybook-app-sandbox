@@ -782,8 +782,8 @@ export async function createOrder(input: {
     });
     return { id: created.id };
   }
-  // 결제가 끝났으니 책 상태도 SOLD 로 동기화 (다른 사람 화면에서 더 이상 노출 X)
-  await supabase.from("books").update({ status: "SOLD" }).eq("id", b.id);
+  // books.status='SOLD' 전이는 0015 트리거(SECURITY DEFINER) 가 책임진다.
+  // buyer 가 직접 books UPDATE 를 시도하면 books_update_own RLS 가 0행으로 막아 silent 실패.
   return { id: (data as { id: string }).id };
 }
 

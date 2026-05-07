@@ -17,6 +17,7 @@ import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRound
 import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
+import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import BookImage from "@/components/ui/BookImage";
@@ -168,6 +169,13 @@ export default function ChatDetailPage({
             {book?.region ?? book?.loc ?? "마포구"} · 매너온도 38.6℃
           </Typography>
         </Box>
+        <IconButton
+          onClick={() => router.push("/home")}
+          aria-label="홈으로 이동"
+          sx={{ color: palette.ink }}
+        >
+          <HomeRoundedIcon />
+        </IconButton>
         <IconButton onClick={() => toast?.show("준비 중이에요")}>
           <MoreVertRoundedIcon />
         </IconButton>

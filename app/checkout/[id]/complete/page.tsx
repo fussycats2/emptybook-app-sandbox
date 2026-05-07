@@ -7,6 +7,7 @@ import { Box, Button, IconButton, Stack, Typography } from "@mui/material";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import IosShareRoundedIcon from "@mui/icons-material/IosShareRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
+import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { palette } from "@/lib/theme";
@@ -191,20 +192,31 @@ function CompleteInner({ bookId }: { bookId: string }) {
           flexShrink: 0,
         }}
       >
-        <Stack direction="row" gap={1}>
+        <Stack gap={1}>
+          {/* 결제완료는 깊은 흐름의 막다른 길이 되기 쉬워, 홈/주문내역/채팅 세 갈래를 모두 노출 */}
+          <Stack direction="row" gap={1}>
+            <Button
+              variant="outlined"
+              sx={{ flex: 1 }}
+              onClick={handleStartChat}
+              disabled={chatBusy}
+            >
+              판매자와 채팅
+            </Button>
+            <Button
+              sx={{ flex: 1.4 }}
+              onClick={() => router.push("/mypage/orders")}
+            >
+              주문 내역 보기
+            </Button>
+          </Stack>
           <Button
-            variant="outlined"
-            sx={{ flex: 1 }}
-            onClick={handleStartChat}
-            disabled={chatBusy}
+            variant="text"
+            startIcon={<HomeRoundedIcon />}
+            onClick={() => router.push("/home")}
+            sx={{ color: palette.inkMute, fontWeight: 700 }}
           >
-            판매자와 채팅
-          </Button>
-          <Button
-            sx={{ flex: 1.4 }}
-            onClick={() => router.push("/mypage/orders")}
-          >
-            주문 내역 보기
+            홈으로 돌아가기
           </Button>
         </Stack>
       </Box>

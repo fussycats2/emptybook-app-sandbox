@@ -17,6 +17,9 @@ import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import LocalShippingRoundedIcon from "@mui/icons-material/LocalShippingRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import AddPhotoAlternateRoundedIcon from "@mui/icons-material/AddPhotoAlternateRounded";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import HomeRoundedIcon from "@mui/icons-material/HomeRounded";
+import RateReviewRoundedIcon from "@mui/icons-material/RateReviewRounded";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
@@ -52,10 +55,19 @@ export default function OrderConfirmPage({
   const title = book?.title ?? order?.title ?? "도서";
   const sellerName = book?.seller ?? "판매자";
   const purchaseDate = order?.date ?? "-";
+  // 거래완료 후엔 footer 를 "후기 작성" + "홈으로" 로 교체해 사용자가 깊은 흐름에서 빠져나갈 길을 보장.
+  // 같은 페이지에서 STEPS 트래커는 그대로 보여주되, 안내/액션만 바뀌는 식.
+  const isCompleted = order?.status === "거래완료";
 
   return (
     <>
-      <AppHeader title="거래 확정" left="back" />
+      <AppHeader
+        title="거래 확정"
+        left="back"
+        // 거래확정 화면은 /mypage/orders → /orders/[id] 깊이라 router.back() 만 해도
+        // 의미 있는 곳에 닿지만, 알림에서 직접 진입하는 케이스도 있어 항상 홈으로 빠질 수단 제공.
+        homeButton
+      />
       <ScrollBody>
         <Box
           sx={{
@@ -223,33 +235,81 @@ export default function OrderConfirmPage({
           </Box>
         </Box>
 
-        <Box
-          sx={{
-            mx: 2,
-            mb: 2,
-            background: palette.warnSoft,
-            border: `1px solid ${palette.warn}33`,
-            borderRadius: 3,
-            p: 1.75,
-            color: "#7A5800",
-            fontSize: 12.5,
-            lineHeight: 1.65,
-            fontWeight: 600,
-            letterSpacing: "-0.01em",
-          }}
-        >
-          📦 책 상태를 꼭 확인하고 확정해주세요. 거래 확정 후에는 환불이 어려워요.
-        </Box>
+        {isCompleted ? (
+          // 거래확정이 끝난 뒤엔 안내문을 완료 톤으로 교체 — 사용자가 같은 페이지에 있어도
+          // "끝났구나" 가 한눈에 보이게.
+          <Box
+            sx={{
+              mx: 2,
+              mb: 2,
+              background: `${palette.primary}10`,
+              border: `1px solid ${palette.primary}33`,
+              borderRadius: 3,
+              p: 1.75,
+              color: palette.primary,
+              fontSize: 12.5,
+              lineHeight: 1.65,
+              fontWeight: 700,
+              letterSpacing: "-0.01em",
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <CheckCircleRoundedIcon sx={{ fontSize: 18 }} />
+            거래가 확정됐어요. 후기를 남겨 주세요.
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              mx: 2,
+              mb: 2,
+              background: palette.warnSoft,
+              border: `1px solid ${palette.warn}33`,
+              borderRadius: 3,
+              p: 1.75,
+              color: "#7A5800",
+              fontSize: 12.5,
+              lineHeight: 1.65,
+              fontWeight: 600,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            📦 책 상태를 꼭 확인하고 확정해주세요. 거래 확정 후에는 환불이 어려워요.
+          </Box>
+        )}
       </ScrollBody>
       <FixedFooter>
-        <Stack direction="row" gap={1}>
-          <Button variant="outlined" sx={{ flex: 1 }} onClick={() => toast?.show("신고가 접수됐어요")}>
-            문제 신고
-          </Button>
-          <Button sx={{ flex: 1.5 }} onClick={() => setConfirm(true)}>
-            거래 확정하기
-          </Button>
-        </Stack>
+        {isCompleted ? (
+          // 거래완료 후 — 같은 화면에 머물지 않고 자연스럽게 다음 단계로 보낼 수 있게 두 CTA 분기.
+          // 후기 작성으로 가거나, 곧장 홈으로. 뒤로가기로만 빠져나가야 했던 막다른 길 해소.
+          <Stack direction="row" gap={1}>
+            <Button
+              variant="outlined"
+              sx={{ flex: 1 }}
+              startIcon={<HomeRoundedIcon />}
+              onClick={() => router.push("/home")}
+            >
+              홈으로
+            </Button>
+            <Button
+              sx={{ flex: 1.5 }}
+              startIcon={<RateReviewRoundedIcon />}
+              onClick={() => router.push(`/orders/${params.id}/review`)}
+            >
+              후기 작성하기
+            </Button>
+          </Stack>
+        ) : (
+          <Stack direction="row" gap={1}>
+            <Button variant="outlined" sx={{ flex: 1 }} onClick={() => toast?.show("신고가 접수됐어요")}>
+              문제 신고
+            </Button>
+            <Button sx={{ flex: 1.5 }} onClick={() => setConfirm(true)}>
+              거래 확정하기
+            </Button>
+          </Stack>
+        )}
       </FixedFooter>
       <ConfirmDialog
         open={confirm}
@@ -261,7 +321,8 @@ export default function OrderConfirmPage({
           try {
             await completeMutation.mutateAsync(params.id);
             toast?.show("거래가 확정됐어요");
-            router.push(`/orders/${params.id}/review`);
+            // 자동 redirect 대신 페이지를 거래완료 상태로 잠그고 footer CTA(후기/홈)로 분기.
+            // 즉시 후기로 보내면 "홈으로 가고 싶었던" 사용자가 또 막다른 길에 갇히게 됨.
           } catch {
             toast?.show("거래 확정에 실패했어요", "error");
           }

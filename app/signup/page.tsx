@@ -81,7 +81,8 @@ export default function SignupPage() {
     // mock 모드는 그냥 통과
     if (!isSupabaseConfigured) {
       toast?.show("데모 모드: 가입을 환영해요!");
-      router.push("/home");
+      // replace — 가입 폼이 stack 에 남으면 홈에서 뒤로가기 시 다시 가입 폼으로 떨어짐.
+      router.replace("/home");
       return;
     }
     setSubmitting(true);
@@ -113,7 +114,8 @@ export default function SignupPage() {
     // 이메일 인증이 켜져 있으면 session 이 비어있다 → 인증 메일 안내 후 로그인 페이지로
     if (!data.session) {
       toast?.show("가입 메일을 확인해 인증을 마쳐주세요");
-      router.push("/login");
+      // replace — 가입이 끝났으니 가입 폼은 stack 에서 빼고 로그인이 종착점이 되게.
+      router.replace("/login");
       return;
     }
     // 자동 로그인된 경우 바로 홈으로

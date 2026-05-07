@@ -58,7 +58,8 @@ function LoginPageInner() {
     // mock 모드: 인증 없이 다음 페이지로 진입
     if (!isSupabaseConfigured) {
       toast?.show("Supabase 환경변수가 없어 데모 모드로 진입합니다");
-      router.push(next);
+      // replace — 로그인 폼이 stack 에 남으면 next 페이지에서 뒤로가기 시 다시 로그인 폼으로 떨어짐.
+      router.replace(next);
       return;
     }
     // 클라이언트 측 1차 유효성 검사 (서버에서 한 번 더 검증됨)
