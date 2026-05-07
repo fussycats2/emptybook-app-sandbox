@@ -349,6 +349,9 @@ export async function updateAppPrefs(prefs: AppPrefs): Promise<void> {
 // region 이 주어지면 그 지역 책을 먼저 보여주고 부족하면 다른 지역 책으로 채움 (v9.8).
 //   - 사용자 동네 매물이 항상 상단에 보여서 "내 동네 거래" 가치가 살아남
 //   - region 매물이 limit 보다 많으면 그 안에서만 노출 (다른 지역까지 안 섞음)
+// 거래완료(SOLD) 책은 활성 매물(SELLING/RESERVED) 다음 순서로 밀어 보여 준다 — 상단의
+// 책이 거래완료돼도 같은 자리에 박혀 있는 어색함을 막음. 활성 매물이 limit 을 채우면
+// SOLD 는 아예 안 보이고, 모자랄 때만 뒤꼬리로 따라붙음.
 // mock 모드의 SaleStatus 에서 "canceled" 인 책도 같이 제외해서 Supabase 모드와 동일하게 보이게 한다
 export async function listRecentBooks(
   limit = 10,
@@ -357,48 +360,114 @@ export async function listRecentBooks(
   const supabase = await tryClient();
   if (!supabase) {
     const all = mockListBooks().filter((b) => b.status !== "canceled");
-    if (!region) return all.slice(0, limit);
-    const local = all.filter((b) => b.region === region || b.loc === region);
-    if (local.length >= limit) return local.slice(0, limit);
-    const others = all.filter((b) => b.region !== region && b.loc !== region);
-    return [...local, ...others].slice(0, limit);
+    const orderByRegion = (list: typeof all) => {
+      if (!region) return list;
+      const local = list.filter(
+        (b) => b.region === region || b.loc === region
+      );
+      const others = list.filter(
+        (b) => b.region !== region && b.loc !== region
+      );
+      return [...local, ...others];
+    };
+    const active = orderByRegion(all.filter((b) => b.status !== "sold"));
+    const sold = orderByRegion(all.filter((b) => b.status === "sold"));
+    return [...active, ...sold].slice(0, limit);
   }
-  const baseSelect = () =>
-    supabase.from("books").select("*").neq("status", "HIDDEN");
 
-  if (region) {
-    // 1단계: 같은 region 책 우선
-    const { data: localData, error: localErr } = await baseSelect()
-      .eq("region", region)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-    if (localErr) {
-      const all = mockListBooks().filter((b) => b.status !== "canceled");
-      return all.slice(0, limit);
+  // 우선순위 단계별로 남은 자리만큼 채운다 — 활성 region → 활성 다른 지역 → SOLD region → SOLD 다른 지역.
+  // region 미지정이면 활성 → SOLD 두 단계만 밟는다.
+  const collected: BookRow[] = [];
+  const remaining = () => limit - collected.length;
+
+  type QueryStep = () => Promise<BookRow[]>;
+  const steps: QueryStep[] = region
+    ? [
+        async () => {
+          const { data } = await supabase
+            .from("books")
+            .select("*")
+            .neq("status", "HIDDEN")
+            .neq("status", "SOLD")
+            .eq("region", region)
+            .order("created_at", { ascending: false })
+            .limit(remaining());
+          return (data as BookRow[]) ?? [];
+        },
+        async () => {
+          const { data } = await supabase
+            .from("books")
+            .select("*")
+            .neq("status", "HIDDEN")
+            .neq("status", "SOLD")
+            .neq("region", region)
+            .order("created_at", { ascending: false })
+            .limit(remaining());
+          return (data as BookRow[]) ?? [];
+        },
+        async () => {
+          const { data } = await supabase
+            .from("books")
+            .select("*")
+            .eq("status", "SOLD")
+            .eq("region", region)
+            .order("created_at", { ascending: false })
+            .limit(remaining());
+          return (data as BookRow[]) ?? [];
+        },
+        async () => {
+          const { data } = await supabase
+            .from("books")
+            .select("*")
+            .eq("status", "SOLD")
+            .neq("region", region)
+            .order("created_at", { ascending: false })
+            .limit(remaining());
+          return (data as BookRow[]) ?? [];
+        },
+      ]
+    : [
+        async () => {
+          const { data } = await supabase
+            .from("books")
+            .select("*")
+            .neq("status", "HIDDEN")
+            .neq("status", "SOLD")
+            .order("created_at", { ascending: false })
+            .limit(remaining());
+          return (data as BookRow[]) ?? [];
+        },
+        async () => {
+          const { data } = await supabase
+            .from("books")
+            .select("*")
+            .eq("status", "SOLD")
+            .order("created_at", { ascending: false })
+            .limit(remaining());
+          return (data as BookRow[]) ?? [];
+        },
+      ];
+
+  try {
+    for (const step of steps) {
+      if (remaining() <= 0) break;
+      const rows = await step();
+      collected.push(...rows);
     }
-    const local = (localData as BookRow[]) ?? [];
-    if (local.length >= limit) return local.map(rowToSummary);
-    // 2단계: 부족분만 다른 지역에서 채움
-    const remaining = limit - local.length;
-    const { data: otherData } = await baseSelect()
-      .neq("region", region)
-      .order("created_at", { ascending: false })
-      .limit(remaining);
-    const others = (otherData as BookRow[]) ?? [];
-    return [...local, ...others].map(rowToSummary);
+  } catch {
+    // 쿼리 실패 시에도 화면은 계속 보여주도록 mock 폴백
+    const all = mockListBooks().filter((b) => b.status !== "canceled");
+    return all.slice(0, limit);
   }
-
-  const { data, error } = await baseSelect()
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  // 쿼리 실패 시에도 화면은 계속 보여주도록 mock 폴백
-  if (error || !data) {
+  if (collected.length === 0) {
     return mockListBooks().filter((b) => b.status !== "canceled").slice(0, limit);
   }
-  return (data as BookRow[]).map(rowToSummary);
+  return collected.map(rowToSummary);
 }
 
 // 검색 — 키워드(q) / 카테고리 / 상태 등급 필터를 조합해 책을 검색
+// 거래완료(SOLD) 책은 활성 매물 다음 순서로 밀어 표시 — 키워드/카테고리 매칭 정보는 보존하되
+// 사용자가 "지금 살 수 있는 책" 을 위쪽에서 먼저 보게 한다.
 export async function searchBooks(opts: {
   q?: string;
   category?: string;
@@ -407,8 +476,7 @@ export async function searchBooks(opts: {
   const supabase = await tryClient();
   if (!supabase) {
     // Supabase 없을 땐 mock 배열을 직접 필터링
-    const list = mockListBooks();
-    return list.filter((b) => {
+    const list = mockListBooks().filter((b) => {
       // 취소된 책은 검색 결과에서 빠진다 (Supabase 모드의 .neq("status","HIDDEN") 와 동일)
       if (b.status === "canceled") return false;
       if (opts.q && !b.title.includes(opts.q) && !(b.author ?? "").includes(opts.q))
@@ -417,25 +485,45 @@ export async function searchBooks(opts: {
       if (opts.state && b.state !== opts.state) return false;
       return true;
     });
+    const active = list.filter((b) => b.status !== "sold");
+    const sold = list.filter((b) => b.status === "sold");
+    return [...active, ...sold];
   }
-  // Supabase 쿼리 빌더에 조건을 누적해서 붙여나간다
-  let query = supabase.from("books").select("*").neq("status", "HIDDEN");
-  if (opts.q) {
-    // ilike 는 PostgreSQL LIKE 연산자라 % / _ / \ 가 wildcard 로 해석된다.
-    // 사용자가 "50%" 같은 검색어를 넣었을 때 모든 책이 매칭되지 않게 이스케이프
-    const safe = opts.q.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
-    query = query.ilike("title", `%${safe}%`);
-  }
-  if (opts.category) query = query.eq("category", opts.category);
-  // 사용자 입력은 한글 라벨 → DB enum 으로 변환해서 매칭
-  if (opts.state && STATE_TO_LABEL_FROM_KOR[opts.state]) {
-    query = query.eq("state", STATE_TO_LABEL_FROM_KOR[opts.state]);
-  }
-  const { data, error } = await query
+  // Supabase 쿼리 빌더에 조건을 누적해서 붙여나간다.
+  // 활성/SOLD 두 번 쿼리를 분리 — 활성 먼저 fetch, 부족분만 SOLD 로 채워 SOLD 가 항상 뒤로 가게.
+  const baseQuery = () => {
+    let q = supabase.from("books").select("*").neq("status", "HIDDEN");
+    if (opts.q) {
+      // ilike 는 PostgreSQL LIKE 연산자라 % / _ / \ 가 wildcard 로 해석된다.
+      // 사용자가 "50%" 같은 검색어를 넣었을 때 모든 책이 매칭되지 않게 이스케이프
+      const safe = opts.q.replace(/\\/g, "\\\\").replace(/[%_]/g, "\\$&");
+      q = q.ilike("title", `%${safe}%`);
+    }
+    if (opts.category) q = q.eq("category", opts.category);
+    // 사용자 입력은 한글 라벨 → DB enum 으로 변환해서 매칭
+    if (opts.state && STATE_TO_LABEL_FROM_KOR[opts.state]) {
+      q = q.eq("state", STATE_TO_LABEL_FROM_KOR[opts.state]);
+    }
+    return q;
+  };
+
+  const TOTAL_LIMIT = 50;
+  const { data: activeData, error: activeErr } = await baseQuery()
+    .neq("status", "SOLD")
     .order("created_at", { ascending: false })
-    .limit(50);
-  if (error || !data) return [];
-  return (data as BookRow[]).map(rowToSummary);
+    .limit(TOTAL_LIMIT);
+  if (activeErr) return [];
+  const active = (activeData as BookRow[]) ?? [];
+  if (active.length >= TOTAL_LIMIT) {
+    return active.map(rowToSummary);
+  }
+  const remaining = TOTAL_LIMIT - active.length;
+  const { data: soldData } = await baseQuery()
+    .eq("status", "SOLD")
+    .order("created_at", { ascending: false })
+    .limit(remaining);
+  const sold = (soldData as BookRow[]) ?? [];
+  return [...active, ...sold].map(rowToSummary);
 }
 
 // 주어진 id 배열로 BookSummary 들을 한 번에 가져온다 — 입력 순서를 그대로 유지
@@ -1505,20 +1593,30 @@ export async function listLikedBookIds(): Promise<Set<string>> {
 // 내가 찜한 책 전체 목록(BookSummary) — /mypage/likes 화면용
 // likes ↔ books inner join 으로 한 번에 가져온다.
 // 판매자가 취소한(HIDDEN) 책은 "사라진 책"이므로 내 찜 목록에서도 제외 — 홈 피드와 동일한 가시성
+// 거래완료(SOLD) 찜은 찜한 시점(likes.created_at) 순서를 그대로 유지하되 활성 매물 뒤로 분리해 표시.
 export async function listLikedBooks(): Promise<BookSummary[]> {
+  const partitionMock = (list: ReturnType<typeof mockListBooks>) => {
+    const active = list.filter((b) => b.status !== "sold");
+    const sold = list.filter((b) => b.status === "sold");
+    return [...active, ...sold];
+  };
   const supabase = await tryClient();
   if (!supabase) {
     const ids = new Set(mockListLikedIds());
-    return mockListBooks().filter(
-      (b) => ids.has(b.id) && b.status !== "canceled"
+    return partitionMock(
+      mockListBooks().filter(
+        (b) => ids.has(b.id) && b.status !== "canceled"
+      )
     );
   }
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
   if (!uid) {
     const ids = new Set(mockListLikedIds());
-    return mockListBooks().filter(
-      (b) => ids.has(b.id) && b.status !== "canceled"
+    return partitionMock(
+      mockListBooks().filter(
+        (b) => ids.has(b.id) && b.status !== "canceled"
+      )
     );
   }
   const { data } = await supabase
@@ -1527,10 +1625,12 @@ export async function listLikedBooks(): Promise<BookSummary[]> {
     .eq("user_id", uid)
     .order("created_at", { ascending: false });
   if (!data) return [];
-  return (data as { books: BookRow | null }[])
+  const rows = (data as { books: BookRow | null }[])
     .filter((r): r is { books: BookRow } => !!r.books)
-    .filter((r) => r.books.status !== "HIDDEN") // 취소된 책은 제외
-    .map((r) => rowToSummary(r.books));
+    .filter((r) => r.books.status !== "HIDDEN"); // 취소된 책은 제외
+  const active = rows.filter((r) => r.books.status !== "SOLD");
+  const sold = rows.filter((r) => r.books.status === "SOLD");
+  return [...active, ...sold].map((r) => rowToSummary(r.books));
 }
 
 // 찜 토글 — likes 행을 INSERT/DELETE 하면 0005_likes_count_trigger.sql 의
