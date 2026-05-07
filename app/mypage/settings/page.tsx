@@ -10,6 +10,7 @@
 import {
   Box,
   Button,
+  Chip,
   OutlinedInput,
   Stack,
   Switch,
@@ -24,7 +25,7 @@ import { palette } from "@/lib/theme";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { withDefaultPrefs } from "@/lib/repo";
+import { meta, withDefaultPrefs } from "@/lib/repo";
 import {
   useMyProfile,
   useUpdateAppPrefs,
@@ -82,10 +83,14 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState("");
   const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
+  // 관심 장르 — 회원가입 시 받은 preferred_genres 가 가입 이후엔 수정처가 없었어서 v9.9 에서 추가.
+  // 홈 카테고리 추천 섹션이 첫 번째 장르를 추천 카테고리로 쓰므로, 사용자가 자기 취향을 바꾸면 즉시 반영.
+  const [genres, setGenres] = useState<string[]>([]);
   const [original, setOriginal] = useState({
     displayName: "",
     username: "",
     phone: "",
+    genres: [] as string[],
   });
   const [push, setPush] = useState(withDefaultPrefs().push);
   const [privacy, setPrivacy] = useState(withDefaultPrefs().privacy);
@@ -96,20 +101,44 @@ export default function SettingsPage() {
     const dn = profile.display_name ?? "";
     const un = profile.username ?? "";
     const ph = profile.phone ?? "";
+    const gn = profile.preferred_genres ?? [];
     setDisplayName(dn);
     setUsername(un);
     setPhone(ph);
-    setOriginal({ displayName: dn, username: un, phone: ph });
+    setGenres(gn);
+    setOriginal({ displayName: dn, username: un, phone: ph, genres: gn });
     const prefs = withDefaultPrefs(profile.app_prefs);
     setPush(prefs.push);
     setPrivacy(prefs.privacy);
   }, [profile]);
 
-  // 변경된 항목이 하나라도 있을 때만 저장 버튼 활성화
+  // 변경된 항목이 하나라도 있을 때만 저장 버튼 활성화 (텍스트 필드만 — 장르는 별도 저장 버튼)
   const profileDirty =
     displayName !== original.displayName ||
     username !== original.username ||
     phone !== original.phone;
+
+  // 장르 dirty — 정렬에 무관하게 같은 집합인지 비교
+  const genresDirty =
+    genres.length !== original.genres.length ||
+    genres.some((g) => !original.genres.includes(g)) ||
+    original.genres.some((g) => !genres.includes(g));
+
+  const toggleGenre = (g: string) =>
+    setGenres((prev) =>
+      prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g]
+    );
+
+  const handleSaveGenres = async () => {
+    if (savingProfile || !genresDirty) return;
+    const res = await updateProfile.mutateAsync({ preferred_genres: genres });
+    if (res.ok) {
+      toast?.show("관심 장르를 저장했어요");
+      setOriginal((o) => ({ ...o, genres }));
+    } else {
+      toast?.show("저장에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
+    }
+  };
 
   const handleSaveProfile = async () => {
     if (savingProfile || !profileDirty) return;
@@ -122,7 +151,7 @@ export default function SettingsPage() {
       toast?.show("이미 사용 중인 사용자명이에요", "warning");
     } else if (res.ok) {
       toast?.show("프로필을 저장했어요");
-      setOriginal({ displayName, username, phone });
+      setOriginal((o) => ({ ...o, displayName, username, phone }));
     } else {
       toast?.show("저장에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
     }
@@ -174,6 +203,52 @@ export default function SettingsPage() {
                 {savingProfile ? "저장 중…" : "프로필 저장"}
               </Button>
             </Stack>
+          </Box>
+        </Group>
+
+        <Group title="관심 장르">
+          <Box sx={{ p: 1.5 }}>
+            <Typography
+              sx={{
+                fontSize: 12.5,
+                color: palette.inkMute,
+                lineHeight: 1.6,
+                mb: 1,
+              }}
+            >
+              선택한 장르의 책을 홈에서 우선 추천해드려요. 여러 개 골라도 돼요.
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+              {meta.CATEGORIES.map((c) => {
+                const on = genres.includes(c.name);
+                return (
+                  <Chip
+                    key={c.name}
+                    label={`${c.emoji} ${c.name}`}
+                    variant={on ? "filled" : "outlined"}
+                    onClick={() => toggleGenre(c.name)}
+                    sx={{
+                      height: 34,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      ...(on && {
+                        background: palette.primary,
+                        color: "#fff",
+                        "&:hover": { background: palette.primaryDark },
+                      }),
+                    }}
+                  />
+                );
+              })}
+            </Box>
+            <Button
+              fullWidth
+              onClick={handleSaveGenres}
+              disabled={!genresDirty || savingProfile}
+              sx={{ mt: 1.5 }}
+            >
+              {savingProfile ? "저장 중…" : "관심 장르 저장"}
+            </Button>
           </Box>
         </Group>
 

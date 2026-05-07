@@ -7,7 +7,8 @@ export const queryKeys = {
   book: {
     all: ["book"] as const,
     lists: () => [...queryKeys.book.all, "list"] as const,
-    recent: (limit: number) => [...queryKeys.book.lists(), "recent", limit] as const,
+    recent: (limit: number, region?: string) =>
+      [...queryKeys.book.lists(), "recent", limit, region ?? "all"] as const,
     search: (params: { q?: string; category?: string; state?: string }) =>
       [...queryKeys.book.lists(), "search", params] as const,
     mine: () => [...queryKeys.book.lists(), "mine"] as const,

@@ -30,9 +30,13 @@ export function useUpdateMyProfile() {
       display_name?: string | null;
       username?: string | null;
       phone?: string | null;
+      preferred_genres?: string[] | null;
     }) => updateMyProfile(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.profile.me() });
+      // 홈 카테고리 추천 섹션이 preferred_genres 첫 번째 값을 카테고리로 쓰므로,
+      // 장르 변경 시 책 검색 캐시도 같이 invalidate (다음 진입에 새 카테고리로 fetch).
+      qc.invalidateQueries({ queryKey: queryKeys.book.lists() });
     },
   });
 }

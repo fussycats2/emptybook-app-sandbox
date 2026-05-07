@@ -31,12 +31,15 @@ import { ListSkeleton } from "@/components/ui/Skeleton";
 import { useToast } from "@/components/ui/ToastProvider";
 import { palette, radius, shadow } from "@/lib/theme";
 import { meta } from "@/lib/repo";
-import { useRecentBooks } from "@/lib/query/bookHooks";
+import { useRecentBooks, useSearchBooks } from "@/lib/query/bookHooks";
+import { useMyProfile } from "@/lib/query/profileHooks";
 import { useNotificationsStore } from "@/lib/store/notificationsStore";
 import { useMyShelf } from "@/lib/query/shelfHooks";
 import { useShelfStore } from "@/lib/store/shelfStore";
 import { useRegionStore } from "@/lib/store/regionStore";
 import { SHELF_STATUS_LABEL } from "@/lib/supabase/types";
+import StatusBadge from "@/components/ui/StatusBadge";
+import type { BookSummary } from "@/components/ui/BookCard";
 
 const { CATEGORIES, POPULAR_SELLERS } = meta;
 import MannerTemperature from "@/components/ui/MannerTemperature";
@@ -44,8 +47,18 @@ import MannerTemperature from "@/components/ui/MannerTemperature";
 export default function HomePage() {
   const router = useRouter();
   const toast = useToast();
-  // React Query — 캐시 공유 + 자동 refetch 정책 + 에러 시 빈 배열 처리
-  const { data: books, isLoading } = useRecentBooks(10);
+  // 사용자가 선택한 동네 — 헤더 칩 라벨 + 섹션 헤더 라벨 + 피드 정렬 우선순위에 모두 적용 (v9.8)
+  const region = useRegionStore((s) => s.region);
+  const [regionPickerOpen, setRegionPickerOpen] = useState(false);
+  // React Query — region 우선 정렬. region 이 바뀌면 새로 fetch (캐시 키에 region 포함)
+  const { data: books, isLoading } = useRecentBooks(10, region);
+  // 추천 카테고리 — preferred_genres(가입 시 선택한 장르) 가 있으면 첫 번째,
+  // 없으면 모든 사용자에게 노출되는 기본값 "소설".
+  // /signup 에서 받은 preferred_genres 가 회원에게 자연스러운 발견 경험을 만든다.
+  const { data: profile } = useMyProfile();
+  const recommendCategory = profile?.preferred_genres?.[0] ?? "소설";
+  const isMyTaste = !!profile?.preferred_genres?.length;
+  const { data: categoryBooks } = useSearchBooks({ category: recommendCategory });
   // 알림 unread 개수 — 0 이면 헤더의 빨간점을 숨긴다
   const unreadCount = useNotificationsStore((s) => s.unreadCount);
   // 책장 카운트 — 홈 바로가기 카드에 권수/상태별 요약 노출
@@ -53,9 +66,6 @@ export default function HomePage() {
   useMyShelf();
   const shelfTotal = useShelfStore((s) => s.total);
   const shelfByStatus = useShelfStore((s) => s.byStatus);
-  // 사용자가 선택한 동네 — 헤더 칩 라벨 + 섹션 헤더 라벨에 일관 적용
-  const region = useRegionStore((s) => s.region);
-  const [regionPickerOpen, setRegionPickerOpen] = useState(false);
 
   return (
     <>
@@ -464,6 +474,55 @@ export default function HomePage() {
           ))}
         </Box>
 
+        {/* 카테고리 추천 섹션 — preferred_genres 가 있으면 "내 취향에 맞는 책",
+            없으면 기본 "소설" 추천. SOLD/HIDDEN/canceled 책은 searchBooks 가 자동 필터.
+            가로 스크롤 형태로 두께를 줄여 메인 피드와 구분 (v9.8) */}
+        {categoryBooks && categoryBooks.length > 0 && (
+          <>
+            <SectionLabel
+              right={
+                <Box
+                  onClick={() =>
+                    router.push(
+                      `/search?category=${encodeURIComponent(recommendCategory)}`
+                    )
+                  }
+                  sx={{
+                    px: 1.25,
+                    py: 0.4,
+                    borderRadius: 999,
+                    background: palette.primaryTint,
+                    color: palette.primary,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: "-0.01em",
+                    cursor: "pointer",
+                    "&:hover": { background: palette.primarySoft },
+                  }}
+                >
+                  더 보기 →
+                </Box>
+              }
+            >
+              {isMyTaste
+                ? `취향에 맞을 ${recommendCategory} 책`
+                : `${recommendCategory} 책 둘러보기`}
+            </SectionLabel>
+            <Box
+              className="no-scrollbar"
+              sx={{ display: "flex", gap: 1.25, px: 2, pb: 1, overflowX: "auto" }}
+            >
+              {categoryBooks.slice(0, 8).map((b) => (
+                <MiniBookCard
+                  key={b.id}
+                  book={b}
+                  onClick={() => router.push(`/books/${b.id}`)}
+                />
+              ))}
+            </Box>
+          </>
+        )}
+
         <SectionLabel>이 동네 인기 판매자</SectionLabel>
         <Box
           className="no-scrollbar"
@@ -519,5 +578,74 @@ export default function HomePage() {
         onClose={() => setRegionPickerOpen(false)}
       />
     </>
+  );
+}
+
+// 홈 카테고리 추천 섹션의 가로 스크롤 카드 (v9.8).
+// 메인 피드(BookFeedItem) 보다 좁고 표지를 강조 — 발견 경험에 적합한 폼.
+// 같은 책을 메인 피드에서 이미 봤을 수 있으니 "둘러보기" 톤으로 가벼운 인상.
+function MiniBookCard({
+  book,
+  onClick,
+}: {
+  book: BookSummary;
+  onClick: () => void;
+}) {
+  return (
+    <Box
+      onClick={onClick}
+      sx={{
+        flexShrink: 0,
+        width: 130,
+        cursor: "pointer",
+        transition: "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "&:hover": { transform: "translateY(-2px)" },
+      }}
+    >
+      <Box sx={{ position: "relative", mb: 0.75 }}>
+        <BookImage
+          seed={book.id}
+          src={book.coverUrl}
+          width={130}
+          height={170}
+          radius={radius.md}
+        />
+        {(book.status === "sold" ||
+          book.status === "reserved" ||
+          book.status === "free") && (
+          <Box sx={{ position: "absolute", top: 8, left: 8 }}>
+            <StatusBadge status={book.status as any} size="sm" />
+          </Box>
+        )}
+      </Box>
+      <Typography
+        sx={{
+          fontSize: 12.5,
+          fontWeight: 700,
+          letterSpacing: "-0.02em",
+          lineHeight: 1.35,
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {book.title}
+      </Typography>
+      <Typography
+        sx={{
+          fontSize: 13,
+          fontWeight: 800,
+          color: book.free ? palette.accent : palette.ink,
+          mt: 0.4,
+          letterSpacing: "-0.02em",
+        }}
+      >
+        {book.price}
+      </Typography>
+      <Typography sx={{ fontSize: 10.5, color: palette.inkSubtle, mt: 0.1 }}>
+        {book.loc ?? "-"}
+      </Typography>
+    </Box>
   );
 }

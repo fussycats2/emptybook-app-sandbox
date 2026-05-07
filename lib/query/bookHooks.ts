@@ -19,11 +19,11 @@ import {
 import { queryKeys } from "./keys";
 import { likeKeys } from "./likeHooks";
 
-// 홈 피드 — 최근 등록 도서
-export function useRecentBooks(limit = 10) {
+// 홈 피드 — 최근 등록 도서. region 이 주어지면 그 동네 책 우선 (v9.8)
+export function useRecentBooks(limit = 10, region?: string) {
   return useQuery({
-    queryKey: queryKeys.book.recent(limit),
-    queryFn: () => listRecentBooks(limit),
+    queryKey: queryKeys.book.recent(limit, region),
+    queryFn: () => listRecentBooks(limit, region),
   });
 }
 

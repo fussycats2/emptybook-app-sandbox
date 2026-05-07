@@ -268,31 +268,42 @@ export async function getMyProfile(): Promise<Profile | null> {
   return { ...(data as Profile), app_prefs: (data as any).app_prefs ?? {} };
 }
 
-// 내 프로필 부분 수정 — display_name / username / phone 등
+// 내 프로필 부분 수정 — display_name / username / phone / preferred_genres
 // username UNIQUE 위반(23505) 시 { uniqueViolation: true } 반환
+// preferred_genres 는 홈 카테고리 추천 섹션(v9.8) 의 첫 번째 카테고리로 쓰여서
+// 가입 후에도 수정 가능해야 한다 — /mypage/settings 의 "관심 장르" 섹션에서 호출.
 export async function updateMyProfile(input: {
   display_name?: string | null;
   username?: string | null;
   phone?: string | null;
+  preferred_genres?: string[] | null;
 }): Promise<{ ok: boolean; uniqueViolation?: boolean }> {
+  // mock 의 Profile 타입은 preferred_genres 가 string[] (null 미허용) 이라 폴백 시 정규화.
+  const mockInput = {
+    ...input,
+    preferred_genres:
+      input.preferred_genres === null ? [] : input.preferred_genres,
+  };
   const supabase = await tryClient();
   if (!supabase) {
-    mockUpdateProfile(input);
+    mockUpdateProfile(mockInput);
     return { ok: true };
   }
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) {
-    mockUpdateProfile(input);
+    mockUpdateProfile(mockInput);
     return { ok: true };
   }
   // 빈 문자열은 null 로 정규화 (username UNIQUE 충돌 방지 + 일관성)
-  const payload: Record<string, string | null> = {};
+  const payload: Record<string, string | string[] | null> = {};
   if (input.display_name !== undefined)
     payload.display_name = input.display_name?.trim() || null;
   if (input.username !== undefined)
     payload.username = input.username?.trim() || null;
   if (input.phone !== undefined)
     payload.phone = input.phone?.trim() || null;
+  if (input.preferred_genres !== undefined)
+    payload.preferred_genres = input.preferred_genres ?? [];
 
   const { error } = await supabase
     .from("profiles")
@@ -334,17 +345,50 @@ export async function updateAppPrefs(prefs: AppPrefs): Promise<void> {
 // ---------- Books (도서) ----------
 
 // 홈 피드용 — 최근 등록된 책 목록
-// HIDDEN(신고/숨김) 상태인 책은 제외하고, 최신순으로 limit 개 조회
+// HIDDEN(신고/숨김) 상태인 책은 제외하고, 최신순으로 limit 개 조회.
+// region 이 주어지면 그 지역 책을 먼저 보여주고 부족하면 다른 지역 책으로 채움 (v9.8).
+//   - 사용자 동네 매물이 항상 상단에 보여서 "내 동네 거래" 가치가 살아남
+//   - region 매물이 limit 보다 많으면 그 안에서만 노출 (다른 지역까지 안 섞음)
 // mock 모드의 SaleStatus 에서 "canceled" 인 책도 같이 제외해서 Supabase 모드와 동일하게 보이게 한다
-export async function listRecentBooks(limit = 10): Promise<BookSummary[]> {
+export async function listRecentBooks(
+  limit = 10,
+  region?: string
+): Promise<BookSummary[]> {
   const supabase = await tryClient();
   if (!supabase) {
-    return mockListBooks().filter((b) => b.status !== "canceled").slice(0, limit);
+    const all = mockListBooks().filter((b) => b.status !== "canceled");
+    if (!region) return all.slice(0, limit);
+    const local = all.filter((b) => b.region === region || b.loc === region);
+    if (local.length >= limit) return local.slice(0, limit);
+    const others = all.filter((b) => b.region !== region && b.loc !== region);
+    return [...local, ...others].slice(0, limit);
   }
-  const { data, error } = await supabase
-    .from("books")
-    .select("*")
-    .neq("status", "HIDDEN")
+  const baseSelect = () =>
+    supabase.from("books").select("*").neq("status", "HIDDEN");
+
+  if (region) {
+    // 1단계: 같은 region 책 우선
+    const { data: localData, error: localErr } = await baseSelect()
+      .eq("region", region)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (localErr) {
+      const all = mockListBooks().filter((b) => b.status !== "canceled");
+      return all.slice(0, limit);
+    }
+    const local = (localData as BookRow[]) ?? [];
+    if (local.length >= limit) return local.map(rowToSummary);
+    // 2단계: 부족분만 다른 지역에서 채움
+    const remaining = limit - local.length;
+    const { data: otherData } = await baseSelect()
+      .neq("region", region)
+      .order("created_at", { ascending: false })
+      .limit(remaining);
+    const others = (otherData as BookRow[]) ?? [];
+    return [...local, ...others].map(rowToSummary);
+  }
+
+  const { data, error } = await baseSelect()
     .order("created_at", { ascending: false })
     .limit(limit);
   // 쿼리 실패 시에도 화면은 계속 보여주도록 mock 폴백

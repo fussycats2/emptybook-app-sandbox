@@ -154,16 +154,19 @@ export default function SplashPage() {
 
           {/* Hero — 무게 대비로 단어별 리듬을 주는 디스플레이 헤드라인
               "책장은(200)  비우고(800)," / "이야기는(200)  잇다(800)."
-              420px 카드 폭에서 단어 분리 줄바꿈을 막기 위해 nowrap + 살짝 작은 사이즈 */}
+              420px 카드 폭에서 단어 분리 줄바꿈을 막기 위해 nowrap.
+              데스크탑(md+)은 좌측 브랜드 패널 옆 카드라 글자가 같으면 답답해 보임 →
+              모바일(46) 보다 작은 42px + 우측 여백을 두어 좌측으로 기우는 인상 강조 */}
           <Typography
             className="splash-rise"
             sx={{
-              fontSize: { xs: 46, sm: 56 },
+              fontSize: { xs: 46, md: 47 },
               fontWeight: 200,
               letterSpacing: "-0.045em",
-              lineHeight: 1.06,
+              lineHeight: 1.1,
               whiteSpace: "nowrap",
               animationDelay: "120ms",
+              pr: { xs: 0, md: 6 },
             }}
           >
             책장은{" "}
@@ -178,12 +181,13 @@ export default function SplashPage() {
           <Typography
             className="splash-rise"
             sx={{
-              fontSize: { xs: 46, sm: 56 },
+              fontSize: { xs: 46, md: 47 },
               fontWeight: 200,
               letterSpacing: "-0.045em",
-              lineHeight: 1.06,
+              lineHeight: 1.1,
               whiteSpace: "nowrap",
               animationDelay: "200ms",
+              pr: { xs: 0, md: 6 },
             }}
           >
             이야기는{" "}
@@ -198,7 +202,8 @@ export default function SplashPage() {
             </Box>
           </Typography>
 
-          {/* 서브카피 — 두 절 구조로 의도된 위치(쉼표 뒤)에서 줄바꿈 */}
+          {/* 서브카피 — 두 절 구조로 의도된 위치(쉼표 뒤)에서 줄바꿈
+              데스크탑에서도 너무 늘어지지 않게 maxWidth 제한 */}
           <Typography
             className="splash-rise"
             sx={{
@@ -208,6 +213,7 @@ export default function SplashPage() {
               mt: 3,
               lineHeight: 1.65,
               animationDelay: "280ms",
+              maxWidth: { xs: "100%", md: 280 },
             }}
           >
             당신의 책 한 권이,
