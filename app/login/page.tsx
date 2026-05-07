@@ -131,7 +131,14 @@ function LoginPageInner() {
 
   return (
     <>
-      <AppHeader title="" left="back" bordered={false} />
+      {/* 뒤로가기는 명시적으로 스플래시(/) 로 — 스플래시에서 /login 진입을 router.replace 로
+          처리(v9.5)했기 때문에 router.back() 으로는 외부 사이트나 빈 stack 으로 빠짐 */}
+      <AppHeader
+        title=""
+        left="back"
+        bordered={false}
+        onLeftClick={() => router.replace("/")}
+      />
       <Box sx={{ p: 3, pt: 1, display: "flex", flexDirection: "column", flex: 1 }}>
         <Box className="fade-in-up">
           <Box
