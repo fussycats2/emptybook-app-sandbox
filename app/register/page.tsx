@@ -4,6 +4,11 @@
 // - 사진(최대 10장) / 도서 검색 / 가격 / 상태 / 거래 방식 / 지역 / 설명 입력
 // - 도서 검색: /api/books/search 로 네이버 API 호출 → 결과 선택 시 폼 자동 채움
 // - 등록 성공 시 Storage 에 사진 업로드 → /register/complete?id=... 로 이동
+//
+// 수정 모드 (?editId=xxx):
+// - 기존 책의 메타데이터(가격/상태/거래방식/카테고리/지역/설명/상세체크) 만 수정
+// - 도서 정체성(제목/저자/ISBN/표지) 과 사진은 변경 불가 — 등록 시점에 확정
+// - 성공 시 /books/[id] 로 돌아감
 
 import {
   Box,
@@ -32,7 +37,7 @@ import ConditionDetailSheet from "@/components/ui/ConditionDetailSheet";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { meta, uploadBookImages } from "@/lib/repo";
-import { useCreateBook } from "@/lib/query/bookHooks";
+import { useBook, useCreateBook, useUpdateBook } from "@/lib/query/bookHooks";
 import { useNaverBookSearch } from "@/lib/query/naverBookHooks";
 import { useShelfItem, useUpdateShelfItem } from "@/lib/query/shelfHooks";
 import { useRegionStore } from "@/lib/store/regionStore";
@@ -45,12 +50,13 @@ const MAX_PHOTOS = 10;
 // 단일 파일 최대 8MB — Storage 비용/대역폭 보호
 const MAX_FILE_SIZE = 8 * 1024 * 1024;
 
-const STATES = [
-  { key: "최상", label: "최상", desc: "거의 새책" },
-  { key: "상", label: "상", desc: "사용감 적음" },
-  { key: "중", label: "중", desc: "사용감 보통" },
-  { key: "하", label: "하", desc: "사용감 많음" },
-] as const;
+// 등급별 한 줄 설명 — 상세 체크 결과 카드에 보조 텍스트로 노출
+const GRADE_DESC: Record<"최상" | "상" | "중" | "하", string> = {
+  최상: "거의 새책",
+  상: "사용감 적음",
+  중: "사용감 보통",
+  하: "사용감 많음",
+};
 const TRADE = [
   { key: "DIRECT", label: "직거래" },
   { key: "PARCEL", label: "택배" },
@@ -70,12 +76,17 @@ export default function RegisterPage() {
 function RegisterPageInner() {
   const router = useRouter();
   const toast = useToast();
-  // /mypage/shelf 에서 "판매 등록하기" 누르면 ?shelfId=xxx 로 prefill
+  // /mypage/shelf 에서 "판매 등록하기" 누르면 ?shelfId=xxx 로 prefill.
+  // /books/[id] 의 "게시글 수정" 메뉴에서 누르면 ?editId=xxx 로 수정 모드 진입.
   const searchParams = useSearchParams();
   const shelfId = searchParams?.get("shelfId") ?? undefined;
+  const editId = searchParams?.get("editId") ?? undefined;
+  const isEditMode = !!editId;
   const { data: shelfItem } = useShelfItem(shelfId);
+  const { data: editBook } = useBook(editId);
   const updateShelfMut = useUpdateShelfItem();
-  // 책장→등록 prefill 을 한 번만 적용하기 위한 가드
+  const updateBookMutation = useUpdateBook();
+  // 책장→등록 / 수정 모드 prefill 을 한 번만 적용하기 위한 가드
   const prefilledRef = useRef(false);
   // 선택한 실제 파일들 + blob 미리보기 URL 한 쌍씩 보관
   // 파일 추가/삭제 시 createObjectURL/revokeObjectURL 으로 라이프사이클 관리
@@ -112,7 +123,10 @@ function RegisterPageInner() {
   const naverSearch = useNaverBookSearch();
   // 사진 업로드는 별도 단계 — createBook 직후 진행하므로 spinner 동안 같이 잠근다
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const submitting = createBookMutation.isPending || uploadingPhotos;
+  const submitting =
+    createBookMutation.isPending ||
+    updateBookMutation.isPending ||
+    uploadingPhotos;
   const searching = naverSearch.isPending;
 
   // 언마운트 시 blob URL 들 일괄 해제 (메모리 누수 방지)
@@ -127,7 +141,7 @@ function RegisterPageInner() {
   // 책장 항목으로부터 prefill — shelfId 가 있고 책장 데이터가 도착하면 폼 채움
   // selected 에 BookSearchItem 형태로 박아 매칭 카드 UI 가 그대로 노출되도록
   useEffect(() => {
-    if (!shelfItem || prefilledRef.current) return;
+    if (!shelfItem || prefilledRef.current || isEditMode) return;
     prefilledRef.current = true;
     setTitle(shelfItem.title);
     setSelected({
@@ -142,7 +156,40 @@ function RegisterPageInner() {
       link: "",
     });
     if (shelfItem.category) setCategory(shelfItem.category);
-  }, [shelfItem]);
+  }, [shelfItem, isEditMode]);
+
+  // 수정 모드 prefill — editId 의 책 정보가 도착하면 폼을 채운다.
+  // 사진은 수정 불가, 도서 정체성(제목/저자/ISBN/표지)은 read-only 카드로만 표시.
+  useEffect(() => {
+    if (!isEditMode || !editBook || prefilledRef.current) return;
+    prefilledRef.current = true;
+    setTitle(editBook.title);
+    setSelected({
+      title: editBook.title,
+      author: editBook.author ?? "",
+      publisher: editBook.publisher ?? "",
+      isbn: editBook.isbn ?? "",
+      image: editBook.coverUrl ?? "",
+      price: editBook.originalPriceNumber ?? 0,
+      description: editBook.synopsis ?? "",
+      pubdate: editBook.pubDate ?? "",
+      link: editBook.sourceUrl ?? "",
+    });
+    if (editBook.category) setCategory(editBook.category);
+    if (editBook.region) setRegion(editBook.region);
+    if (editBook.state) {
+      const s = editBook.state as string;
+      if (s === "최상" || s === "상" || s === "중" || s === "하") setState(s);
+    }
+    setFree(!!editBook.free);
+    setPrice(String(editBook.priceNumber ?? 0));
+    setDescription(editBook.description ?? editBook.comment ?? "");
+    setConditionDetail(editBook.conditionDetail);
+    // tradeMethod 는 한글 라벨로 저장돼 있어 enum 으로 역변환
+    if (editBook.tradeMethod === "직거래") setTrade("DIRECT");
+    else if (editBook.tradeMethod === "택배") setTrade("PARCEL");
+    else setTrade("BOTH");
+  }, [isEditMode, editBook]);
 
   // 파일 선택 — 한도/타입/크기 검증 후 photos 에 누적
   const handleFilesPicked = (fileList: FileList | null) => {
@@ -229,11 +276,51 @@ function RegisterPageInner() {
     toast?.show("도서 정보를 가져왔어요");
   };
 
+  // 수정 모드 — 메타데이터 patch 만 보내고 도서 상세로 복귀
+  const submitEdit = async () => {
+    if (!editId || submitting) return;
+    const priceNumber = free ? 0 : parseInt(price || "0", 10) || 0;
+    try {
+      const ok = await updateBookMutation.mutateAsync({
+        bookId: editId,
+        patch: {
+          state,
+          priceNumber,
+          free,
+          region: region.trim() || currentRegion,
+          description: description.trim() || undefined,
+          tradeMethod: trade as "DIRECT" | "PARCEL" | "BOTH",
+          category,
+          conditionDetail: conditionSet ? conditionDetail : null,
+        },
+      });
+      if (!ok) {
+        toast?.show("수정에 실패했어요. 다시 시도해주세요.", "error");
+        return;
+      }
+      toast?.show("수정했어요");
+      router.replace(`/books/${editId}`);
+      router.refresh();
+    } catch {
+      toast?.show("수정에 실패했어요. 다시 시도해주세요.", "error");
+    }
+  };
+
   // 폼 검증 후 createBook 호출 → 사진 업로드 → 완료 페이지로 이동
   const submit = async () => {
     if (submitting) return;
+    if (isEditMode) {
+      void submitEdit();
+      return;
+    }
     if (!title.trim()) {
       toast?.show("도서 제목을 입력해주세요", "warning");
+      return;
+    }
+    // 등록 시에는 반드시 상세 체크를 거쳐야 한다 — 등급은 체크리스트 결과로 자동 결정
+    if (!conditionSet) {
+      toast?.show("도서 상태를 체크해주세요", "warning");
+      setConditionSheetOpen(true);
       return;
     }
     try {
@@ -304,19 +391,47 @@ function RegisterPageInner() {
   return (
     <>
       <AppHeader
-        title="도서 등록"
+        title={isEditMode ? "게시글 수정" : "도서 등록"}
         left="close"
         right={
-          <Button
-            variant="text"
-            sx={{ minWidth: 0, color: palette.inkMute, fontSize: 13 }}
-            onClick={() => toast?.show("임시저장했어요")}
-          >
-            임시저장
-          </Button>
+          isEditMode ? null : (
+            <Button
+              variant="text"
+              sx={{ minWidth: 0, color: palette.inkMute, fontSize: 13 }}
+              onClick={() => toast?.show("임시저장했어요")}
+            >
+              임시저장
+            </Button>
+          )
         }
       />
       <ScrollBody>
+        {/* 수정 모드 안내 — 사진/도서 정체성은 수정 불가하다는 점을 명시 */}
+        {isEditMode && (
+          <Box
+            sx={{
+              mx: 2,
+              mt: 2,
+              px: 1.5,
+              py: 1.25,
+              borderRadius: 2,
+              background: palette.primaryTint,
+              border: `1px solid ${palette.primarySoft}`,
+              color: palette.primary,
+            }}
+          >
+            <Typography sx={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.5 }}>
+              가격·상태·설명 등 거래 정보만 수정할 수 있어요.
+            </Typography>
+            <Typography
+              sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25, lineHeight: 1.5 }}
+            >
+              사진과 도서 정보(제목/저자/ISBN)는 수정할 수 없어요.
+            </Typography>
+          </Box>
+        )}
+        {/* 수정 모드면 사진 섹션 자체를 감춰서 사용자가 잘못 누르지 않게 한다 */}
+        {!isEditMode && (
         <Box sx={{ p: 2 }}>
           <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
             사진{" "}
@@ -437,7 +552,62 @@ function RegisterPageInner() {
             ))}
           </Box>
         </Box>
+        )}
 
+        {/* 수정 모드에서는 도서 정보 변경이 불가하므로 검색 영역 대신
+            현재 책의 표지/제목/저자만 read-only 카드로 보여준다 */}
+        {isEditMode && editBook ? (
+          <Box sx={{ p: 2 }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
+              도서 정보
+            </Typography>
+            <Box
+              sx={{
+                border: `1px solid ${palette.lineSoft}`,
+                background: palette.surfaceAlt,
+                borderRadius: 3,
+                p: 1.5,
+                display: "flex",
+                gap: 1.5,
+                alignItems: "center",
+              }}
+            >
+              <BookImage
+                seed={editBook.id}
+                src={editBook.coverUrl}
+                width={56}
+                height={72}
+                radius={8}
+              />
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    fontSize: 13.5,
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {editBook.title}
+                </Typography>
+                <Typography
+                  sx={{
+                    fontSize: 11.5,
+                    color: palette.inkMute,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {[editBook.author, editBook.publisher, editBook.isbn]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        ) : (
         <Box sx={{ p: 2 }}>
           <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
             도서 검색
@@ -638,6 +808,7 @@ function RegisterPageInner() {
             </Stack>
           )}
         </Box>
+        )}
 
         <Box sx={{ p: 2 }}>
           <Stack
@@ -697,74 +868,170 @@ function RegisterPageInner() {
         </Box>
 
         <Box sx={{ p: 2 }}>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 1 }}
-          >
-            <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
-              도서 상태
-            </Typography>
-            <Button
-              size="small"
-              variant="text"
-              startIcon={<RuleRoundedIcon sx={{ fontSize: 16 }} />}
+          <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
+            도서 상태
+          </Typography>
+          {/* 상태 등급은 직접 고르지 않고 상세 체크의 자동 추정 결과로만 결정.
+              조작 일관성을 위해 등록 모드와 수정 모드 모두 동일 카드 사용.
+              - 미체크: 프롬프트 카드 (등록 버튼은 별도로 disabled 처리)
+              - 체크 완료: 큰 등급 글씨 + "다시 체크하기"
+              - 수정 모드 + 레거시(detail 없음): 현재 등급 노출 + "상세 체크하기" */}
+          {conditionSet ? (
+            <Box
               onClick={() => setConditionSheetOpen(true)}
               sx={{
-                minWidth: 0,
-                px: 1,
-                fontSize: 12,
-                fontWeight: 700,
-                color: conditionSet ? palette.primary : palette.inkMute,
+                cursor: "pointer",
+                p: 2,
+                borderRadius: 3,
+                border: `1.5px solid ${palette.primary}`,
+                background: palette.primaryTint,
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                transition: "background 160ms ease, transform 90ms ease",
+                "&:hover": { background: palette.primarySoft },
+                "&:active": { transform: "scale(0.99)" },
               }}
             >
-              {conditionSet ? "상세 체크 완료" : "상세 체크"}
-            </Button>
-          </Stack>
-          <Stack direction="row" gap={1}>
-            {STATES.map((s) => {
-              const on = state === s.key;
-              return (
-                <Box
-                  key={s.key}
-                  onClick={() => setState(s.key as typeof state)}
+              <Box
+                sx={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 999,
+                  background: palette.primary,
+                  color: "#fff",
+                  display: "grid",
+                  placeItems: "center",
+                  fontSize: 22,
+                  fontWeight: 900,
+                  letterSpacing: "-0.04em",
+                  flexShrink: 0,
+                }}
+              >
+                {state}
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
                   sx={{
-                    flex: 1,
-                    border: `1.5px solid ${on ? palette.primary : palette.lineSoft}`,
-                    background: on ? palette.primaryTint : palette.surface,
-                    borderRadius: 2.5,
-                    py: 1.25,
-                    px: 0.75,
-                    textAlign: "center",
-                    cursor: "pointer",
-                    transition: "border-color 160ms ease, background 160ms ease, transform 90ms ease",
-                    boxShadow: on ? `0 0 0 4px ${palette.primaryGlow}` : "none",
-                    "&:active": { transform: "scale(0.97)" },
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: palette.primary,
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
                   }}
                 >
-                  <Typography
-                    sx={{
-                      fontSize: 14,
-                      fontWeight: 800,
-                      color: on ? palette.primary : palette.ink,
-                    }}
-                  >
-                    {s.label}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      fontSize: 10.5,
-                      color: palette.inkSubtle,
-                      mt: 0.25,
-                    }}
-                  >
-                    {s.desc}
-                  </Typography>
-                </Box>
-              );
-            })}
-          </Stack>
+                  상세 체크 완료 · 자동 추정
+                </Typography>
+                <Typography
+                  sx={{ fontSize: 14, fontWeight: 800, color: palette.ink, mt: 0.25 }}
+                >
+                  {GRADE_DESC[state]}
+                </Typography>
+                <Typography
+                  sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25 }}
+                >
+                  체크 항목을 바꾸면 등급이 다시 계산돼요. 탭해서 다시 체크하기.
+                </Typography>
+              </Box>
+              <RuleRoundedIcon sx={{ color: palette.primary, fontSize: 22 }} />
+            </Box>
+          ) : isEditMode ? (
+            // 수정 모드 + 레거시(상세 체크 미작성) — 기존 등급은 보존하고 변경은 상세 체크 경유
+            <Box
+              onClick={() => setConditionSheetOpen(true)}
+              sx={{
+                cursor: "pointer",
+                p: 2,
+                borderRadius: 3,
+                border: `1.5px solid ${palette.lineSoft}`,
+                background: palette.surfaceAlt,
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                "&:hover": { borderColor: palette.primary },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 999,
+                  background: palette.surface,
+                  color: palette.ink,
+                  border: `1.5px solid ${palette.line}`,
+                  display: "grid",
+                  placeItems: "center",
+                  fontSize: 22,
+                  fontWeight: 900,
+                  letterSpacing: "-0.04em",
+                  flexShrink: 0,
+                }}
+              >
+                {state}
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  sx={{ fontSize: 13.5, fontWeight: 800, color: palette.ink }}
+                >
+                  현재 등급 · {GRADE_DESC[state]}
+                </Typography>
+                <Typography
+                  sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25 }}
+                >
+                  등급을 바꾸려면 탭해서 상세 체크하기.
+                </Typography>
+              </Box>
+              <RuleRoundedIcon sx={{ color: palette.inkMute, fontSize: 20 }} />
+            </Box>
+          ) : (
+            // 신규 등록 + 미체크 — 상세 체크 강제 프롬프트
+            <Box
+              onClick={() => setConditionSheetOpen(true)}
+              sx={{
+                cursor: "pointer",
+                p: 2,
+                borderRadius: 3,
+                border: `1.5px dashed ${palette.line}`,
+                background: palette.surfaceAlt,
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                transition: "border-color 160ms ease, background 160ms ease, transform 90ms ease",
+                "&:hover": {
+                  borderColor: palette.primary,
+                  background: palette.primaryTint,
+                },
+                "&:active": { transform: "scale(0.99)" },
+              }}
+            >
+              <Box
+                sx={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 999,
+                  background: palette.primarySoft,
+                  color: palette.primary,
+                  display: "grid",
+                  placeItems: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <RuleRoundedIcon />
+              </Box>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography
+                  sx={{ fontSize: 13.5, fontWeight: 800, color: palette.ink }}
+                >
+                  상세 체크로 등급 받기
+                </Typography>
+                <Typography
+                  sx={{ fontSize: 11.5, color: palette.inkMute, mt: 0.25, lineHeight: 1.5 }}
+                >
+                  표지·책등·모서리 등을 체크하면 등급이 자동으로 결정돼요. 등록을 위해 꼭 한 번 체크해주세요.
+                </Typography>
+              </Box>
+            </Box>
+          )}
         </Box>
 
         <Box sx={{ p: 2 }}>
@@ -853,8 +1120,20 @@ function RegisterPageInner() {
         </Box>
       </ScrollBody>
       <FixedFooter>
-        <Button fullWidth onClick={submit} disabled={submitting}>
-          {free ? "무료나눔 등록하기" : "판매 등록하기"}
+        <Button
+          fullWidth
+          onClick={submit}
+          disabled={submitting || (!isEditMode && !conditionSet)}
+        >
+          {isEditMode
+            ? submitting
+              ? "수정 중…"
+              : "수정 완료"
+            : !conditionSet
+            ? "상세 체크 후 등록할 수 있어요"
+            : free
+            ? "무료나눔 등록하기"
+            : "판매 등록하기"}
         </Button>
       </FixedFooter>
       <BarcodeScanner

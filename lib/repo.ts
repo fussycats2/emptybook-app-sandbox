@@ -11,6 +11,7 @@ import {
   mockAddShelfItem,
   mockCancelBook,
   mockCreateBook,
+  mockUpdateBook,
   mockCreateOrder,
   mockCreateReview,
   mockDeleteBook,
@@ -693,6 +694,58 @@ export async function listMyBooks(): Promise<BookSummary[]> {
     .order("created_at", { ascending: false });
   if (!data) return [];
   return (data as BookRow[]).map(rowToSummary);
+}
+
+// 게시글 수정 — 메타데이터(가격/상태/카테고리/지역/설명/거래방식/상세체크) 만 수정.
+// 도서 정체성(title/author/isbn/cover) 은 등록 시점에 확정되어 변경 불가.
+// 반환: true = 성공, false = 실패(권한/대상 없음 / 네트워크 등)
+export async function updateBook(
+  bookId: string,
+  patch: {
+    state?: "최상" | "상" | "중" | "하";
+    priceNumber?: number;
+    free?: boolean;
+    region?: string;
+    description?: string;
+    tradeMethod?: "DIRECT" | "PARCEL" | "BOTH";
+    category?: string;
+    conditionDetail?: ConditionDetail | null;
+  }
+): Promise<boolean> {
+  const supabase = await tryClient();
+  if (!supabase) return mockUpdateBook(bookId, patch);
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return mockUpdateBook(bookId, patch);
+  if (!isUuid(bookId)) return mockUpdateBook(bookId, patch);
+
+  // 한글 등급 → DB enum 변환. patch.state 가 없으면 그 컬럼은 update 에서 제외
+  const updateRow: Record<string, unknown> = {};
+  if (patch.state) {
+    updateRow.state = STATE_TO_LABEL_FROM_KOR[patch.state] ?? "A";
+  }
+  if (patch.priceNumber !== undefined) {
+    updateRow.price = patch.free ? 0 : patch.priceNumber;
+  } else if (patch.free === true) {
+    // priceNumber 없이 free 만 켰을 때도 가격 0 으로 정렬
+    updateRow.price = 0;
+  }
+  if (patch.tradeMethod) updateRow.trade_method = patch.tradeMethod;
+  if (patch.category !== undefined) updateRow.category = patch.category;
+  if (patch.region !== undefined) updateRow.region = patch.region;
+  if (patch.description !== undefined) {
+    updateRow.description = patch.description || null;
+  }
+  if (patch.conditionDetail !== undefined) {
+    updateRow.condition_detail = patch.conditionDetail ?? null;
+  }
+  if (Object.keys(updateRow).length === 0) return true;
+
+  const { error } = await supabase
+    .from("books")
+    .update(updateRow)
+    .eq("id", bookId)
+    .eq("seller_id", auth.user.id); // RLS 외 클라이언트 가드
+  return !error;
 }
 
 // 판매 취소(등록 취소) — 책 상태를 HIDDEN 으로 만들어 목록/검색에서 제외

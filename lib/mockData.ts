@@ -792,6 +792,66 @@ export function mockCreateBook(input: {
   return book;
 }
 
+// 게시글 수정 — Supabase 의 updateBook 과 동일한 patch 를 mock store 에 반영.
+// 가격/state/region/description/tradeMethod/category/conditionDetail 만 변경 가능.
+export function mockUpdateBook(
+  bookId: string,
+  patch: {
+    state?: "최상" | "상" | "중" | "하";
+    priceNumber?: number;
+    free?: boolean;
+    region?: string;
+    description?: string;
+    tradeMethod?: "DIRECT" | "PARCEL" | "BOTH";
+    category?: string;
+    conditionDetail?: ConditionDetail | null;
+  }
+): boolean {
+  const s = getStore();
+  const book = s.books.find((b) => b.id === bookId);
+  if (!book) return false;
+  if (patch.state) book.state = patch.state;
+  if (patch.category !== undefined) book.category = patch.category;
+  if (patch.region !== undefined) {
+    book.region = patch.region;
+    book.loc = patch.region;
+  }
+  if (patch.description !== undefined) {
+    book.description = patch.description || undefined;
+    book.comment = patch.description || undefined;
+  }
+  if (patch.tradeMethod) {
+    book.tradeMethod =
+      patch.tradeMethod === "BOTH"
+        ? "직거래, 택배 가능"
+        : patch.tradeMethod === "DIRECT"
+        ? "직거래"
+        : "택배";
+  }
+  if (patch.conditionDetail !== undefined) {
+    book.conditionDetail = patch.conditionDetail ?? undefined;
+  }
+  // 가격/무료나눔 — free 토글이 명시되면 그에 맞춰 priceNumber/price/free/status 일괄 갱신
+  const nextFree =
+    patch.free !== undefined
+      ? patch.free
+      : patch.priceNumber !== undefined
+      ? patch.priceNumber === 0
+      : undefined;
+  if (patch.priceNumber !== undefined || nextFree !== undefined) {
+    const num = nextFree ? 0 : patch.priceNumber ?? book.priceNumber ?? 0;
+    book.priceNumber = num;
+    book.price = num === 0 ? "무료나눔" : `${num.toLocaleString()}원`;
+    book.free = num === 0;
+    // selling/free 외 상태(예: reserved/sold/canceled)는 보존 — 진행 중인 거래를
+    // 가격만 바꿨다고 강제로 selling 으로 되돌리면 FSM 과 어긋난다.
+    if (book.status === "selling" || book.status === "free") {
+      book.status = num === 0 ? "free" : "selling";
+    }
+  }
+  return true;
+}
+
 // 등록 취소 — 책을 HIDDEN 상태로(공개 목록에서 사라짐, 데이터는 남김)
 // mock 의 SaleStatus 에는 "canceled" 가 있으므로 그것을 사용 (실제 DB 의 HIDDEN 과 매핑)
 export function mockCancelBook(bookId: string): boolean {

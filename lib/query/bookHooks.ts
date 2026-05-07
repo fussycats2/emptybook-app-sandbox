@@ -15,9 +15,11 @@ import {
   listMyBooks,
   listRecentBooks,
   searchBooks,
+  updateBook,
 } from "@/lib/repo";
 import { queryKeys } from "./keys";
 import { likeKeys } from "./likeHooks";
+import type { ConditionDetail } from "@/lib/supabase/types";
 
 // 홈 피드 — 최근 등록 도서. region 이 주어지면 그 동네 책 우선 (v9.8)
 export function useRecentBooks(limit = 10, region?: string) {
@@ -65,6 +67,35 @@ export function useMyBooks() {
   return useQuery({
     queryKey: queryKeys.book.mine(),
     queryFn: () => listMyBooks(),
+  });
+}
+
+// 게시글 수정 — 메타데이터 패치. 채팅/찜 목록은 join 으로 같은 책 정보를 보여주므로 함께 invalidate
+export function useUpdateBook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      bookId,
+      patch,
+    }: {
+      bookId: string;
+      patch: {
+        state?: "최상" | "상" | "중" | "하";
+        priceNumber?: number;
+        free?: boolean;
+        region?: string;
+        description?: string;
+        tradeMethod?: "DIRECT" | "PARCEL" | "BOTH";
+        category?: string;
+        conditionDetail?: ConditionDetail | null;
+      };
+    }) => updateBook(bookId, patch),
+    onSuccess: (_ok, vars) => {
+      qc.invalidateQueries({ queryKey: queryKeys.book.lists() });
+      qc.invalidateQueries({ queryKey: queryKeys.book.detail(vars.bookId) });
+      qc.invalidateQueries({ queryKey: queryKeys.chat.list() });
+      qc.invalidateQueries({ queryKey: likeKeys.list() });
+    },
   });
 }
 

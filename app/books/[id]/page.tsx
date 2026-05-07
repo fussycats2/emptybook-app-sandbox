@@ -135,9 +135,12 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
     ? !!user && book.sellerId === user.id
     : book.seller === "나";
   const isSold = status === "sold";
+  const isReserved = status === "reserved";
   const isCanceled = status === "canceled";
   // 거래완료/취소된 책은 본인이 아니어도 구매 불가
   const ctaDisabled = isMine || isSold || isCanceled;
+  // 거래완료(SOLD) 책은 게시글 관리 메뉴 자체를 노출하지 않음 — 수정/취소/삭제 모두 의미 없음
+  const canManage = isMine && !isSold;
 
   // 판매자 카드의 받은 후기 미리보기 — 본인 책이면 안 가져옴(불필요한 요청 방지).
   // mock 모드에서는 sellerId 가 없을 수 있어 항상 시드 후기로 폴백.
@@ -282,8 +285,9 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
         >
           <IosShareRoundedIcon fontSize="small" />
         </IconButton>
-        {/* MoreVert — 본인 책일 때만 노출. 다른 사람 책에서 누르면 의미 없는 토스트만 뜨던 거 제거. */}
-        {isMine && (
+        {/* MoreVert — 본인 책 + 거래완료(SOLD) 가 아닐 때만 노출.
+            거래완료된 책은 수정/취소/삭제 모두 무의미하므로 메뉴 자체를 숨긴다. */}
+        {canManage && (
           <IconButton
             onClick={() => setMenuOpen(true)}
             sx={{ color: scrolled ? palette.ink : "#fff" }}
@@ -627,14 +631,16 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           <SheetRow
             icon={<EditRoundedIcon />}
             label="게시글 수정"
-            sub="준비중"
-            disabled
-            onClick={() => toast?.show("준비중이에요")}
+            sub="가격·상태·설명을 바꿀 수 있어요"
+            onClick={() => {
+              setMenuOpen(false);
+              router.push(`/register?editId=${book.id}`);
+            }}
           />
           <SheetRow
             icon={<VisibilityOffRoundedIcon />}
             label="판매 취소"
-            sub="목록에서 숨겨요. 데이터는 남아요."
+            sub="다시 내 책장으로 옮겨져요"
             onClick={() => setConfirm("cancel")}
           />
           <SheetRow
@@ -650,7 +656,7 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
       <ConfirmDialog
         open={confirm === "cancel"}
         title="판매를 취소할까요?"
-        description="목록과 검색에서 더 이상 보이지 않아요. 다시 올리려면 새로 등록해야 해요."
+        description="목록과 검색에서 사라지고, 책은 다시 내 책장으로 옮겨져요. 다시 올리려면 새로 등록해야 해요."
         confirmLabel={busy ? "처리중…" : "판매 취소"}
         onCancel={() => setConfirm(null)}
         onConfirm={handleCancel}
