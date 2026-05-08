@@ -146,6 +146,8 @@ Realtime: `messages`, `chat_rooms`, `notifications` · Storage 버킷: `book-ima
 - **판매 취소 → 책장 redirect**: `cancelBook` 성공 후엔 `/mypage/selling` 이 아니라 `/mypage/shelf` 로 보낸다. 사용자 멘탈 모델이 "취소 = 다시 내 소유로 돌아옴". 0014 트리거가 linked shelf_item 만 OWNED 로 옮기므로, 직접 등록한 책(shelf 흔적 없음)은 클라이언트가 `addShelfItem(status:"OWNED")` 로 명시 추가해야 일관됨. ISBN partial unique(0012) 가 idempotent 보장. 정상 삭제(영구)는 사용자 의도대로 `/mypage/selling` 유지 — 책장에 추가 안 함.
 - **신규 가입 메타 채움**: profiles 의 추가 필드(phone/preferred_genres 등) 는 `/signup` 의 `signUp({ options: { data: ... } })` 에 담아 보내고 `handle_new_user()` 트리거(0018) 가 흡수. 가입 직후 클라이언트가 `profiles.update()` 를 호출하면 confirm-email ON 환경에서 RLS 가 silent 차단.
 - **BookCard 류 표지**: `BookImage` 에 `seed={book.id} src={book.coverUrl}` 두 prop 모두 넘겨야 한다. `src` 가 있으면 실표지, 없으면 seed 기반 placeholder 로 폴백. 한쪽이라도 빠지면 표지 있는데 placeholder 가 나오거나, 폴백이 일관되지 않게 된다.
+- **`BookSpine` 책장 전용**: `/mypage/shelf` 에서만 사용. CSS-only 절차적 책등 (해시 시드로 테마/색/너비 결정 — 표지 이미지 사용 안 함). 다른 화면은 `BookImage` 그대로 유지. 제목은 vertical-rl **한 컬럼**, `(부제)` `[시리즈]` 같은 괄호 이후는 `stripParenthesis()` 로 떼고 그래도 길면 "…" 잘림 — 여러 줄 wrap 은 시각적으로 어수선해서 의도적으로 사용하지 않음. 저자는 하단 가로 1줄.
+- **`BookSpine` "판매중" 띠지(`listed`)**: `selected.status === "FOR_SALE" && linkedBookId` 일 때만 true. linkedBookId 만 있는 OWNED 항목(0014/0016 트리거가 거래완료/구매로 자동 OWNED 한 케이스)은 띠지·BottomSheet "매물로 등록됨" 뱃지·"등록된 매물 보기" footer 버튼 모두 비표시 — 의미가 "현재 판매 중" 이라 OWNED 와 충돌. 세 군데 조건이 같이 움직여야 함.
 - **세션 마감 git 작업**: 사용자가 직접 처리. 명시적 요청 있을 때만 commit/PR.
 
 ---

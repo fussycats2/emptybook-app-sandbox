@@ -324,8 +324,8 @@ export default function ShelfPage() {
               >
                 삭제
               </Button>
-              {selected.linkedBookId ? (
-                // 이미 매물로 등록된 책장 항목 — 중복 등록 방지 + 매물로 점프
+              {selected.status === "FOR_SALE" && selected.linkedBookId ? (
+                // 판매중 + 매물 연결됨 — 중복 등록 방지 + 매물로 점프
                 <Button
                   fullWidth
                   variant="outlined"
@@ -365,10 +365,12 @@ export default function ShelfPage() {
             {/* 책 정보 헤더 */}
             <Stack direction="row" gap={1.5} alignItems="center">
               <BookSpine
+                seed={selected.id}
                 title={selected.title}
                 author={selected.author}
                 category={selected.category}
                 coverUrl={selected.coverUrl}
+                listed={selected.status === "FOR_SALE" && !!selected.linkedBookId}
               />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography
@@ -392,7 +394,7 @@ export default function ShelfPage() {
                     {selected.finishedAt && `완독 ${selected.finishedAt}`}
                   </Typography>
                 )}
-                {selected.linkedBookId && (
+                {selected.status === "FOR_SALE" && selected.linkedBookId && (
                   <Box
                     sx={{
                       display: "inline-flex",
@@ -645,6 +647,9 @@ function ShelfRow({
           p: 1.5,
           boxShadow: shadow.card,
           overflow: "hidden",
+          // 빈 공간에 깔리는 미세한 격자 — 책장 안쪽 음영처럼
+          backgroundImage: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surfaceAlt} 100%), repeating-linear-gradient(90deg, transparent 0 8px, rgba(140,115,80,0.04) 8px 9px)`,
+          backgroundBlendMode: "normal, multiply",
         }}
       >
         <Box
@@ -655,28 +660,34 @@ function ShelfRow({
             overflowX: "auto",
             alignItems: "flex-end",
             pb: 0.75,
-            // 책장 받침대 — 진열된 책들 아래에 라인
+            minHeight: 156,
           }}
         >
           {items.map((it) => (
             <BookSpine
               key={it.id}
+              seed={it.id}
               title={it.title}
               author={it.author}
               category={it.category}
               coverUrl={it.coverUrl}
               rating={it.rating}
+              listed={it.status === "FOR_SALE" && !!it.linkedBookId}
               onClick={() => onItemClick(it)}
             />
           ))}
         </Box>
+        {/* 나무 받침대 — 그라데이션 + 가는 하이라이트 라인으로 입체감 */}
         <Box
           sx={{
-            mt: 0.5,
-            height: 6,
+            mt: 0.75,
+            position: "relative",
+            height: 8,
             borderRadius: 999,
-            background: `linear-gradient(180deg, #B59B6E 0%, #8C7350 100%)`,
-            opacity: 0.85,
+            background:
+              "linear-gradient(180deg, #C4A879 0%, #A8895C 45%, #7A6342 100%)",
+            boxShadow:
+              "0 1px 0 rgba(255,255,255,0.35) inset, 0 2px 4px rgba(122,99,66,0.25)",
           }}
         />
       </Box>
