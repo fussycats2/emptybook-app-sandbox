@@ -52,7 +52,7 @@
 
 ```
 app/                              # 22+ 화면 라우트
-  api/                            # books/search, auth/naver/{start,callback}, auth/find-email
+  api/                            # books/search, auth/naver/{start,callback}, auth/find-email, aladin/bestseller
   auth/callback/route.ts          # OAuth(PKCE) 공통 콜백
   (page routes — app 디렉토리 트리 직접 참조)
 

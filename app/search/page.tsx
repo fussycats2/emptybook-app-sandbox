@@ -30,6 +30,7 @@ import { ListSkeleton } from "@/components/ui/Skeleton";
 import { palette } from "@/lib/theme";
 import { meta } from "@/lib/repo";
 import { useSearchBooks } from "@/lib/query/bookHooks";
+import { useAladinBestseller } from "@/lib/query/aladinHooks";
 import FilterSheet, { type FilterValue } from "@/components/search/FilterSheet";
 
 const { POPULAR_SEARCHES, RECENT_SEARCHES, CATEGORIES } = meta;
@@ -75,6 +76,14 @@ function SearchInner() {
   );
   const results = isResultMode ? searchQuery.data ?? null : [];
   const isLoadingResults = isResultMode && searchQuery.isLoading;
+
+  // 알라딘 베스트셀러 — 결과 모드 아닐 때(=초기 검색 화면) "실시간 인기" 섹션에 노출.
+  // 키 미설정 / 알라딘 응답 실패 시 unavailable=true → 기존 mock(POPULAR_SEARCHES) 폴백.
+  const bestseller = useAladinBestseller(10);
+  const popularItems =
+    bestseller.data?.items && bestseller.data.items.length > 0
+      ? bestseller.data.items
+      : POPULAR_SEARCHES.map((title) => ({ title, author: "", isbn: "", cover: "" }));
 
   // 서버 응답을 받아 클라이언트에서 추가 필터(가격/상태/무료) 적용
   // 서버는 키워드/카테고리만 처리하고, 나머지는 클라이언트에서 가벼운 후처리로 끝낸다
@@ -290,7 +299,7 @@ function SearchInner() {
                 </Box>
               )}
             </Section>
-            <Section title="실시간 인기" icon={<LocalFireDepartmentRoundedIcon sx={{ color: palette.accent }} />}>
+            <Section title="베스트셀러" icon={<LocalFireDepartmentRoundedIcon sx={{ color: palette.accent }} />}>
               <Box
                 sx={{
                   background: palette.surface,
@@ -299,9 +308,9 @@ function SearchInner() {
                   overflow: "hidden",
                 }}
               >
-                {POPULAR_SEARCHES.map((t, i) => (
+                {popularItems.map((item, i) => (
                   <Stack
-                    key={t}
+                    key={`${item.title}-${i}`}
                     direction="row"
                     alignItems="center"
                     gap={1.5}
@@ -313,7 +322,7 @@ function SearchInner() {
                       transition: "background 140ms ease",
                       "&:hover": { background: palette.surfaceAlt },
                     }}
-                    onClick={() => submit(t)}
+                    onClick={() => submit(item.title)}
                   >
                     <Typography
                       sx={{
@@ -326,9 +335,34 @@ function SearchInner() {
                     >
                       {i + 1}
                     </Typography>
-                    <Typography sx={{ fontSize: 14, fontWeight: 600, flex: 1, letterSpacing: "-0.01em" }}>
-                      {t}
-                    </Typography>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          letterSpacing: "-0.01em",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {item.title}
+                      </Typography>
+                      {item.author && (
+                        <Typography
+                          sx={{
+                            fontSize: 11,
+                            color: palette.inkSubtle,
+                            mt: 0.25,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {item.author}
+                        </Typography>
+                      )}
+                    </Box>
                     {i < 3 && (
                       <LocalFireDepartmentRoundedIcon
                         sx={{ fontSize: 14, color: palette.accent, opacity: 0.5 }}
