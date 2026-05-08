@@ -26,7 +26,7 @@ import BottomTabNav from "@/components/ui/BottomTabNav";
 import { BookListRow, type BookSummary } from "@/components/ui/BookCard";
 import { ScrollBody } from "@/components/ui/Section";
 import EmptyState from "@/components/ui/EmptyState";
-import { ListSkeleton } from "@/components/ui/Skeleton";
+import { ListSkeleton, SkeletonBox } from "@/components/ui/Skeleton";
 import { palette } from "@/lib/theme";
 import { meta } from "@/lib/repo";
 import { useSearchBooks } from "@/lib/query/bookHooks";
@@ -77,13 +77,18 @@ function SearchInner() {
   const results = isResultMode ? searchQuery.data ?? null : [];
   const isLoadingResults = isResultMode && searchQuery.isLoading;
 
-  // 알라딘 베스트셀러 — 결과 모드 아닐 때(=초기 검색 화면) "실시간 인기" 섹션에 노출.
+  // 알라딘 베스트셀러 — 결과 모드 아닐 때(=초기 검색 화면) "베스트셀러" 섹션에 노출.
   // 키 미설정 / 알라딘 응답 실패 시 unavailable=true → 기존 mock(POPULAR_SEARCHES) 폴백.
   const bestseller = useAladinBestseller(10);
-  const popularItems =
-    bestseller.data?.items && bestseller.data.items.length > 0
-      ? bestseller.data.items
-      : POPULAR_SEARCHES.map((title) => ({ title, author: "", isbn: "", cover: "" }));
+  const hasRealBestseller =
+    !!bestseller.data?.items && bestseller.data.items.length > 0;
+  const popularItems = hasRealBestseller
+    ? bestseller.data!.items!
+    : POPULAR_SEARCHES.map((title) => ({ title, author: "", isbn: "", cover: "" }));
+  // 데이터 출처/기준 시점 캡션 — 실데이터일 때만. 한국 출판계 컨벤션의 "N월 N주차" 표기
+  const popularCaption = hasRealBestseller
+    ? `알라딘 · ${formatBestsellerWeek(new Date())} 기준`
+    : undefined;
 
   // 서버 응답을 받아 클라이언트에서 추가 필터(가격/상태/무료) 적용
   // 서버는 키워드/카테고리만 처리하고, 나머지는 클라이언트에서 가벼운 후처리로 끝낸다
@@ -299,7 +304,11 @@ function SearchInner() {
                 </Box>
               )}
             </Section>
-            <Section title="베스트셀러" icon={<LocalFireDepartmentRoundedIcon sx={{ color: palette.accent }} />}>
+            <Section
+              title="베스트셀러"
+              icon={<LocalFireDepartmentRoundedIcon sx={{ color: palette.accent }} />}
+              caption={popularCaption}
+            >
               <Box
                 sx={{
                   background: palette.surface,
@@ -308,7 +317,33 @@ function SearchInner() {
                   overflow: "hidden",
                 }}
               >
-                {popularItems.map((item, i) => (
+                {bestseller.isLoading ? (
+                  // 첫 진입 시 mock → 실데이터 swap 으로 깜빡이지 않도록 skeleton 행 노출
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <Stack
+                      key={i}
+                      direction="row"
+                      alignItems="center"
+                      gap={1.5}
+                      sx={{
+                        px: 1.75,
+                        py: 1.1,
+                        borderTop: i === 0 ? "none" : `1px solid ${palette.lineSoft}`,
+                      }}
+                    >
+                      <SkeletonBox width={14} height={14} radius={4} />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <SkeletonBox width={`${60 + ((i * 7) % 30)}%`} height={13} />
+                        <SkeletonBox
+                          width={`${30 + ((i * 11) % 25)}%`}
+                          height={9}
+                          sx={{ mt: 0.6 }}
+                        />
+                      </Box>
+                    </Stack>
+                  ))
+                ) : (
+                popularItems.map((item, i) => (
                   <Stack
                     key={`${item.title}-${i}`}
                     direction="row"
@@ -369,7 +404,8 @@ function SearchInner() {
                       />
                     )}
                   </Stack>
-                ))}
+                ))
+                )}
               </Box>
             </Section>
             <Section title="카테고리">
@@ -438,10 +474,13 @@ function SearchInner() {
 function Section({
   title,
   icon,
+  caption,
   children,
 }: {
   title: string;
   icon?: React.ReactNode;
+  // 제목 옆 작게 노출되는 부가 설명 (예: 데이터 출처/기준 시각)
+  caption?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -457,10 +496,47 @@ function Section({
         >
           {title}
         </Typography>
+        {caption && (
+          <Typography
+            sx={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: palette.inkSubtle,
+              ml: 0.25,
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {caption}
+          </Typography>
+        )}
       </Stack>
       {children}
     </Box>
   );
+}
+
+// "5월 1주차" 같은 한국 출판계 베스트셀러 표기.
+// - 그 달 첫 월요일이 시작하는 주를 1주차로 셈 (Mon~Sun 한 주)
+// - 1일~첫 월요일 직전 며칠은 전 달의 마지막 주로 흡수 (월~일 같은 주이므로)
+//   예: 2026-05-01(금) ~ 05-03(일) 은 "4월 N주차" 로 표시
+function formatBestsellerWeek(date: Date): string {
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0-indexed
+  const day = date.getDate();
+
+  // 그 달 1일의 요일 (0=Sun, 1=Mon, …)
+  const firstDow = new Date(year, month, 1).getDay();
+  // 1일이 월요일이면 offset 0, 아니면 다음 월요일까지 거리
+  const firstMondayOffset = (1 - firstDow + 7) % 7;
+  const firstMondayDay = 1 + firstMondayOffset;
+
+  if (day < firstMondayDay) {
+    // 이 달의 첫 월요일 이전 → 전 달 마지막 날 기준으로 재귀 (같은 주에 속함)
+    const lastDayOfPrev = new Date(year, month, 0);
+    return formatBestsellerWeek(lastDayOfPrev);
+  }
+  const week = Math.floor((day - firstMondayDay) / 7) + 1;
+  return `${month + 1}월 ${week}주차`;
 }
 
 // 표시용 가격 문자열("6,000원")에서 숫자만 뽑아 정렬용으로 변환
