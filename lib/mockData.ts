@@ -1396,7 +1396,6 @@ export function mockMarkCouponUsed(couponId: string, transactionId: string) {
   c.usedTransactionId = transactionId;
 }
 
-export const RECENT_SEARCHES = ["한강", "달러구트", "82년생", "데미안", "코스모스"];
 export const POPULAR_SEARCHES = [
   "채식주의자",
   "아몬드",

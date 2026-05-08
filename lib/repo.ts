@@ -7,7 +7,6 @@ import {
   CATEGORIES,
   POPULAR_SEARCHES,
   POPULAR_SELLERS,
-  RECENT_SEARCHES,
   mockAddShelfItem,
   mockCancelBook,
   mockCreateBook,
@@ -112,7 +111,6 @@ export const isSupabaseConfigured =
 export const meta = {
   CATEGORIES,
   POPULAR_SELLERS,
-  RECENT_SEARCHES,
   POPULAR_SEARCHES,
 };
 

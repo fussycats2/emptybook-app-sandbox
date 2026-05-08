@@ -31,9 +31,10 @@ import { palette } from "@/lib/theme";
 import { meta } from "@/lib/repo";
 import { useSearchBooks } from "@/lib/query/bookHooks";
 import { useAladinBestseller } from "@/lib/query/aladinHooks";
+import { useRecentSearchStore } from "@/lib/store/recentSearchStore";
 import FilterSheet, { type FilterValue } from "@/components/search/FilterSheet";
 
-const { POPULAR_SEARCHES, RECENT_SEARCHES, CATEGORIES } = meta;
+const { POPULAR_SEARCHES, CATEGORIES } = meta;
 
 // 결과 정렬 옵션 — 칩 형태로 노출하고 sort state 와 연동
 const SORTS = [
@@ -61,7 +62,10 @@ function SearchInner() {
     region: "",
   });
   const [sort, setSort] = useState("recent");
-  const [recent, setRecent] = useState<string[]>(RECENT_SEARCHES);
+  // 최근 검색어 — Zustand persist store. 같은 브라우저 안에서 검색 후에도 유지
+  const recent = useRecentSearchStore((s) => s.terms);
+  const pushRecent = useRecentSearchStore((s) => s.push);
+  const removeRecent = useRecentSearchStore((s) => s.remove);
 
   // 결과 모드 진입 조건: 검색어가 있거나, 카테고리/상태/무료나눔 필터가 활성화된 경우
   const isResultMode =
@@ -138,11 +142,11 @@ function SearchInner() {
     return arr;
   }, [filtered, sort]);
 
-  // 검색 실행: 최근 검색어 맨 앞에 끼워 넣고, 동일어 중복 제거 후 8개로 유지
+  // 검색 실행: 입력값 반영 + 최근 검색어 store 에 push (중복 제거 + max 8 은 store 가 처리)
   const submit = (term: string) => {
     if (!term.trim()) return;
     setQ(term);
-    setRecent((r) => [term, ...r.filter((x) => x !== term)].slice(0, 8));
+    pushRecent(term);
   };
 
   const activeChips = [
@@ -292,9 +296,7 @@ function SearchInner() {
                       label={t}
                       variant="outlined"
                       onClick={() => submit(t)}
-                      onDelete={() =>
-                        setRecent((r) => r.filter((x) => x !== t))
-                      }
+                      onDelete={() => removeRecent(t)}
                       deleteIcon={<CloseRoundedIcon />}
                       sx={{
                         "& .MuiChip-deleteIcon": { fontSize: 14 },
