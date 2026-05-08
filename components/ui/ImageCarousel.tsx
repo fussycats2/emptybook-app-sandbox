@@ -1,8 +1,18 @@
 "use client";
 
 // 도서 상세 화면 상단의 이미지 캐러셀(좌우 스와이프)
-// CSS scroll-snap 으로 자연스러운 페이지 단위 스크롤을 구현하고
-// scrollLeft 값을 보고 현재 인덱스를 계산해 인디케이터에 표시
+// CSS scroll-snap 으로 자연스러운 페이지 단위 스크롤 + scrollLeft 로 인덱스 추적
+//
+// 슬라이드 구성 규칙
+//   1) coverUrl 이 있으면 항상 첫 슬라이드 (네이버/알라딘 표지나 첫 업로드)
+//   2) imageUrls(사용자 업로드) 를 그 뒤에 붙임 — coverUrl 과 같은 URL 은 중복 제거
+//   3) 둘 다 없으면 placeholder count 로 BookImage 폴백
+//   첫 슬라이드가 표지로 통일되어 사용자가 어떤 책인지 즉시 인지 가능
+//
+// 인디케이터: 점들을 직접 클릭(데스크톱) 하면 해당 슬라이드로 스크롤. 모바일은 스와이프 그대로.
+//
+// 표시 모드: 실사진은 object-fit: contain — 표지(세로) / 사용자 사진(가로/세로 혼재) 어느 쪽도
+// 잘림 없이 전체 노출. 책 마켓플레이스의 신뢰감을 위해 letterbox 가 cover-crop 보다 자연스러움.
 
 import { Box } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
@@ -13,40 +23,55 @@ interface Props {
   count?: number;
   seed?: string | number;
   height?: number | string;
-  coverUrl?: string; // 외부 표지 URL — imageUrls 가 비었을 때 첫 슬라이드로 폴백
-  imageUrls?: string[]; // 사용자가 업로드한 사진들 — 있으면 슬라이드별로 매핑
+  coverUrl?: string;
+  imageUrls?: string[];
 }
 
 export default function ImageCarousel({
   count = 4,
   seed,
-  height = 380,
+  height = 300,
   coverUrl,
   imageUrls,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [idx, setIdx] = useState(0);
 
-  // 우선순위: 업로드 이미지 → coverUrl 단일 슬라이드 → placeholder count
-  const slides: (string | undefined)[] =
-    imageUrls && imageUrls.length > 0
-      ? imageUrls
-      : coverUrl
-      ? [coverUrl]
-      : Array.from({ length: count }, () => undefined);
+  // 슬라이드 빌드 — coverUrl 우선, imageUrls 뒤에 dedup 으로 합치기
+  const slides: (string | undefined)[] = (() => {
+    const seen = new Set<string>();
+    const arr: string[] = [];
+    if (coverUrl) {
+      arr.push(coverUrl);
+      seen.add(coverUrl);
+    }
+    for (const url of imageUrls ?? []) {
+      if (url && !seen.has(url)) {
+        arr.push(url);
+        seen.add(url);
+      }
+    }
+    if (arr.length > 0) return arr;
+    return Array.from({ length: count }, () => undefined);
+  })();
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // 스크롤이 멈출 때 어느 페이지에 가까운지 반올림으로 계산
     const onScroll = () => {
       const i = Math.round(el.scrollLeft / el.clientWidth);
       setIdx(i);
     };
-    // passive: true → 스크롤 성능 향상 (preventDefault 안 쓰겠다는 약속)
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
+
+  // 점 클릭 → 해당 슬라이드로 부드럽게 스크롤 (데스크톱에서도 이동 가능)
+  const scrollTo = (i: number) => {
+    const el = ref.current;
+    if (!el) return;
+    el.scrollTo({ left: el.clientWidth * i, behavior: "smooth" });
+  };
 
   return (
     <Box sx={{ position: "relative", width: "100%" }}>
@@ -65,14 +90,28 @@ export default function ImageCarousel({
             sx={{
               flex: "0 0 100%",
               scrollSnapAlign: "start",
+              height,
+              // 실사진의 contain 에서 letterbox 영역 — 책장 톤 cream 으로 자연스럽게
+              background: palette.surfaceAlt,
+              position: "relative",
             }}
           >
-            <BookImage
-              seed={`${seed}-${i}`}
-              src={src}
-              height={height}
-              radius={0}
-            />
+            {src ? (
+              <Box
+                component="img"
+                src={src}
+                alt=""
+                loading={i === 0 ? "eager" : "lazy"}
+                sx={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                }}
+              />
+            ) : (
+              <BookImage seed={`${seed}-${i}`} height={height} radius={0} />
+            )}
           </Box>
         ))}
       </Box>
@@ -92,6 +131,7 @@ export default function ImageCarousel({
       >
         {idx + 1} / {slides.length}
       </Box>
+      {/* 인디케이터 — 각 점이 클릭 가능해야 데스크톱에서도 슬라이드 이동 가능 */}
       <Box
         sx={{
           position: "absolute",
@@ -99,23 +139,32 @@ export default function ImageCarousel({
           left: 0,
           right: 0,
           display: "flex",
-          gap: 0.5,
+          gap: 0.6,
           justifyContent: "center",
-          pointerEvents: "none",
         }}
       >
-        {slides.map((_, i) => (
-          <Box
-            key={i}
-            sx={{
-              width: i === idx ? 16 : 6,
-              height: 6,
-              borderRadius: 999,
-              background: i === idx ? "#fff" : "rgba(255,255,255,0.55)",
-              transition: "all 200ms",
-            }}
-          />
-        ))}
+        {slides.map((_, i) => {
+          const on = i === idx;
+          return (
+            <Box
+              key={i}
+              role="button"
+              aria-label={`사진 ${i + 1}로 이동`}
+              onClick={() => scrollTo(i)}
+              sx={{
+                width: on ? 18 : 6,
+                height: 6,
+                borderRadius: 999,
+                background: on ? "#fff" : "rgba(255,255,255,0.55)",
+                cursor: "pointer",
+                transition: "width 200ms ease, background 160ms ease",
+                "&:hover": {
+                  background: on ? "#fff" : "rgba(255,255,255,0.8)",
+                },
+              }}
+            />
+          );
+        })}
       </Box>
     </Box>
   );

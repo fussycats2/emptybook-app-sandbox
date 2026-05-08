@@ -20,7 +20,7 @@ import LocalFireDepartmentRoundedIcon from "@mui/icons-material/LocalFireDepartm
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import LocationChip from "@/components/ui/LocationChip";
 import RegionPickerSheet from "@/components/ui/RegionPickerSheet";
@@ -50,6 +50,26 @@ export default function HomePage() {
   // 사용자가 선택한 동네 — 헤더 칩 라벨 + 섹션 헤더 라벨 + 피드 정렬 우선순위에 모두 적용 (v9.8)
   const region = useRegionStore((s) => s.region);
   const [regionPickerOpen, setRegionPickerOpen] = useState(false);
+  // 이벤트 배너 — 가로 스크롤 위치 추적 + 데스크톱용 점 인디케이터 클릭 이동
+  const BANNER_COUNT = 2;
+  const bannerScrollRef = useRef<HTMLDivElement>(null);
+  const [activeBanner, setActiveBanner] = useState(0);
+  const handleBannerScroll = () => {
+    const el = bannerScrollRef.current;
+    if (!el) return;
+    // 카드 너비 ≈ scrollWidth/N. 절반 이상 넘어가면 다음 인덱스로 간주 (단순 round)
+    const cardSpan = el.scrollWidth / BANNER_COUNT;
+    const idx = Math.min(BANNER_COUNT - 1, Math.round(el.scrollLeft / cardSpan));
+    if (idx !== activeBanner) setActiveBanner(idx);
+  };
+  const scrollToBanner = (idx: number) => {
+    const el = bannerScrollRef.current;
+    if (!el) return;
+    const target = el.children[idx] as HTMLElement | undefined;
+    if (!target) return;
+    // scrollPaddingLeft(16) 만큼 빼야 snap 위치와 일치
+    el.scrollTo({ left: target.offsetLeft - 16, behavior: "smooth" });
+  };
   // React Query — region 우선 정렬. region 이 바뀌면 새로 fetch (캐시 키에 region 포함)
   const { data: books, isLoading } = useRecentBooks(10, region);
   // 추천 카테고리 — preferred_genres(가입 시 선택한 장르) 가 있으면 첫 번째,
@@ -124,16 +144,20 @@ export default function HomePage() {
 
       <ScrollBody>
         {/* 이벤트 배너 — 좌우 스크롤 2장 (신규가입 쿠폰 안내 / 스타벅스 쿠폰 추첨 준비)
-            scrollSnapType: "x mandatory" 로 한 장씩 스냅. 다음 카드가 ~30px 살짝 비쳐 스크롤 가능 힌트 */}
+            scrollSnapType: "x mandatory" 로 한 장씩 스냅. 다음 카드가 ~30px 살짝 비쳐 스크롤 가능 힌트
+            py 로 호버 lift(translateY -2px) + shadow 가 위에서 잘리지 않게 여유 확보 */}
         <Box
+          ref={bannerScrollRef}
+          onScroll={handleBannerScroll}
           className="no-scrollbar"
           sx={{
-            mt: 2,
+            mt: 1.5,
             display: "flex",
             gap: 1.25,
             overflowX: "auto",
             scrollSnapType: "x mandatory",
             px: 2,
+            py: 0.75,
             // 스냅 카드의 좌우 padding 보정 — 첫/마지막 카드 가장자리에 살짝 여유
             scrollPaddingLeft: 16,
             scrollPaddingRight: 16,
@@ -351,6 +375,36 @@ export default function HomePage() {
           </Box>
         </Box>
 
+        {/* 배너 위치 인디케이터 — 데스크톱은 스와이프 어려워 점 클릭으로도 이동 가능 */}
+        <Stack
+          direction="row"
+          gap={0.75}
+          justifyContent="center"
+          sx={{ mt: 1, mb: 0.5 }}
+        >
+          {Array.from({ length: BANNER_COUNT }).map((_, i) => {
+            const on = i === activeBanner;
+            return (
+              <Box
+                key={i}
+                role="button"
+                aria-label={`배너 ${i + 1}로 이동`}
+                onClick={() => scrollToBanner(i)}
+                sx={{
+                  width: on ? 18 : 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: on ? palette.primary : palette.line,
+                  opacity: on ? 0.85 : 0.45,
+                  cursor: "pointer",
+                  transition: "width 200ms ease, opacity 160ms ease, background 160ms ease",
+                  "&:hover": { opacity: on ? 0.95 : 0.7 },
+                }}
+              />
+            );
+          })}
+        </Stack>
+
         {/* 내 책장 바로가기 — 이벤트 배너 바로 아래, 카테고리 위에 배치 */}
         <Box
           onClick={() => router.push("/mypage/shelf")}
@@ -492,7 +546,9 @@ export default function HomePage() {
               gap: 1.5,
               px: 2,
               overflowX: "auto",
-              pb: 0.5,
+              // 호버 lift + shadow 가 위/아래에서 잘리지 않도록 세로 padding 확보
+              pt: 0.75,
+              pb: 1,
             }}
           >
             {CATEGORIES.map((c) => (
@@ -630,7 +686,15 @@ export default function HomePage() {
             </SectionLabel>
             <Box
               className="no-scrollbar"
-              sx={{ display: "flex", gap: 1.25, px: 2, pb: 1, overflowX: "auto" }}
+              sx={{
+                display: "flex",
+                gap: 1.25,
+                px: 2,
+                // 호버 lift(-2px) + shadow 가 위에서 잘리지 않도록 세로 padding 확보
+                pt: 0.75,
+                pb: 1.5,
+                overflowX: "auto",
+              }}
             >
               {categoryBooks.slice(0, 8).map((b) => (
                 <MiniBookCard
