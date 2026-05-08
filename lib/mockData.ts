@@ -1350,13 +1350,6 @@ export const CATEGORIES: { name: string; emoji: string }[] = [
   { name: "만화", emoji: "🎨" },
 ];
 
-export const POPULAR_SELLERS = [
-  { name: "책방마니아", trades: 12, manner: 38.6 },
-  { name: "독서왕", trades: 24, manner: 41.2 },
-  { name: "북헌터", trades: 36, manner: 39.4 },
-  { name: "리딩클럽", trades: 48, manner: 42.0 },
-];
-
 // ---------- Coupons (0017) ----------
 
 // 만료 일자가 지난 AVAILABLE 쿠폰을 EXPIRED 로 옮긴다 — DB 의 expire_old_coupons() 동등.

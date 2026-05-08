@@ -1,7 +1,7 @@
 "use client";
 
 // 홈 화면 (/home) — 앱의 메인 피드
-// 구성: 위치/검색바 → 이벤트 배너 → 카테고리 가로 스크롤 → 최근 등록 책 목록 → 인기 판매자
+// 구성: 위치/검색바 → 이벤트 배너(가로 스크롤 2장) → 내 책장 바로가기 → 카테고리 → 최근 등록 책 → 추천 카테고리
 
 import {
   Box,
@@ -15,6 +15,7 @@ import {
 import NotificationsNoneRoundedIcon from "@mui/icons-material/NotificationsNoneRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
+import CardGiftcardRoundedIcon from "@mui/icons-material/CardGiftcardRounded";
 import LocalFireDepartmentRoundedIcon from "@mui/icons-material/LocalFireDepartmentRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
@@ -41,8 +42,7 @@ import { SHELF_STATUS_LABEL } from "@/lib/supabase/types";
 import StatusBadge from "@/components/ui/StatusBadge";
 import type { BookSummary } from "@/components/ui/BookCard";
 
-const { CATEGORIES, POPULAR_SELLERS } = meta;
-import MannerTemperature from "@/components/ui/MannerTemperature";
+const { CATEGORIES } = meta;
 
 export default function HomePage() {
   const router = useRouter();
@@ -123,111 +123,231 @@ export default function HomePage() {
       </Box>
 
       <ScrollBody>
-        {/* 이벤트 배너 — 거대 이모지 대신 추상적인 라운드 도형으로 데코 */}
+        {/* 이벤트 배너 — 좌우 스크롤 2장 (신규가입 쿠폰 안내 / 스타벅스 쿠폰 추첨 준비)
+            scrollSnapType: "x mandatory" 로 한 장씩 스냅. 다음 카드가 ~30px 살짝 비쳐 스크롤 가능 힌트 */}
         <Box
-          onClick={() => toast?.show("이벤트 페이지는 준비 중이에요")}
-          className="card-lift"
+          className="no-scrollbar"
           sx={{
-            mx: 2,
             mt: 2,
-            borderRadius: `${radius.lg}px`,
-            background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 60%, #14302A 100%)`,
-            color: "#fff",
-            p: 2.5,
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            overflow: "hidden",
-            position: "relative",
-            cursor: "pointer",
-            boxShadow: shadow.pop,
+            gap: 1.25,
+            overflowX: "auto",
+            scrollSnapType: "x mandatory",
+            px: 2,
+            // 스냅 카드의 좌우 padding 보정 — 첫/마지막 카드 가장자리에 살짝 여유
+            scrollPaddingLeft: 16,
+            scrollPaddingRight: 16,
           }}
         >
-          {/* 우측 추상 데코 — 책장 실루엣 느낌의 라운드 도형 */}
+          {/* 1) 신규가입 쿠폰 — 클릭 시 쿠폰함 (/mypage/coupons) */}
           <Box
+            onClick={() => router.push("/mypage/coupons")}
+            className="card-lift"
             sx={{
-              position: "absolute",
-              right: -40,
-              top: -30,
-              width: 200,
-              height: 200,
-              borderRadius: "50%",
-              background:
-                "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 60%, transparent 70%)",
-              filter: "blur(2px)",
+              flex: "0 0 86%",
+              scrollSnapAlign: "start",
+              borderRadius: `${radius.lg}px`,
+              background: `linear-gradient(135deg, ${palette.accent} 0%, ${palette.accentDark} 70%, #8C3F33 100%)`,
+              color: "#fff",
+              p: 2.5,
+              overflow: "hidden",
+              position: "relative",
+              cursor: "pointer",
+              boxShadow: shadow.pop,
+              minHeight: 140,
             }}
-          />
-          <Box
-            sx={{
-              position: "absolute",
-              right: 18,
-              bottom: -30,
-              width: 110,
-              height: 110,
-              borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.20)",
-            }}
-          />
-          <Box
-            sx={{
-              position: "absolute",
-              right: 60,
-              top: 30,
-              width: 50,
-              height: 50,
-              borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.16)",
-            }}
-          />
+          >
+            {/* 우측 추상 데코 — 쿠폰 티켓 느낌의 큰 라운드 + 점선 원형 */}
+            <Box
+              sx={{
+                position: "absolute",
+                right: -50,
+                top: -40,
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.05) 60%, transparent 70%)",
+                filter: "blur(2px)",
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                right: 24,
+                bottom: -28,
+                width: 96,
+                height: 96,
+                borderRadius: "50%",
+                border: "1.5px dashed rgba(255,255,255,0.30)",
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                right: 80,
+                top: 36,
+                width: 38,
+                height: 38,
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.10)",
+              }}
+            />
 
-          <Box sx={{ position: "relative", zIndex: 1, maxWidth: "70%" }}>
-            <Stack direction="row" alignItems="center" gap={0.75} mb={1}>
-              <Box
-                sx={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                  background: "rgba(255,255,255,0.16)",
-                  border: "1px solid rgba(255,255,255,0.22)",
-                  backdropFilter: "blur(6px)",
-                  borderRadius: 999,
-                  px: 1,
-                  py: 0.4,
-                }}
-              >
-                <CampaignRoundedIcon sx={{ fontSize: 13 }} />
-                <Typography
+            <Box sx={{ position: "relative", zIndex: 1, maxWidth: "72%" }}>
+              <Stack direction="row" alignItems="center" gap={0.75} mb={1}>
+                <Box
                   sx={{
-                    fontSize: 10.5,
-                    fontWeight: 800,
-                    letterSpacing: "0.18em",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    background: "rgba(255,255,255,0.18)",
+                    border: "1px solid rgba(255,255,255,0.28)",
+                    backdropFilter: "blur(6px)",
+                    borderRadius: 999,
+                    px: 1,
+                    py: 0.4,
                   }}
                 >
-                  EVENT
-                </Typography>
-              </Box>
-            </Stack>
-            <Typography
+                  <CardGiftcardRoundedIcon sx={{ fontSize: 13 }} />
+                  <Typography
+                    sx={{
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      letterSpacing: "0.18em",
+                    }}
+                  >
+                    WELCOME
+                  </Typography>
+                </Box>
+              </Stack>
+              <Typography
+                sx={{
+                  fontSize: 18,
+                  fontWeight: 800,
+                  lineHeight: 1.4,
+                  letterSpacing: "-0.025em",
+                }}
+              >
+                신규가입 환영 쿠폰
+                <br />
+                받아가세요!
+              </Typography>
+              <Stack
+                direction="row"
+                gap={0.5}
+                alignItems="center"
+                sx={{ mt: 1.5, fontSize: 12.5, opacity: 0.95, fontWeight: 700 }}
+              >
+                쿠폰함에서 확인
+                <ArrowForwardRoundedIcon sx={{ fontSize: 14 }} />
+              </Stack>
+            </Box>
+          </Box>
+
+          {/* 2) 스타벅스 쿠폰 추첨 — 준비 중 토스트 (기존 그대로) */}
+          <Box
+            onClick={() => toast?.show("이벤트 페이지는 준비 중이에요")}
+            className="card-lift"
+            sx={{
+              flex: "0 0 86%",
+              scrollSnapAlign: "start",
+              borderRadius: `${radius.lg}px`,
+              background: `linear-gradient(135deg, ${palette.primary} 0%, ${palette.primaryDark} 60%, #14302A 100%)`,
+              color: "#fff",
+              p: 2.5,
+              overflow: "hidden",
+              position: "relative",
+              cursor: "pointer",
+              boxShadow: shadow.pop,
+              minHeight: 140,
+            }}
+          >
+            <Box
               sx={{
-                fontSize: 18,
-                fontWeight: 800,
-                lineHeight: 1.4,
-                letterSpacing: "-0.025em",
+                position: "absolute",
+                right: -40,
+                top: -30,
+                width: 200,
+                height: 200,
+                borderRadius: "50%",
+                background:
+                  "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.04) 60%, transparent 70%)",
+                filter: "blur(2px)",
               }}
-            >
-              내 책장 정리하면
-              <br />
-              스타벅스 쿠폰 추첨!
-            </Typography>
-            <Stack
-              direction="row"
-              gap={0.5}
-              alignItems="center"
-              sx={{ mt: 1.5, fontSize: 12.5, opacity: 0.92, fontWeight: 700 }}
-            >
-              참여하기
-              <ArrowForwardRoundedIcon sx={{ fontSize: 14 }} />
-            </Stack>
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                right: 18,
+                bottom: -30,
+                width: 110,
+                height: 110,
+                borderRadius: "50%",
+                border: "1px solid rgba(255,255,255,0.20)",
+              }}
+            />
+            <Box
+              sx={{
+                position: "absolute",
+                right: 60,
+                top: 30,
+                width: 50,
+                height: 50,
+                borderRadius: "50%",
+                border: "1px solid rgba(255,255,255,0.16)",
+              }}
+            />
+
+            <Box sx={{ position: "relative", zIndex: 1, maxWidth: "70%" }}>
+              <Stack direction="row" alignItems="center" gap={0.75} mb={1}>
+                <Box
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    background: "rgba(255,255,255,0.16)",
+                    border: "1px solid rgba(255,255,255,0.22)",
+                    backdropFilter: "blur(6px)",
+                    borderRadius: 999,
+                    px: 1,
+                    py: 0.4,
+                  }}
+                >
+                  <CampaignRoundedIcon sx={{ fontSize: 13 }} />
+                  <Typography
+                    sx={{
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      letterSpacing: "0.18em",
+                    }}
+                  >
+                    EVENT
+                  </Typography>
+                </Box>
+              </Stack>
+              <Typography
+                sx={{
+                  fontSize: 18,
+                  fontWeight: 800,
+                  lineHeight: 1.4,
+                  letterSpacing: "-0.025em",
+                }}
+              >
+                내 책장 정리하면
+                <br />
+                스타벅스 쿠폰 추첨!
+              </Typography>
+              <Stack
+                direction="row"
+                gap={0.5}
+                alignItems="center"
+                sx={{ mt: 1.5, fontSize: 12.5, opacity: 0.92, fontWeight: 700 }}
+              >
+                참여하기 (준비 중)
+                <ArrowForwardRoundedIcon sx={{ fontSize: 14 }} />
+              </Stack>
+            </Box>
           </Box>
         </Box>
 
@@ -523,53 +643,7 @@ export default function HomePage() {
           </>
         )}
 
-        <SectionLabel>이 동네 인기 판매자</SectionLabel>
-        <Box
-          className="no-scrollbar"
-          sx={{ display: "flex", gap: 1.5, px: 2, pb: 4, overflowX: "auto" }}
-        >
-          {POPULAR_SELLERS.map((u) => (
-            <Box
-              key={u.name}
-              className="card-lift"
-              sx={{
-                flexShrink: 0,
-                width: 176,
-                background: palette.surface,
-                border: `1px solid ${palette.lineSoft}`,
-                borderRadius: `${radius.md}px`,
-                p: 1.75,
-                display: "flex",
-                flexDirection: "column",
-                gap: 1.25,
-                cursor: "pointer",
-                "&:hover": { borderColor: palette.line, boxShadow: shadow.cardHover },
-              }}
-            >
-              <Stack direction="row" gap={1} alignItems="center">
-                <BookImage seed={u.name} width={40} height={40} radius={999} />
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography
-                    sx={{
-                      fontSize: 13.5,
-                      fontWeight: 800,
-                      letterSpacing: "-0.02em",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {u.name}
-                  </Typography>
-                  <Typography sx={{ fontSize: 10.5, color: palette.inkSubtle, mt: 0.25 }}>
-                    거래 {u.trades}회
-                  </Typography>
-                </Box>
-              </Stack>
-              <MannerTemperature value={u.manner} size="sm" />
-            </Box>
-          ))}
-        </Box>
+        <Box sx={{ pb: 3 }} />
       </ScrollBody>
 
       <BottomTabNav />
