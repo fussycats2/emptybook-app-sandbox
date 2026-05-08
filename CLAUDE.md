@@ -67,6 +67,8 @@ lib/
   staticContent.ts                # 공지/약관/지원 정적 콘텐츠
   isbn.ts                         # ISBN-10/13 체크섬 + 정규화
   conditionGrade.ts               # 도서 상태 상세 체크리스트 + 등급 추정
+  geo.ts                          # Geolocation API + Haversine — 좌표→자치구 매핑 (lib/seoulCentroids 참조)
+  seoulCentroids.ts               # 서울 25개 자치구청 좌표 테이블 (reverse geocoding 대체)
   auth/AuthProvider.tsx
   realtime/                       # useRealtimeChat / useRealtimeChatList / useRealtimeNotifications
   supabase/                       # client / server / admin(service_role) / middleware / types
@@ -146,8 +148,11 @@ Realtime: `messages`, `chat_rooms`, `notifications` · Storage 버킷: `book-ima
 - **판매 취소 → 책장 redirect**: `cancelBook` 성공 후엔 `/mypage/selling` 이 아니라 `/mypage/shelf` 로 보낸다. 사용자 멘탈 모델이 "취소 = 다시 내 소유로 돌아옴". 0014 트리거가 linked shelf_item 만 OWNED 로 옮기므로, 직접 등록한 책(shelf 흔적 없음)은 클라이언트가 `addShelfItem(status:"OWNED")` 로 명시 추가해야 일관됨. ISBN partial unique(0012) 가 idempotent 보장. 정상 삭제(영구)는 사용자 의도대로 `/mypage/selling` 유지 — 책장에 추가 안 함.
 - **신규 가입 메타 채움**: profiles 의 추가 필드(phone/preferred_genres 등) 는 `/signup` 의 `signUp({ options: { data: ... } })` 에 담아 보내고 `handle_new_user()` 트리거(0018) 가 흡수. 가입 직후 클라이언트가 `profiles.update()` 를 호출하면 confirm-email ON 환경에서 RLS 가 silent 차단.
 - **BookCard 류 표지**: `BookImage` 에 `seed={book.id} src={book.coverUrl}` 두 prop 모두 넘겨야 한다. `src` 가 있으면 실표지, 없으면 seed 기반 placeholder 로 폴백. 한쪽이라도 빠지면 표지 있는데 placeholder 가 나오거나, 폴백이 일관되지 않게 된다.
-- **`BookSpine` 책장 전용**: `/mypage/shelf` 에서만 사용. CSS-only 절차적 책등 (해시 시드로 테마/색/너비 결정 — 표지 이미지 사용 안 함). 다른 화면은 `BookImage` 그대로 유지. 제목은 vertical-rl **한 컬럼**, `(부제)` `[시리즈]` 같은 괄호 이후는 `stripParenthesis()` 로 떼고 그래도 길면 "…" 잘림 — 여러 줄 wrap 은 시각적으로 어수선해서 의도적으로 사용하지 않음. 저자는 하단 가로 1줄.
+- **`BookSpine` 책장 진열대 전용**: `/mypage/shelf` 의 책장 그리드(본문 진열) 에서만 사용. CSS-only 절차적 책등 (해시 시드로 테마/색/너비 결정 — 표지 이미지 사용 안 함). 같은 화면이라도 책 클릭 시 뜨는 BottomSheet 헤더는 `BookImage`(실표지) 사용 — 상세 컨텍스트는 책등 모양보다 표지가 더 자연스러움. 다른 화면도 모두 `BookImage` 유지. 제목은 vertical-rl **한 컬럼**, `(부제)` `[시리즈]` 같은 괄호 이후는 `stripParenthesis()` 로 떼고 그래도 길면 "…" 잘림 — 여러 줄 wrap 은 시각적으로 어수선해서 의도적으로 사용하지 않음. 저자는 하단 가로 1줄.
 - **`BookSpine` "판매중" 띠지(`listed`)**: `selected.status === "FOR_SALE" && linkedBookId` 일 때만 true. linkedBookId 만 있는 OWNED 항목(0014/0016 트리거가 거래완료/구매로 자동 OWNED 한 케이스)은 띠지·BottomSheet "매물로 등록됨" 뱃지·"등록된 매물 보기" footer 버튼 모두 비표시 — 의미가 "현재 판매 중" 이라 OWNED 와 충돌. 세 군데 조건이 같이 움직여야 함.
+- **`regionStore` — 사용자 선택 vs 자동 채움 분리**: `setRegion(name)` 은 사용자가 RegionPickerSheet 에서 자치구를 직접 골랐을 때(`isUserSet=true`), `setRegionAuto(name)` 은 GPS 자동 매핑(`lib/geo.ts` 의 `locateUserRegion()`) 결과로 채울 때(`isUserSet=false`) 사용. 두 경로가 같은 setter 를 공유하면 "사용자가 명시 선택했는지" 를 구분할 수 없어 향후 자동 갱신 가드를 못 걺. v2 migrate 가 default("마포구") 와 다른 기존 region 은 명시 선택으로 추정.
+- **`/login` ScrollBody**: 페이지 본문은 `<ScrollBody>` 로 감싸야 작은 화면에서 하단(SNS 버튼 등) 이 잘리지 않음. `PhoneFrame` 자체가 `overflow: hidden` 이라 자식이 `flex: 1 + overflowY: auto` 를 들고 있어야 함 — 단순 `flex: 1` Box 는 콘텐츠가 넘칠 때 그대로 잘림. 새 풀-페이지 폼 추가 시 같은 패턴.
+- **상세 체크 적용 vs 항목 체크**: `/register` 에서 등록 가능 여부는 `conditionApplied OR hasAnyChecked(detail)` 로 판단. 사용자가 시트에서 아무 항목도 체크 안 하고 "상태 적용 (최상)" 을 눌러도 명시 확인으로 인정해야 함. `hasAnyChecked` 단독으로 게이팅하면 결함 없는 책의 등록을 막아버림.
 - **세션 마감 git 작업**: 사용자가 직접 처리. 명시적 요청 있을 때만 commit/PR.
 
 ---

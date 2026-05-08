@@ -4,6 +4,8 @@
 //   - 게스트 / 로그인 모두 같은 브라우저에서 동작 (서버 동기화 X — profiles.region 연동은 추후)
 //   - 홈 헤더 LocationChip + 홈 섹션 헤더("{region}의 따끈한 책") 가 같은 값을 본다
 //   - 25개 서울 자치구를 시드로 노출 — 향후 GPS / profiles.region 도입 시 store 만 갈아끼우면 됨
+//   - isUserSet: 사용자가 명시적으로 골랐는지 vs 기본값/GPS 로 자동 채워졌는지 구분.
+//     자동 자리 차지를 사용자 결정으로 오해하지 않도록 (이후 자동 갱신 가드용).
 //
 // SSR 안전성
 //   persist 가 hydrate 되기 전 첫 프레임은 DEFAULT_REGION 으로 떨어진다 — 모든 화면이
@@ -48,19 +50,37 @@ export const SEOUL_DISTRICTS = [
 
 interface RegionState {
   region: string;
+  // true: 사용자가 직접 선택. false: 기본값 또는 GPS 자동 채움
+  isUserSet: boolean;
+  // 사용자가 직접 선택할 때 호출 (RegionPickerSheet 의 자치구 항목 클릭 등)
   setRegion: (region: string) => void;
+  // GPS 자동 매핑 결과를 채울 때 호출 — isUserSet 은 false 유지
+  setRegionAuto: (region: string) => void;
 }
 
 export const useRegionStore = create<RegionState>()(
   persist(
     (set) => ({
       region: DEFAULT_REGION,
-      setRegion: (region) => set({ region }),
+      isUserSet: false,
+      setRegion: (region) => set({ region, isUserSet: true }),
+      setRegionAuto: (region) => set({ region, isUserSet: false }),
     }),
     {
       name: "emptybook:region",
       storage: createJSONStorage(() => localStorage),
-      version: 1,
-    }
-  )
+      version: 2,
+      // v1 (region 만 있던 시절) → v2 마이그레이션. 기존 region 은 그대로 살리되,
+      // default 와 다른 값을 골라둔 사용자는 명시 선택으로 간주(isUserSet=true)
+      migrate: (persisted: any, fromVersion) => {
+        if (fromVersion < 2) {
+          return {
+            region: persisted?.region ?? DEFAULT_REGION,
+            isUserSet: !!persisted?.region && persisted.region !== DEFAULT_REGION,
+          };
+        }
+        return persisted;
+      },
+    },
+  ),
 );

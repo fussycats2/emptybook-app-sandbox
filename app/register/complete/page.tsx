@@ -113,7 +113,13 @@ function CompleteInner() {
               cursor: book ? "pointer" : "default",
             }}
           >
-            <BookImage seed={book?.id ?? "complete"} width={68} height={88} radius={10} />
+            <BookImage
+              seed={book?.id ?? "complete"}
+              src={book?.coverUrl}
+              width={68}
+              height={88}
+              radius={10}
+            />
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
                 {book?.title ?? "도서"}

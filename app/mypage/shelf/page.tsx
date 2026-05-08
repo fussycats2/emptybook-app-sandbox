@@ -35,6 +35,7 @@ import BottomSheet from "@/components/ui/BottomSheet";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import EmptyState from "@/components/ui/EmptyState";
 import BookSpine from "@/components/ui/BookSpine";
+import BookImage from "@/components/ui/BookImage";
 import { useToast } from "@/components/ui/ToastProvider";
 import { palette, radius, shadow } from "@/lib/theme";
 import {
@@ -362,15 +363,14 @@ export default function ShelfPage() {
       >
         {selected && (
           <Stack gap={2} sx={{ pt: 1, pb: 1 }}>
-            {/* 책 정보 헤더 */}
+            {/* 책 정보 헤더 — 상세 시트는 책장 진열대가 아니므로 표지 이미지 사용 */}
             <Stack direction="row" gap={1.5} alignItems="center">
-              <BookSpine
+              <BookImage
                 seed={selected.id}
-                title={selected.title}
-                author={selected.author}
-                category={selected.category}
-                coverUrl={selected.coverUrl}
-                listed={selected.status === "FOR_SALE" && !!selected.linkedBookId}
+                src={selected.coverUrl}
+                width={72}
+                height={96}
+                radius={8}
               />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography

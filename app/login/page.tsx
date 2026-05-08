@@ -20,6 +20,7 @@ import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
+import { ScrollBody } from "@/components/ui/Section";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -139,7 +140,7 @@ function LoginPageInner() {
         bordered={false}
         onLeftClick={() => router.replace("/")}
       />
-      <Box sx={{ p: 3, pt: 1, display: "flex", flexDirection: "column", flex: 1 }}>
+      <ScrollBody sx={{ p: 3, pt: 1 }}>
         <Box className="fade-in-up">
           <Box
             sx={{
@@ -356,7 +357,7 @@ function LoginPageInner() {
             Google로 계속하기
           </Button>
         </Stack>
-      </Box>
+      </ScrollBody>
     </>
   );
 }

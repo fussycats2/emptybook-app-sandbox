@@ -116,7 +116,11 @@ function RegisterPageInner() {
     undefined
   );
   const [conditionSheetOpen, setConditionSheetOpen] = useState(false);
-  const conditionSet = hasAnyChecked(conditionDetail);
+  // 시트에서 "상태 적용" 을 한 번이라도 눌렀는지. 체크박스 0개여도(=최상) 사용자가 명시적으로
+  // 확인한 신호로 인정해야 등록 버튼 활성화 가능
+  const [conditionApplied, setConditionApplied] = useState(false);
+  // 등록 가능 여부 — 명시 적용 OR 항목 체크가 하나라도 있을 때 (기존 detail 보유 케이스 포함)
+  const conditionSet = conditionApplied || hasAnyChecked(conditionDetail);
 
   // React Query mutations — 등록(useCreateBook) / 네이버 검색(useNaverBookSearch)
   const createBookMutation = useCreateBook();
@@ -1147,6 +1151,8 @@ function RegisterPageInner() {
         initial={conditionDetail}
         onApply={(detail, suggested) => {
           setConditionDetail(detail);
+          // 체크 0개여도 "최상" 으로 명시 확정한 것으로 인정 — 등록 버튼 활성화 트리거
+          setConditionApplied(true);
           // 사용자에게 자동 추천된 등급을 적용 — 사용자가 폼에서 다시 다른 등급을 고를 수 있음
           setState(suggested);
           toast?.show(`상태가 "${suggested}" 으로 추천됐어요`);
