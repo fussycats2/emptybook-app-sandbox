@@ -91,6 +91,16 @@ button { -webkit-tap-highlight-color: transparent; }
   color: transparent;
 }
 
+/* BookLoader — 책 페이지 넘김 애니메이션. 한 장씩 오른쪽에서 왼쪽으로 넘어가는 루프.
+   transform-origin 은 중앙(척추) 기준이라 책처럼 회전 + 100% 에서 fade-out 후 reset 으로 자연스러운 루프 */
+@keyframes bookFlip {
+  0%   { transform: rotateY(0deg);    opacity: 1; }
+  10%  { opacity: 1; }
+  50%  { transform: rotateY(-100deg); opacity: 1; }
+  85%  { transform: rotateY(-180deg); opacity: 0; }
+  100% { transform: rotateY(-180deg); opacity: 0; }
+}
+
 @keyframes splashRise {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }

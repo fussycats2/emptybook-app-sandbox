@@ -23,6 +23,7 @@ import { useMemo, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
+import BookLoader from "@/components/ui/BookLoader";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { useBook } from "@/lib/query/bookHooks";
 import { useCreateOrder } from "@/lib/query/orderHooks";
@@ -109,8 +110,8 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
     return (
       <>
         <AppHeader title="결제" left="back" />
-        <Box sx={{ flex: 1, display: "grid", placeItems: "center", color: palette.inkSubtle }}>
-          불러오는 중…
+        <Box sx={{ flex: 1, display: "grid", placeItems: "center" }}>
+          <BookLoader label="불러오는 중…" />
         </Box>
       </>
     );

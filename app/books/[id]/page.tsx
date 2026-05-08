@@ -39,6 +39,7 @@ import MannerTemperature, {
 } from "@/components/ui/MannerTemperature";
 import LikeButton from "@/components/ui/LikeButton";
 import BookImage from "@/components/ui/BookImage";
+import BookLoader from "@/components/ui/BookLoader";
 import BottomSheet from "@/components/ui/BottomSheet";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
@@ -120,10 +121,9 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           flex: 1,
           display: "grid",
           placeItems: "center",
-          color: palette.inkSubtle,
         }}
       >
-        불러오는 중…
+        <BookLoader label="불러오는 중…" />
       </Box>
     );
   }

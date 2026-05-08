@@ -33,7 +33,7 @@ const COLORS: { bg: string; ink: string; tint: string }[] = [
   { bg: "#2D4A36", ink: "#E8D9B8", tint: "#3F6249" }, // forest
   { bg: "#1F3552", ink: "#E0D6BC", tint: "#2C476B" }, // navy
   { bg: "#7A5A1F", ink: "#F4E4BC", tint: "#9B7530" }, // mustard
-  { bg: "#E8DCC4", ink: "#3D2E1F", tint: "#D4C4A4" }, // cream
+  { bg: "#D4C4A4", ink: "#3D2E1F", tint: "#E8DCC4" }, // cream — bg=어두운 크림, tint=밝은 크림 (다른 색들과 동일한 컨벤션)
   { bg: "#8E6E48", ink: "#F2E3C6", tint: "#A38259" }, // tan
   { bg: "#2A4F4F", ink: "#E0DBC4", tint: "#3D6868" }, // dark teal
   { bg: "#4A2B47", ink: "#E8D5C0", tint: "#653F62" }, // plum
@@ -191,13 +191,15 @@ export default function BookSpine({
         background: backgroundCss,
       }}
     >
-      {/* 좌우 가장자리 미세 음영 — 책등 입체감 */}
+      {/* 좌우 가장자리 미세 음영 — 책등 입체감.
+          어두운 책색에 자연스럽게 묻히고, 밝은 색(cream/tan 등) 에서는 거친 띠로 도드라지지 않도록
+          alpha 와 falloff 를 부드럽게 조정 (0.22→0.14, 18%→32%) */}
       <Box
         sx={{
           position: "absolute",
           inset: 0,
           background:
-            "linear-gradient(90deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0) 18%, rgba(0,0,0,0) 82%, rgba(0,0,0,0.22) 100%)",
+            "linear-gradient(90deg, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0) 32%, rgba(0,0,0,0) 68%, rgba(0,0,0,0.14) 100%)",
           pointerEvents: "none",
         }}
       />
