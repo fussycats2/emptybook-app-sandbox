@@ -14,7 +14,7 @@ import { useEffect } from "react";
 import BookImage from "./BookImage";
 import StatusBadge, { type SaleStatus } from "./StatusBadge";
 import LikeButton from "./LikeButton";
-import { palette, radius, shadow } from "@/lib/theme";
+import { palette, shadow } from "@/lib/theme";
 import { useLikesStore, selectLikeCount } from "@/lib/store/likesStore";
 
 // 카드에 필요한 최소 정보 — repo.ts 의 변환 함수가 이 형태로 데이터를 만들어 넘김
@@ -72,16 +72,33 @@ export function BookFeedItem({ book }: { book: BookSummary }) {
         "&:active": { background: palette.lineSoft },
       }}
     >
+      {/* 표지 영역 — 고정폭 컬럼(112) 안에서 책 이미지를 중앙정렬.
+          autoWidth 로 책별 비율은 살리되, 오른쪽 텍스트의 좌측 정렬선은 모든 행에서 동일하게. */}
       <Box
         sx={{
-          position: "relative",
+          width: 112,
           flexShrink: 0,
-          borderRadius: `${radius.md}px`,
-          overflow: "hidden",
-          boxShadow: shadow.card,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
         }}
       >
-        <BookImage seed={book.id} src={book.coverUrl} width={108} height={132} radius={radius.md} />
+        <Box
+          sx={{
+            position: "relative",
+            borderRadius: 0,
+            overflow: "hidden",
+            boxShadow: shadow.card,
+          }}
+        >
+          <BookImage
+            seed={book.id}
+            src={book.coverUrl}
+            height={148}
+            radius={0}
+            autoWidth
+          />
+        </Box>
       </Box>
       <Stack flex={1} minWidth={0} justifyContent="space-between">
         <Box>
@@ -171,6 +188,8 @@ export function BookFeedItem({ book }: { book: BookSummary }) {
 }
 
 // 검색 결과 등에서 사용하는 정사각형 카드 (2열 그리드 친화적)
+// v10: 카드 외곽 border 제거 — 책 이미지를 그대로 띄워 모던/미니멀 인상.
+// 호버에만 미세 lift + soft shadow. 상하 정렬은 underneath 의 text 가 캡션처럼 자연스럽게 따라옴.
 export function BookGridCard({ book }: { book: BookSummary }) {
   const router = useRouter();
   const status: SaleStatus | undefined =
@@ -180,20 +199,24 @@ export function BookGridCard({ book }: { book: BookSummary }) {
       onClick={() => router.push(`/books/${book.id}`)}
       sx={{
         cursor: "pointer",
-        background: palette.surface,
-        borderRadius: `${radius.md}px`,
-        overflow: "hidden",
-        border: `1px solid ${palette.lineSoft}`,
-        transition: "transform 200ms cubic-bezier(0.22, 1, 0.36, 1), border-color 160ms ease, box-shadow 200ms ease",
+        transition:
+          "transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms ease",
         "&:hover": {
-          borderColor: palette.line,
           transform: "translateY(-2px)",
-          boxShadow: shadow.cardHover,
         },
         "&:active": { transform: "scale(0.985)" },
       }}
     >
-      <Box sx={{ position: "relative" }}>
+      <Box
+        sx={{
+          position: "relative",
+          borderRadius: 0,
+          overflow: "hidden",
+          boxShadow: shadow.card,
+          transition: "box-shadow 200ms ease",
+          "&:hover": { boxShadow: shadow.cardHover },
+        }}
+      >
         <BookImage seed={book.id} src={book.coverUrl} ratio={1} radius={0} />
         {status && (
           <Box sx={{ position: "absolute", top: 8, left: 8 }}>
@@ -204,7 +227,7 @@ export function BookGridCard({ book }: { book: BookSummary }) {
           <LikeButton bookId={book.id} size="small" bg="rgba(255,255,255,0.92)" />
         </Box>
       </Box>
-      <Box sx={{ p: 1.5 }}>
+      <Box sx={{ pt: 1.25, px: 0.5 }}>
         <Typography
           sx={{
             fontSize: 13,
@@ -255,7 +278,7 @@ export function BookListRow({ book }: { book: BookSummary }) {
         "&:hover": { background: palette.surfaceAlt },
       }}
     >
-      <BookImage seed={book.id} src={book.coverUrl} width={68} height={88} radius={12} />
+      <BookImage seed={book.id} src={book.coverUrl} width={68} height={88} radius={0} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography
           sx={{

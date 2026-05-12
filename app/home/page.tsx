@@ -6,14 +6,13 @@
 import {
   Box,
   IconButton,
-  InputAdornment,
   Stack,
   Typography,
-  OutlinedInput,
   Badge,
 } from "@mui/material";
 import NotificationsNoneRoundedIcon from "@mui/icons-material/NotificationsNoneRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import SearchPill from "@/components/ui/SearchPill";
 import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
 import CardGiftcardRoundedIcon from "@mui/icons-material/CardGiftcardRounded";
 import LocalFireDepartmentRoundedIcon from "@mui/icons-material/LocalFireDepartmentRounded";
@@ -120,24 +119,13 @@ export default function HomePage() {
           </Stack>
         </Stack>
         {/* 입력은 받지 않고(readOnly), 클릭만으로 검색 페이지로 이동시키는 패턴 */}
-        <OutlinedInput
-          fullWidth
+        <SearchPill
           placeholder="찾고 있는 책이 있나요?"
           onClick={() => router.push("/search")}
           readOnly
-          startAdornment={
-            <InputAdornment position="start">
-              <SearchRoundedIcon sx={{ color: palette.inkSubtle }} />
-            </InputAdornment>
-          }
           sx={{
-            background: palette.lineSoft,
-            borderRadius: 999,
-            "& fieldset": { border: "none" },
-            "& input": { py: 1.4, fontSize: 13.5, cursor: "pointer" },
             cursor: "pointer",
-            transition: "background 160ms ease",
-            "&:hover": { background: palette.surfaceAlt, boxShadow: `0 0 0 1px ${palette.line}` },
+            "& input": { cursor: "pointer" },
           }}
         />
       </Box>
@@ -538,17 +526,17 @@ export default function HomePage() {
           </Box>
         </Box>
 
-        <Box sx={{ pt: 2.5 }}>
+        {/* 카테고리 행 — 크기 축소(58→46) + 위아래 간격 압축. 메인 피드로 빠르게 시선 이동. */}
+        <Box sx={{ pt: 1.25 }}>
           <Box
             className="no-scrollbar"
             sx={{
               display: "flex",
-              gap: 1.5,
+              gap: 1.25,
               px: 2,
               overflowX: "auto",
-              // 호버 lift + shadow 가 위/아래에서 잘리지 않도록 세로 padding 확보
-              pt: 0.75,
-              pb: 1,
+              pt: 0.5,
+              pb: 0.5,
             }}
           >
             {CATEGORIES.map((c) => (
@@ -562,22 +550,23 @@ export default function HomePage() {
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
-                  gap: 0.75,
-                  width: 64,
+                  gap: 0.5,
+                  width: 54,
                   cursor: "pointer",
                 }}
               >
                 <Box
                   sx={{
-                    width: 58,
-                    height: 58,
+                    width: 46,
+                    height: 46,
                     borderRadius: "50%",
                     background: `linear-gradient(135deg, ${palette.primaryTint} 0%, ${palette.primarySoft} 100%)`,
                     border: `1px solid ${palette.lineSoft}`,
                     display: "grid",
                     placeItems: "center",
-                    fontSize: 26,
-                    transition: "transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms ease",
+                    fontSize: 20,
+                    transition:
+                      "transform 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 200ms ease",
                     "&:hover": {
                       transform: "translateY(-2px) scale(1.04)",
                       boxShadow: `0 8px 20px ${palette.primaryGlow}`,
@@ -588,7 +577,7 @@ export default function HomePage() {
                 </Box>
                 <Typography
                   sx={{
-                    fontSize: 11.5,
+                    fontSize: 11,
                     color: palette.inkMute,
                     fontWeight: 700,
                     letterSpacing: "-0.01em",
@@ -734,19 +723,27 @@ function MiniBookCard({
       onClick={onClick}
       sx={{
         flexShrink: 0,
-        width: 130,
+        // 셀 폭은 표준 책 너비(2:3 of 170 = 113) 보다 살짝 여유. 표지는 안에서 중앙정렬.
+        width: 124,
         cursor: "pointer",
         transition: "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)",
         "&:hover": { transform: "translateY(-2px)" },
       }}
     >
-      <Box sx={{ position: "relative", mb: 0.75 }}>
+      <Box
+        sx={{
+          position: "relative",
+          mb: 0.75,
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
         <BookImage
           seed={book.id}
           src={book.coverUrl}
-          width={130}
           height={170}
-          radius={radius.md}
+          radius={0}
+          autoWidth
         />
         {(book.status === "sold" ||
           book.status === "reserved" ||

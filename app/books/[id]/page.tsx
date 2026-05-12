@@ -44,6 +44,7 @@ import BottomSheet from "@/components/ui/BottomSheet";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
   useBook,
+  useIncrementBookView,
   useCancelBook,
   useDeleteBook,
   useRecentBooks,
@@ -55,6 +56,7 @@ import { palette, radius } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLikesStore, selectLikeCount } from "@/lib/store/likesStore";
+import { useViewsStore, selectViewCount } from "@/lib/store/viewsStore";
 import { useRecentlyViewedStore } from "@/lib/store/recentlyViewedStore";
 import { flattenChecked, hasAnyChecked } from "@/lib/conditionGrade";
 import type { ConditionDetail } from "@/lib/supabase/types";
@@ -66,6 +68,12 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
   const { user } = useAuth();
   // React Query — 도서 상세 + 관련(최근) 도서. 같은 캐시를 다른 화면도 공유
   const { data: book } = useBook(id);
+  // isMine — 본인 매물 판별. book 이 아직 안 와도 false 로 안전. useEffect 안 closure 에서 참조하므로 early return 전에 둠.
+  const isMine = book
+    ? book.sellerId
+      ? !!user && book.sellerId === user.id
+      : book.seller === "나"
+    : false;
   const { data: recent } = useRecentBooks(8);
   const related = (recent ?? []).filter((x) => x.id !== id);
   const cancelMutation = useCancelBook();
@@ -114,6 +122,31 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
     if (book?.id) pushRecent(book.id);
   }, [book?.id, pushRecent]);
 
+  // 조회수 — 찜과 같은 패턴(viewsStore + RPC)
+  //  1) book 이 로드되면 store 에 시드 (이미 있으면 유지)
+  //  2) book.id 가 새로 정해진 시점에 한 번만 +1 — 즉시 store(+1) + 비동기 RPC(서버 영구 반영)
+  //  3) 화면은 store 값을 구독해 +1 즉시 보임. 다음 fetch 때 서버 값과 동기화.
+  const seedViewCount = useViewsStore((s) => s.seed);
+  const incrementViewLocal = useViewsStore((s) => s.increment);
+  const liveViewCount = useViewsStore(selectViewCount(book?.id ?? id));
+  const incrementView = useIncrementBookView();
+  const viewedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!book) return;
+    seedViewCount(book.id, book.viewCount ?? 0);
+  }, [book?.id, book?.viewCount, seedViewCount]);
+  useEffect(() => {
+    if (!book?.id) return;
+    if (viewedRef.current === book.id) return;
+    viewedRef.current = book.id;
+    // 본인 매물이면 store 도 +1 하지 않음 — RPC 도 내부에서 noop. UI 일관성.
+    if (!isMine) incrementViewLocal(book.id);
+    incrementView.mutate(book.id);
+    // isMine 은 book.sellerId 가 정해진 후에야 의미가 있어서 dependency 에 포함하지 않음
+    // (실제 mismatch 발생 빈도 매우 낮고, 이중 +1 발사하면 UX 가 더 나빠짐)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book?.id]);
+
   if (!book) {
     return (
       <Box
@@ -128,12 +161,8 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
     );
   }
 
-  // 표시할 상태값과 푸터 버튼 비활성 조건 계산
-  // 우선순위: 1) Supabase 모드 → auth.uid === sellerId, 2) mock 모드 → seller==="나"
+  // 표시할 상태값과 푸터 버튼 비활성 조건 계산 — isMine 은 위에서 이미 계산됨(early return 전 useEffect 가 참조)
   const status = book.status ?? (book.free ? "free" : "selling");
-  const isMine = book.sellerId
-    ? !!user && book.sellerId === user.id
-    : book.seller === "나";
   const isSold = status === "sold";
   const isReserved = status === "reserved";
   const isCanceled = status === "canceled";
@@ -327,6 +356,7 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
               sellerId={book.sellerId}
               sellerRating={book.sellerRating}
               sellerTradeCount={book.sellerTradeCount}
+              sellerAvatar={book.sellerAvatar}
               loc={book.loc ?? book.region ?? "마포구"}
               isMine={isMine}
             />
@@ -417,7 +447,7 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
           >
             <Stack direction="row" gap={0.4} alignItems="center">
               <VisibilityRoundedIcon sx={{ fontSize: 14 }} />
-              조회 {32 + (book.likes ?? 0) * 5}
+              조회 {liveViewCount ?? book.viewCount ?? 0}
             </Stack>
             <Stack direction="row" gap={0.4} alignItems="center">
               <FavoriteBorderRoundedIcon sx={{ fontSize: 14 }} />
@@ -900,6 +930,7 @@ function SellerCard({
   sellerId,
   sellerRating,
   sellerTradeCount,
+  sellerAvatar,
   loc,
   isMine,
 }: {
@@ -907,6 +938,7 @@ function SellerCard({
   sellerId?: string;
   sellerRating?: number;
   sellerTradeCount?: number;
+  sellerAvatar?: string;
   loc: string;
   isMine: boolean;
 }) {
@@ -924,7 +956,39 @@ function SellerCard({
   return (
     <>
       <Stack direction="row" gap={1.25} alignItems="center">
-        <BookImage seed={sellerName} width={44} height={44} radius={999} />
+        {/* 판매자 아바타 — profiles.avatar_url 이 있으면 실사진, 없으면 BookImage seed placeholder */}
+        {sellerAvatar ? (
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              borderRadius: "50%",
+              overflow: "hidden",
+              flexShrink: 0,
+              background: palette.surfaceAlt,
+            }}
+          >
+            <Box
+              component="img"
+              src={sellerAvatar}
+              alt=""
+              sx={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
+              }}
+            />
+          </Box>
+        ) : (
+          <BookImage
+            seed={sellerName}
+            width={44}
+            height={44}
+            radius={999}
+            theaterBackdrop={false}
+          />
+        )}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
             sx={{

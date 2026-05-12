@@ -34,6 +34,9 @@ import { ScrollBody, FixedFooter } from "@/components/ui/Section";
 import BookImage from "@/components/ui/BookImage";
 import BarcodeScanner from "@/components/ui/BarcodeScanner";
 import ConditionDetailSheet from "@/components/ui/ConditionDetailSheet";
+import RegionPickerSheet from "@/components/ui/RegionPickerSheet";
+import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
+import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { meta, uploadBookImages } from "@/lib/repo";
@@ -111,6 +114,7 @@ function RegisterPageInner() {
   const [selected, setSelected] = useState<BookSearchItem | null>(null);
   // 바코드 스캐너 모달 토글
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [regionSheetOpen, setRegionSheetOpen] = useState(false);
   // 도서 상태 상세 체크리스트 — 시트에서 적용 누르면 detail 저장 + state 자동 추천
   const [conditionDetail, setConditionDetail] = useState<ConditionDetail | undefined>(
     undefined
@@ -638,35 +642,42 @@ function RegisterPageInner() {
           >
             바코드로 찾기
           </Button>
-          <OutlinedInput
-            fullWidth
-            placeholder="ISBN 또는 책 제목으로 검색"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              // 사용자가 제목을 직접 수정하면 이전 선택은 더 이상 일치하지 않으므로 해제
-              if (selected) setSelected(null);
-            }}
-            onKeyDown={(e) => {
-              // 한글 IME 조합 중 Enter 는 무시 (글자 확정용 키)
-              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
-              e.preventDefault();
-              handleSearch();
-            }}
-            startAdornment={
-              <SearchRoundedIcon sx={{ color: palette.inkSubtle, mr: 1 }} />
-            }
-            endAdornment={
-              <Button
-                size="small"
-                onClick={() => handleSearch()}
-                disabled={searching}
-                sx={{ minWidth: 60 }}
-              >
-                {searching ? "검색 중…" : "검색"}
-              </Button>
-            }
-          />
+          {/* 입력 + 검색 버튼을 한 줄 Stack — endAdornment 안에 박혀 공간이 좁아지는 문제 회피.
+              버튼은 nowrap + flexShrink:0 + minWidth 로 '검색 중…' 두 줄 깨짐 방지. */}
+          <Stack direction="row" gap={1} alignItems="stretch">
+            <OutlinedInput
+              fullWidth
+              placeholder="ISBN 또는 책 제목으로 검색"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                // 사용자가 제목을 직접 수정하면 이전 선택은 더 이상 일치하지 않으므로 해제
+                if (selected) setSelected(null);
+              }}
+              onKeyDown={(e) => {
+                // 한글 IME 조합 중 Enter 는 무시 (글자 확정용 키)
+                if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                handleSearch();
+              }}
+              startAdornment={
+                <SearchRoundedIcon sx={{ color: palette.inkSubtle, mr: 1 }} />
+              }
+              sx={{ flex: 1, height: 48 }}
+            />
+            <Button
+              onClick={() => handleSearch()}
+              disabled={searching}
+              sx={{
+                flexShrink: 0,
+                minWidth: 88,
+                px: 2,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {searching ? "검색 중…" : "검색"}
+            </Button>
+          </Stack>
 
           {/* 단일 결과(또는 사용자 선택 후): 매칭 카드 표시 */}
           {selected && (
@@ -837,21 +848,52 @@ function RegisterPageInner() {
               />
             </Stack>
           </Stack>
-          <Stack direction="row" gap={1} alignItems="center">
-            <OutlinedInput
-              fullWidth
-              placeholder="0"
-              type="number"
-              disabled={free}
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              endAdornment={
-                <Typography sx={{ fontSize: 14, fontWeight: 700, mr: 1 }}>
-                  원
-                </Typography>
-              }
-            />
-          </Stack>
+          <OutlinedInput
+            fullWidth
+            placeholder="0"
+            // type="number" 는 onChange 에서 숫자만 잘라내므로 굳이 필요 없음.
+            // inputMode 로 모바일 키패드만 숫자로 유도.
+            inputMode="numeric"
+            disabled={free}
+            // 표시는 천 단위 콤마, 내부 state 는 숫자 문자열만 유지
+            value={
+              price && !isNaN(Number(price))
+                ? Number(price).toLocaleString("ko-KR")
+                : price
+            }
+            onChange={(e) => {
+              const digits = e.target.value.replace(/[^0-9]/g, "").slice(0, 9);
+              setPrice(digits);
+            }}
+            startAdornment={
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: palette.inkMute,
+                  mr: 1,
+                }}
+              >
+                ₩
+              </Typography>
+            }
+            endAdornment={
+              <Typography
+                sx={{ fontSize: 14, fontWeight: 700, color: palette.inkMute, ml: 1 }}
+              >
+                원
+              </Typography>
+            }
+            sx={{
+              height: 56,
+              "& input": {
+                fontSize: 18,
+                fontWeight: 800,
+                textAlign: "right",
+                letterSpacing: "-0.01em",
+              },
+            }}
+          />
           {free && (
             <Box
               sx={{
@@ -1091,12 +1133,61 @@ function RegisterPageInner() {
           <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
             거래 지역
           </Typography>
-          <OutlinedInput
-            fullWidth
-            placeholder="동/구 선택 (예: 마포구)"
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
-          />
+          {/* 픽커 카드 — 좌측 핀 아이콘 + 선택 동네 + 우측 화살표.
+              기존 OutlinedInput 자유 입력 대신 동네 시트로 일원화 (잘못된 동네명 입력 방지). */}
+          <Stack
+            direction="row"
+            alignItems="center"
+            gap={1.25}
+            onClick={() => setRegionSheetOpen(true)}
+            sx={{
+              cursor: "pointer",
+              p: "14px 16px",
+              borderRadius: `${20}px`,
+              border: `1px solid ${palette.line}`,
+              background: palette.surface,
+              transition:
+                "border-color 160ms ease, background 160ms ease, transform 90ms ease",
+              "&:hover": {
+                borderColor: palette.primary,
+                background: palette.primaryTint,
+              },
+              "&:active": { transform: "scale(0.995)" },
+            }}
+          >
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: 999,
+                background: palette.primaryTint,
+                color: palette.primary,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              <LocationOnRoundedIcon sx={{ fontSize: 20 }} />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography
+                sx={{
+                  fontSize: 14.5,
+                  fontWeight: 700,
+                  color: region ? palette.ink : palette.inkSubtle,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                {region || "동네를 선택해주세요"}
+              </Typography>
+              <Typography
+                sx={{ fontSize: 11.5, color: palette.inkSubtle, mt: 0.25 }}
+              >
+                서울 25개 자치구 · 탭해서 변경
+              </Typography>
+            </Box>
+            <KeyboardArrowRightRoundedIcon sx={{ color: palette.inkSubtle }} />
+          </Stack>
         </Box>
 
         <Box sx={{ p: 2, pb: 3 }}>
@@ -1144,6 +1235,12 @@ function RegisterPageInner() {
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onDetected={handleBarcodeDetected}
+      />
+      <RegionPickerSheet
+        open={regionSheetOpen}
+        onClose={() => setRegionSheetOpen(false)}
+        value={region}
+        onPick={(next) => setRegion(next)}
       />
       <ConditionDetailSheet
         open={conditionSheetOpen}

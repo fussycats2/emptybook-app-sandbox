@@ -8,14 +8,12 @@
 import {
   Box,
   IconButton,
-  InputAdornment,
-  OutlinedInput,
   Stack,
   Typography,
 } from "@mui/material";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
-import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
+import SearchPill from "@/components/ui/SearchPill";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
@@ -72,26 +70,10 @@ export default function ChatListPage() {
           borderBottom: `1px solid ${palette.lineSoft}`,
         }}
       >
-        <OutlinedInput
-          fullWidth
+        <SearchPill
           placeholder="대화방 검색"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          startAdornment={
-            <InputAdornment position="start">
-              <SearchRoundedIcon sx={{ color: palette.inkSubtle }} />
-            </InputAdornment>
-          }
-          sx={{
-            background: palette.lineSoft,
-            borderRadius: 999,
-            "& fieldset": { border: "none" },
-            "& input": { py: 1.4, fontSize: 13.5 },
-            "&.Mui-focused": {
-              background: palette.surface,
-              boxShadow: `0 0 0 1px ${palette.line}, 0 0 0 5px ${palette.primaryGlow}`,
-            },
-          }}
         />
         <Stack direction="row" gap={1} mt={1.75}>
           {TABS.map((t) => {

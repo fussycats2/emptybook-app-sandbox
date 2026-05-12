@@ -91,11 +91,43 @@ export default function ImageCarousel({
               flex: "0 0 100%",
               scrollSnapAlign: "start",
               height,
-              // 실사진의 contain 에서 letterbox 영역 — 책장 톤 cream 으로 자연스럽게
-              background: palette.surfaceAlt,
               position: "relative",
+              overflow: "hidden",
+              // 폴백 배경 — 표지가 없을 때만 사용
+              background: palette.surfaceAlt,
             }}
           >
+            {/* 영화관 모드 backdrop — 같은 이미지를 크게 + 블러 + 어두운 오버레이로 letterbox 자연 채움
+                (이전엔 cream 단색 letterbox 였어서 표지 옆 빈 영역이 도드라졌음) */}
+            {src && (
+              <>
+                <Box
+                  component="img"
+                  src={src}
+                  alt=""
+                  aria-hidden
+                  loading="eager"
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    filter: "blur(28px) saturate(120%)",
+                    transform: "scale(1.2)",
+                    opacity: 0.85,
+                  }}
+                />
+                <Box
+                  sx={{
+                    position: "absolute",
+                    inset: 0,
+                    background:
+                      "linear-gradient(180deg, rgba(10,16,12,0.32) 0%, rgba(10,16,12,0.10) 35%, rgba(10,16,12,0.10) 65%, rgba(10,16,12,0.45) 100%)",
+                  }}
+                />
+              </>
+            )}
             {src ? (
               <Box
                 component="img"
@@ -103,10 +135,13 @@ export default function ImageCarousel({
                 alt=""
                 loading={i === 0 ? "eager" : "lazy"}
                 sx={{
+                  position: "relative",
                   width: "100%",
                   height: "100%",
                   objectFit: "contain",
                   display: "block",
+                  // 표지 자체에 미세 그림자로 떠 있는 느낌
+                  filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.32))",
                 }}
               />
             ) : (

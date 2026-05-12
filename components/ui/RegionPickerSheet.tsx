@@ -28,10 +28,19 @@ import { useToast } from "@/components/ui/ToastProvider";
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** 외부 컨트롤된 현재 값(예: /register 폼) — 없으면 store 의 region 사용 */
+  value?: string;
+  /** 선택 시 호출. 지정하면 store 갱신 대신 이걸 호출 (개별 폼 전용 선택) */
+  onPick?: (next: string) => void;
 }
 
-export default function RegionPickerSheet({ open, onClose }: Props) {
-  const region = useRegionStore((s) => s.region);
+export default function RegionPickerSheet({
+  open,
+  onClose,
+  value,
+  onPick,
+}: Props) {
+  const region = useRegionStore((s) => (value !== undefined ? value : s.region));
   const setRegion = useRegionStore((s) => s.setRegion);
   const setRegionAuto = useRegionStore((s) => s.setRegionAuto);
   const [q, setQ] = useState("");
@@ -45,7 +54,8 @@ export default function RegionPickerSheet({ open, onClose }: Props) {
   }, [q]);
 
   const handlePick = (next: string) => {
-    setRegion(next);
+    if (onPick) onPick(next);
+    else setRegion(next);
     setQ("");
     onClose();
   };
@@ -57,7 +67,8 @@ export default function RegionPickerSheet({ open, onClose }: Props) {
     setLocating(false);
     switch (result.kind) {
       case "ok":
-        setRegionAuto(result.region);
+        if (onPick) onPick(result.region);
+        else setRegionAuto(result.region);
         toast?.show(`현재 위치로 ${result.region}을(를) 설정했어요`);
         setQ("");
         onClose();

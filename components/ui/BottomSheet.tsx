@@ -90,10 +90,11 @@ export default function BottomSheet({
       </Box>
       {footer && (
         <Box
-          className="safe-bottom"
           sx={{
             borderTop: `1px solid ${palette.lineSoft}`,
-            p: 1.75,
+            px: 1.75,
+            pt: 1.75,
+            pb: "calc(14px + env(safe-area-inset-bottom))",
             background: palette.surface,
           }}
         >

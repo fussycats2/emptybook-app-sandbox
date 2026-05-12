@@ -365,10 +365,11 @@ export default function ChatDetailPage({
       </Box>
 
       <Box
-        className="safe-bottom"
         sx={{
           borderTop: `1px solid ${palette.lineSoft}`,
-          p: 1.25,
+          px: 1.25,
+          pt: 1.25,
+          pb: "calc(10px + env(safe-area-inset-bottom))",
           display: "flex",
           gap: 0.75,
           alignItems: "center",

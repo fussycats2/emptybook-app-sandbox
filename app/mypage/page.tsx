@@ -4,20 +4,22 @@
 // 로그인 사용자가 있으면 profiles 테이블에서 display_name/username 조회
 
 import { Box, IconButton, Stack, Typography } from "@mui/material";
-import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
+import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
-import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
-import ShoppingBagRoundedIcon from "@mui/icons-material/ShoppingBagRounded";
-import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
-import ChatBubbleRoundedIcon from "@mui/icons-material/ChatBubbleRounded";
-import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
-import StarRoundedIcon from "@mui/icons-material/StarRounded";
-import LocalActivityRoundedIcon from "@mui/icons-material/LocalActivityRounded";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
+import FavoriteBorderOutlinedIcon from "@mui/icons-material/FavoriteBorderOutlined";
+import ChatBubbleOutlineOutlinedIcon from "@mui/icons-material/ChatBubbleOutlineOutlined";
+import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
+import StarOutlineRoundedIcon from "@mui/icons-material/StarOutlineRounded";
+import ConfirmationNumberOutlinedIcon from "@mui/icons-material/ConfirmationNumberOutlined";
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
-import VerifiedRoundedIcon from "@mui/icons-material/VerifiedRounded";
-import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
+import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
+import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
+import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
+import CameraAltRoundedIcon from "@mui/icons-material/CameraAltRounded";
 import { useRouter } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import { ScrollBody } from "@/components/ui/Section";
@@ -30,7 +32,11 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useMyBooks } from "@/lib/query/bookHooks";
 import { useOrders } from "@/lib/query/orderHooks";
-import { useMyProfile, useReceivedReviews } from "@/lib/query/profileHooks";
+import {
+  useMyProfile,
+  useReceivedReviews,
+  useUploadAvatar,
+} from "@/lib/query/profileHooks";
 import { useMyShelf } from "@/lib/query/shelfHooks";
 import { useLikesStore } from "@/lib/store/likesStore";
 import { useRecentlyViewedStore } from "@/lib/store/recentlyViewedStore";
@@ -48,24 +54,24 @@ const SECTIONS: { title: string; items: MenuItem[] }[] = [
   {
     title: "내 거래",
     items: [
-      { label: "구매 내역", href: "/mypage/orders", icon: <ShoppingBagRoundedIcon /> },
-      { label: "판매 내역", href: "/mypage/selling", icon: <StorefrontRoundedIcon /> },
-      { label: "받은 후기", href: "/mypage/reviews", icon: <StarRoundedIcon /> },
+      { label: "구매 내역", href: "/mypage/orders", icon: <ShoppingBagOutlinedIcon /> },
+      { label: "판매 내역", href: "/mypage/selling", icon: <StorefrontOutlinedIcon /> },
+      { label: "받은 후기", href: "/mypage/reviews", icon: <StarOutlineRoundedIcon /> },
     ],
   },
   {
     title: "내 활동",
     items: [
-      { label: "내 책장", href: "/mypage/shelf", icon: <AutoStoriesRoundedIcon /> },
-      { label: "찜한 상품", href: "/mypage/likes", icon: <FavoriteRoundedIcon /> },
-      { label: "최근 본 상품", href: "/mypage/recent", icon: <HistoryRoundedIcon /> },
-      { label: "내 채팅", href: "/chat", icon: <ChatBubbleRoundedIcon /> },
+      { label: "내 책장", href: "/mypage/shelf", icon: <MenuBookOutlinedIcon /> },
+      { label: "찜한 상품", href: "/mypage/likes", icon: <FavoriteBorderOutlinedIcon /> },
+      { label: "최근 본 상품", href: "/mypage/recent", icon: <AccessTimeRoundedIcon /> },
+      { label: "내 채팅", href: "/chat", icon: <ChatBubbleOutlineOutlinedIcon /> },
     ],
   },
   {
     title: "혜택",
     items: [
-      { label: "쿠폰함", href: "/mypage/coupons", icon: <LocalActivityRoundedIcon /> },
+      { label: "쿠폰함", href: "/mypage/coupons", icon: <ConfirmationNumberOutlinedIcon /> },
     ],
   },
   {
@@ -89,6 +95,28 @@ export default function MyPage() {
   const { data: myBooks } = useMyBooks();
   const { data: orders } = useOrders();
   const { data: profile } = useMyProfile();
+  // 프로필 사진 업로드 — 아바타 클릭 시 파일 선택, 선택 즉시 mutate 후 캐시 invalidate.
+  const avatarFileRef = useRef<HTMLInputElement | null>(null);
+  const uploadAvatarMut = useUploadAvatar();
+  const handleAvatarPick = (file: File) => {
+    uploadAvatarMut.mutate(file, {
+      onSuccess: (res) => {
+        if (!res.ok) {
+          const msg =
+            res.reason === "too-large"
+              ? "8MB 이하 이미지만 올릴 수 있어요"
+              : res.reason === "not-image"
+              ? "이미지 파일만 올릴 수 있어요"
+              : res.reason === "auth"
+              ? "로그인이 필요해요"
+              : "사진 업로드에 실패했어요";
+          toast?.show(msg);
+          return;
+        }
+        toast?.show("프로필 사진을 업데이트했어요");
+      },
+    });
+  };
   // 받은 후기에서 tags 빈도 집계 — 매너 칩(아래)을 동적으로 그린다.
   // 이전엔 "응답이 빨라요/친절해요/도서 상태 좋아요" 가 모든 사용자에게 동일하게 박혀 있었음.
   const { data: receivedReviews } = useReceivedReviews();
@@ -146,7 +174,7 @@ export default function MyPage() {
         bordered={false}
         right={
           <IconButton onClick={() => router.push("/mypage/settings")}>
-            <SettingsRoundedIcon />
+            <TuneRoundedIcon />
           </IconButton>
         }
       />
@@ -155,7 +183,7 @@ export default function MyPage() {
           sx={{
             mx: 2,
             background: `linear-gradient(155deg, ${palette.surface} 0%, ${palette.surfaceAlt} 100%)`,
-            borderRadius: 4,
+            borderRadius: "20px",
             p: 2.5,
             border: `1px solid ${palette.lineSoft}`,
             position: "relative",
@@ -177,7 +205,12 @@ export default function MyPage() {
             }}
           />
           <Stack direction="row" gap={1.75} alignItems="center" sx={{ position: "relative" }}>
-            <Box sx={{ position: "relative" }}>
+            <Box
+              sx={{ position: "relative", cursor: "pointer" }}
+              onClick={() => avatarFileRef.current?.click()}
+              role="button"
+              aria-label="프로필 사진 변경"
+            >
               <Box
                 sx={{
                   width: 72,
@@ -194,29 +227,76 @@ export default function MyPage() {
                     borderRadius: "50%",
                     overflow: "hidden",
                     background: palette.surface,
+                    position: "relative",
                   }}
                 >
-                  <BookImage seed="me" width={68} height={68} radius={999} />
+                  {profile?.avatar_url ? (
+                    <Box
+                      component="img"
+                      src={profile.avatar_url}
+                      alt=""
+                      sx={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    />
+                  ) : (
+                    <BookImage seed="me" width={68} height={68} radius={999} />
+                  )}
+                  {/* 업로드 중 어둠 + 스피너 톤 */}
+                  {uploadAvatarMut.isPending && (
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        inset: 0,
+                        background: "rgba(0,0,0,0.45)",
+                        display: "grid",
+                        placeItems: "center",
+                        color: "#fff",
+                        fontSize: 10,
+                        fontWeight: 700,
+                      }}
+                    >
+                      업로드…
+                    </Box>
+                  )}
                 </Box>
               </Box>
+              {/* 우하단 액션 배지 — 카메라 아이콘으로 변경 가능을 시각화 */}
               <Box
                 sx={{
                   position: "absolute",
                   right: -2,
                   bottom: -2,
-                  width: 24,
-                  height: 24,
+                  width: 26,
+                  height: 26,
                   borderRadius: "50%",
-                  background: `linear-gradient(155deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
+                  background: `linear-gradient(155deg, ${palette.ink} 0%, ${palette.inkMute} 100%)`,
                   color: "#fff",
                   display: "grid",
                   placeItems: "center",
                   border: `2px solid ${palette.surface}`,
-                  boxShadow: "0 2px 6px rgba(45,95,74,0.30)",
+                  boxShadow: "0 2px 6px rgba(26,38,32,0.30)",
                 }}
               >
-                <VerifiedRoundedIcon sx={{ fontSize: 14 }} />
+                <CameraAltRoundedIcon sx={{ fontSize: 14 }} />
               </Box>
+              {/* 숨겨진 파일 input — 아바타 클릭 시 trigger */}
+              <Box
+                component="input"
+                ref={avatarFileRef}
+                type="file"
+                accept="image/*"
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleAvatarPick(f);
+                  // 동일 파일 재선택을 허용하려면 reset
+                  e.currentTarget.value = "";
+                }}
+                sx={{ display: "none" }}
+              />
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography sx={{ fontSize: 18, fontWeight: 800, letterSpacing: "-0.025em" }}>
@@ -304,13 +384,13 @@ export default function MyPage() {
                 {
                   label: "판매중",
                   val: sellingCount,
-                  icon: <StorefrontRoundedIcon />,
+                  icon: <StorefrontOutlinedIcon />,
                   href: "/mypage/selling",
                 },
                 {
                   label: "구매내역",
                   val: buyingCount,
-                  icon: <ShoppingBagRoundedIcon />,
+                  icon: <ShoppingBagOutlinedIcon />,
                   href: "/mypage/orders",
                 },
                 {
@@ -342,7 +422,7 @@ export default function MyPage() {
                   sx={{
                     background: palette.surface,
                     border: `1px solid ${palette.lineSoft}`,
-                    borderRadius: 3,
+                    borderRadius: "16px",
                     p: 1.75,
                     display: "flex",
                     alignItems: "center",
@@ -362,7 +442,7 @@ export default function MyPage() {
                     sx={{
                       width: 40,
                       height: 40,
-                      borderRadius: 2.5,
+                      borderRadius: "12px",
                       background: `linear-gradient(135deg, ${palette.primaryTint} 0%, ${palette.primarySoft} 100%)`,
                       color: palette.primary,
                       display: "grid",
@@ -399,7 +479,7 @@ export default function MyPage() {
               mt: 1.25,
               background: palette.surface,
               border: `1px solid ${palette.lineSoft}`,
-              borderRadius: 3,
+              borderRadius: "16px",
               p: 1.75,
               display: "flex",
               alignItems: "center",
@@ -417,7 +497,7 @@ export default function MyPage() {
               sx={{
                 width: 40,
                 height: 40,
-                borderRadius: 2.5,
+                borderRadius: "12px",
                 background: `linear-gradient(135deg, ${palette.primaryTint} 0%, ${palette.primarySoft} 100%)`,
                 color: palette.primary,
                 display: "grid",
@@ -425,7 +505,7 @@ export default function MyPage() {
                 flexShrink: 0,
               }}
             >
-              <AutoStoriesRoundedIcon />
+              <MenuBookOutlinedIcon />
             </Box>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Stack direction="row" alignItems="baseline" gap={0.75}>
@@ -508,7 +588,7 @@ export default function MyPage() {
               sx={{
                 background: palette.surface,
                 border: `1px solid ${palette.lineSoft}`,
-                borderRadius: 3,
+                borderRadius: "16px",
                 overflow: "hidden",
               }}
             >
@@ -536,7 +616,7 @@ export default function MyPage() {
                       sx={{
                         width: 32,
                         height: 32,
-                        borderRadius: 1.5,
+                        borderRadius: "8px",
                         background: palette.primaryTint,
                         color: palette.primary,
                         display: "grid",

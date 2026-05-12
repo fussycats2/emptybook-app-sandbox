@@ -51,12 +51,15 @@ export const palette = {
 };
 
 // 모서리 둥글기(radius) 토큰 — 버튼/카드/Chip 등에서 일관된 라운드값 사용
+// v10: 모던 리프레시 — 박스 코너를 살짝 더 둥글려 하드한 사각 인상을 누그러뜨림.
+// (xs/sm 은 칩·태그용으로 작게, md~xl 은 카드·시트용으로 한 단계씩 더 부드럽게)
 export const radius = {
-  xs: 6,
-  sm: 12,
-  md: 16,
-  lg: 20,
-  xl: 28,
+  xs: 8,
+  sm: 14,
+  md: 18,
+  lg: 24,
+  xl: 32,
+  xxl: 40,
   pill: 999, // 알약(pill) 모양: 양 끝이 완전히 둥근 형태
 };
 
@@ -101,7 +104,7 @@ const theme = createTheme({
     caption: { fontSize: 11, color: palette.inkSubtle, letterSpacing: 0 },
     button: { textTransform: "none", fontWeight: 700, letterSpacing: "-0.01em" },
   },
-  shape: { borderRadius: radius.sm },
+  shape: { borderRadius: radius.md },
   components: {
     MuiCssBaseline: {
       styleOverrides: {
@@ -116,12 +119,13 @@ const theme = createTheme({
       defaultProps: { disableElevation: true, variant: "contained" },
       styleOverrides: {
         root: {
-          borderRadius: radius.sm,
+          borderRadius: radius.md,
           padding: "13px 20px",
           fontSize: 14.5,
           fontWeight: 700,
           minHeight: 48,
           letterSpacing: "-0.01em",
+          whiteSpace: "nowrap",
           transition:
             "background 160ms ease, border-color 160ms ease, transform 90ms ease, box-shadow 160ms ease",
           "&:active": { transform: "scale(0.985)" },
@@ -160,7 +164,7 @@ const theme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          borderRadius: radius.sm,
+          borderRadius: radius.md,
           background: palette.surface,
           transition: "border-color 140ms ease, box-shadow 140ms ease",
           "& .MuiOutlinedInput-notchedOutline": {
@@ -178,7 +182,7 @@ const theme = createTheme({
             borderWidth: 1.5,
           },
         },
-        input: { padding: "13px 14px", fontSize: 14 },
+        input: { padding: "14px 16px", fontSize: 14 },
       },
     },
     // Chip(태그/필터 버튼)을 알약 모양으로 통일
@@ -224,23 +228,51 @@ const theme = createTheme({
       defaultProps: { elevation: 0 },
       styleOverrides: {
         root: {
-          borderRadius: radius.md,
+          borderRadius: radius.lg,
           border: `1px solid ${palette.line}`,
           backgroundColor: palette.surface,
         },
       },
     },
     MuiDivider: { styleOverrides: { root: { borderColor: palette.line } } },
+    // v10: 모던한 토글 — iOS 14+ / Toss 스타일 (38×22 트랙, 18px thumb, 부드러운 음영)
     MuiSwitch: {
+      defaultProps: { disableRipple: true },
       styleOverrides: {
-        root: { padding: 8 },
-        switchBase: {
-          "&.Mui-checked": {
-            color: "#fff",
-            "& + .MuiSwitch-track": { background: palette.primary, opacity: 1 },
-          },
+        root: {
+          width: 46,
+          height: 26,
+          padding: 0,
+          marginLeft: 4,
+          overflow: "visible",
         },
-        track: { background: palette.line, opacity: 1 },
+        switchBase: {
+          padding: 3,
+          transitionDuration: "180ms",
+          "&.Mui-checked": {
+            transform: "translateX(20px)",
+            color: "#fff",
+            "& + .MuiSwitch-track": {
+              background: palette.primary,
+              opacity: 1,
+              borderColor: palette.primary,
+            },
+          },
+          "&.Mui-disabled + .MuiSwitch-track": { opacity: 0.5 },
+        },
+        thumb: {
+          width: 20,
+          height: 20,
+          boxShadow:
+            "0 1px 2px rgba(26,38,32,0.18), 0 3px 6px rgba(26,38,32,0.12)",
+        },
+        track: {
+          borderRadius: 999,
+          background: "#D7D2C5",
+          opacity: 1,
+          border: "1px solid transparent",
+          transition: "background 180ms ease",
+        },
       },
     },
     MuiIconButton: {

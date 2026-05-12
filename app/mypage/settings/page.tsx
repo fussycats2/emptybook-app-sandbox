@@ -10,18 +10,18 @@
 import {
   Box,
   Button,
-  Chip,
   OutlinedInput,
   Stack,
   Switch,
   Typography,
 } from "@mui/material";
 import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
+import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { palette } from "@/lib/theme";
+import { palette, radius } from "@/lib/theme";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -218,26 +218,51 @@ export default function SettingsPage() {
             >
               선택한 장르의 책을 홈에서 우선 추천해드려요. 여러 개 골라도 돼요.
             </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+            {/* 2열 그리드 — 줄바꿈 들쭉날쭉 + 이모지 식상함 해소.
+                각 칸은 미니 카드로 통일된 높이/패딩 + 선택 시 체크 아이콘으로 명확한 토글 표시. */}
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: 0.75,
+              }}
+            >
               {meta.CATEGORIES.map((c) => {
                 const on = genres.includes(c.name);
                 return (
-                  <Chip
+                  <Box
                     key={c.name}
-                    label={`${c.emoji} ${c.name}`}
-                    variant={on ? "filled" : "outlined"}
+                    role="button"
+                    aria-pressed={on}
                     onClick={() => toggleGenre(c.name)}
                     sx={{
-                      height: 34,
-                      fontSize: 13,
+                      cursor: "pointer",
+                      userSelect: "none",
+                      height: 44,
+                      px: 1.5,
+                      borderRadius: `${radius.md}px`,
+                      border: `1.5px solid ${on ? palette.primary : palette.line}`,
+                      background: on ? palette.primary : palette.surface,
+                      color: on ? "#fff" : palette.ink,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: 13.5,
                       fontWeight: 700,
-                      ...(on && {
-                        background: palette.primary,
-                        color: "#fff",
-                        "&:hover": { background: palette.primaryDark },
-                      }),
+                      letterSpacing: "-0.01em",
+                      transition:
+                        "background 160ms ease, border-color 160ms ease, color 160ms ease, transform 90ms ease",
+                      "&:hover": on
+                        ? { background: palette.primaryDark }
+                        : { borderColor: palette.primary, background: palette.primaryTint },
+                      "&:active": { transform: "scale(0.985)" },
                     }}
-                  />
+                  >
+                    <span>{c.name}</span>
+                    {on && (
+                      <CheckRoundedIcon sx={{ fontSize: 18, color: "#fff" }} />
+                    )}
+                  </Box>
                 );
               })}
             </Box>
@@ -380,7 +405,7 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
         sx={{
           background: palette.surface,
           border: `1px solid ${palette.lineSoft}`,
-          borderRadius: 3,
+          borderRadius: "16px",
           overflow: "hidden",
         }}
       >

@@ -235,10 +235,13 @@ export default function ShelfPage() {
       </Box>
 
       <ScrollBody>
-        {/* 책장 비주얼 — 따뜻한 라이트 우드 톤 배경 */}
+        {/* 책장 비주얼 — 따뜻한 우드 톤 베이스. 단순 단색에서 살짝 멀어져 입체감. */}
         <Box
           sx={{
-            background: `linear-gradient(180deg, ${palette.surfaceAlt} 0%, ${palette.lineSoft} 100%)`,
+            background: `
+              radial-gradient(120% 60% at 50% 0%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 60%),
+              linear-gradient(180deg, #F1E9D9 0%, #E7DCC5 100%)
+            `,
             minHeight: "100%",
             pb: 4,
           }}
@@ -601,9 +604,9 @@ function ShelfRow({
         <Stack direction="row" alignItems="center" gap={0.75}>
           <Box
             sx={{
-              width: 24,
-              height: 24,
-              borderRadius: 1,
+              width: 26,
+              height: 26,
+              borderRadius: "8px",
               background: palette.primaryTint,
               color: palette.primary,
               display: "grid",
@@ -636,22 +639,27 @@ function ShelfRow({
         )}
       </Stack>
 
-      {/* 나무 받침대 + 책등 진열 */}
+      {/* 책장 — 좌우 측면판 + 위쪽 안쪽 음영 + 아래쪽 두꺼운 우드 선반.
+          여러 레이어로 진짜 책장 한 칸이 단면도처럼 보이게 강화. */}
       <Box
         sx={{
-          mx: 2,
+          mx: 1.5,
           position: "relative",
-          background: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surfaceAlt} 100%)`,
-          border: `1px solid ${palette.lineSoft}`,
+          // 측면 우드 판 음영
+          px: "10px",
+          // 천장 → 바닥으로 가는 light wood 그라데이션
+          background: `
+            linear-gradient(90deg, rgba(122,99,66,0.18) 0%, rgba(122,99,66,0) 4%, rgba(122,99,66,0) 96%, rgba(122,99,66,0.18) 100%),
+            linear-gradient(180deg, #FBF6EA 0%, #F3EAD3 100%)
+          `,
           borderRadius: `${radius.lg}px`,
-          p: 1.5,
-          boxShadow: shadow.card,
+          // 위쪽 어두운 음영(천장) + 살짝 어두운 외곽
+          boxShadow:
+            "inset 0 6px 14px rgba(122,99,66,0.10), 0 1px 0 rgba(255,255,255,0.6) inset, 0 4px 14px rgba(122,99,66,0.12)",
           overflow: "hidden",
-          // 빈 공간에 깔리는 미세한 격자 — 책장 안쪽 음영처럼
-          backgroundImage: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surfaceAlt} 100%), repeating-linear-gradient(90deg, transparent 0 8px, rgba(140,115,80,0.04) 8px 9px)`,
-          backgroundBlendMode: "normal, multiply",
         }}
       >
+        {/* 진열 영역 — 우드 그레인이 살짝 비치는 안쪽 바닥 */}
         <Box
           className="no-scrollbar"
           sx={{
@@ -659,8 +667,11 @@ function ShelfRow({
             gap: 0.75,
             overflowX: "auto",
             alignItems: "flex-end",
-            pb: 0.75,
-            minHeight: 156,
+            pt: 1.5,
+            pb: 1,
+            minHeight: 168,
+            // 미세한 수직 우드 그레인 패턴 — 다른 책 사이로 살짝 비치는 정도
+            backgroundImage: `repeating-linear-gradient(90deg, transparent 0 7px, rgba(122,99,66,0.04) 7px 8px)`,
           }}
         >
           {items.map((it) => (
@@ -677,17 +688,25 @@ function ShelfRow({
             />
           ))}
         </Box>
-        {/* 나무 받침대 — 그라데이션 + 가는 하이라이트 라인으로 입체감 */}
+        {/* 두꺼운 우드 선반 — 책이 놓여 있는 받침대. 위에 가는 하이라이트 + 아래 어두운 그림자. */}
         <Box
           sx={{
-            mt: 0.75,
+            mx: "-10px",
             position: "relative",
-            height: 8,
-            borderRadius: 999,
+            height: 16,
             background:
-              "linear-gradient(180deg, #C4A879 0%, #A8895C 45%, #7A6342 100%)",
+              "linear-gradient(180deg, #C8A977 0%, #B5905E 35%, #8E6E48 75%, #6E5236 100%)",
             boxShadow:
-              "0 1px 0 rgba(255,255,255,0.35) inset, 0 2px 4px rgba(122,99,66,0.25)",
+              "0 1px 0 rgba(255,255,255,0.45) inset, 0 -1px 0 rgba(0,0,0,0.10) inset, 0 6px 12px rgba(110,82,54,0.30)",
+          }}
+        />
+        {/* 선반 아래 미세한 그림자 라인 — 받침대 아래 공간감 */}
+        <Box
+          sx={{
+            mx: "-10px",
+            height: 3,
+            background:
+              "linear-gradient(180deg, rgba(110,82,54,0.18) 0%, rgba(110,82,54,0) 100%)",
           }}
         />
       </Box>

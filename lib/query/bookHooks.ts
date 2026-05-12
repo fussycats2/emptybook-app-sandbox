@@ -11,6 +11,7 @@ import {
   createBook,
   deleteBook,
   fetchBook,
+  incrementBookView,
   listBooksByIds,
   listMyBooks,
   listRecentBooks,
@@ -59,6 +60,14 @@ export function useBook(id: string | undefined) {
     queryKey: queryKeys.book.detail(id ?? ""),
     queryFn: () => fetchBook(id!),
     enabled: !!id,
+  });
+}
+
+// 조회수 +1 mutation — 도서 상세 useEffect 에서 한 번 호출.
+// 본인 매물은 RPC 내부에서 noop. mutation 자체는 그냥 발사하고 결과는 다음 fetchBook 에서 반영.
+export function useIncrementBookView() {
+  return useMutation({
+    mutationFn: (id: string) => incrementBookView(id),
   });
 }
 

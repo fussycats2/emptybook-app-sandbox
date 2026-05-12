@@ -9,15 +9,14 @@ import {
   Box,
   Chip,
   IconButton,
-  InputAdornment,
-  OutlinedInput,
   Stack,
   Typography,
 } from "@mui/material";
 import ArrowBackIosNewRoundedIcon from "@mui/icons-material/ArrowBackIosNewRounded";
-import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import SearchPill from "@/components/ui/SearchPill";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import LocalFireDepartmentRoundedIcon from "@mui/icons-material/LocalFireDepartmentRounded";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -194,39 +193,19 @@ function SearchInner() {
           <IconButton onClick={() => router.back()}>
             <ArrowBackIosNewRoundedIcon fontSize="small" />
           </IconButton>
-          <OutlinedInput
-            fullWidth
+          <SearchPill
             value={q}
             autoFocus
             placeholder="책 제목, 저자, 출판사"
             onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              // 한글 IME 조합 중 Enter 는 무시 (글자 확정용 키)
-              if (e.key === "Enter" && !e.nativeEvent.isComposing) submit(q);
-            }}
-            startAdornment={
-              <InputAdornment position="start">
-                <SearchRoundedIcon sx={{ color: palette.inkSubtle, fontSize: 20 }} />
-              </InputAdornment>
-            }
+            onSubmit={(v) => submit(v)}
             endAdornment={
-              q && (
-                <IconButton size="small" onClick={() => setQ("")}>
+              q ? (
+                <IconButton size="small" onClick={() => setQ("")} sx={{ mr: 0.25 }}>
                   <CloseRoundedIcon fontSize="small" />
                 </IconButton>
-              )
+              ) : undefined
             }
-            sx={{
-              background: palette.lineSoft,
-              borderRadius: 999,
-              height: 42,
-              "& fieldset": { border: "none" },
-              "& input": { fontSize: 14, py: 0 },
-              "&.Mui-focused": {
-                background: palette.surface,
-                boxShadow: `0 0 0 1px ${palette.line}, 0 0 0 5px ${palette.primaryGlow}`,
-              },
-            }}
           />
           <IconButton onClick={() => setFilterOpen(true)}>
             <TuneRoundedIcon />
@@ -311,11 +290,13 @@ function SearchInner() {
               icon={<LocalFireDepartmentRoundedIcon sx={{ color: palette.accent }} />}
               caption={popularCaption}
             >
+              {/* 옅은 surface 배경 + 작은 라운드(10px) — 카드 인상은 살짝만 남겨 구분감 확보.
+                  이전엔 borderRadius:3 → 54px 까지 부풀어 식상했던 부분. */}
               <Box
                 sx={{
                   background: palette.surface,
-                  borderRadius: 3,
                   border: `1px solid ${palette.lineSoft}`,
+                  borderRadius: "10px",
                   overflow: "hidden",
                 }}
               >

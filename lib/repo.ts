@@ -192,6 +192,7 @@ function rowToDetail(b: BookRow): BookDetail {
     free: isFree,
     likes: b.like_count,
     chats: 0,
+    viewCount: (b as any).view_count ?? 0,
     coverUrl: b.cover_url ?? undefined,
     conditionDetail: b.condition_detail ?? undefined,
   };
@@ -274,6 +275,7 @@ export async function updateMyProfile(input: {
   username?: string | null;
   phone?: string | null;
   preferred_genres?: string[] | null;
+  avatar_url?: string | null;
 }): Promise<{ ok: boolean; uniqueViolation?: boolean }> {
   // mock 의 Profile 타입은 preferred_genres 가 string[] (null 미허용) 이라 폴백 시 정규화.
   const mockInput = {
@@ -301,6 +303,7 @@ export async function updateMyProfile(input: {
     payload.phone = input.phone?.trim() || null;
   if (input.preferred_genres !== undefined)
     payload.preferred_genres = input.preferred_genres ?? [];
+  if (input.avatar_url !== undefined) payload.avatar_url = input.avatar_url;
 
   const { error } = await supabase
     .from("profiles")
@@ -308,6 +311,51 @@ export async function updateMyProfile(input: {
     .eq("id", auth.user.id);
   if (error?.code === "23505") return { ok: false, uniqueViolation: true };
   return { ok: !error };
+}
+
+// 프로필 사진 업로드 — book-images 버킷 재사용. avatars/{userId}/{stamp}.{ext} 경로.
+// Storage RLS(0001) 가 authenticated user 에게 임의 경로 INSERT 를 허용해서 별도 버킷 추가 불필요.
+// 성공 시 profiles.avatar_url 도 즉시 갱신. 호출자는 onSuccess 에서 profile.me 캐시 invalidate.
+// 8MB 한도 — 단일 파일 가드 (Storage 자체 한도와 별개로 클라이언트에서 컷)
+const AVATAR_MAX_SIZE = 8 * 1024 * 1024;
+export async function uploadAvatar(
+  file: File,
+): Promise<{ ok: boolean; url?: string; reason?: "too-large" | "not-image" | "auth" | "storage" }> {
+  if (!file.type.startsWith("image/")) return { ok: false, reason: "not-image" };
+  if (file.size > AVATAR_MAX_SIZE) return { ok: false, reason: "too-large" };
+  const supabase = await tryClient();
+  if (!supabase) {
+    // mock 모드 — base64 dataURL 로 미리보기. 새로고침엔 사라짐(서버 저장 없음).
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    mockUpdateProfile({ avatar_url: dataUrl });
+    return { ok: true, url: dataUrl };
+  }
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return { ok: false, reason: "auth" };
+
+  const ext = (file.name.split(".").pop() || file.type.split("/").pop() || "jpg")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 5) || "jpg";
+  const path = `avatars/${auth.user.id}/${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from("book-images")
+    .upload(path, file, { contentType: file.type || undefined, upsert: true });
+  if (upErr) {
+    console.error("[uploadAvatar] upload failed", path, upErr);
+    return { ok: false, reason: "storage" };
+  }
+  const url = supabase.storage.from("book-images").getPublicUrl(path).data.publicUrl;
+  await supabase
+    .from("profiles")
+    .update({ avatar_url: url, updated_at: new Date().toISOString() })
+    .eq("id", auth.user.id);
+  return { ok: true, url };
 }
 
 // 알림/개인정보 토글 등 app_prefs 부분 갱신
@@ -572,20 +620,26 @@ export async function fetchBook(id: string): Promise<BookDetail | null> {
     .select(
       `*,
        book_images(storage_path, sort_order),
-       seller:profiles!books_seller_id_fkey(display_name, rating_avg, trade_count)`
+       seller:profiles!books_seller_id_fkey(display_name, rating_avg, trade_count, avatar_url)`
     )
     .eq("id", id)
     .maybeSingle();
   if (!data) return mockGetBook(id) ?? null;
   const detail = rowToDetail(data as BookRow);
-  // 판매자 정보 보강 — display_name 은 마스킹해서 노출, rating/trade_count 는 그대로
+  // 판매자 정보 보강 — display_name 은 마스킹해서 노출, rating/trade_count/avatar_url 그대로
   const seller = (data as any).seller as
-    | { display_name?: string; rating_avg?: number; trade_count?: number }
+    | {
+        display_name?: string;
+        rating_avg?: number;
+        trade_count?: number;
+        avatar_url?: string;
+      }
     | null;
   if (seller) {
     detail.seller = anonymizeName(seller.display_name, "판매자");
     detail.sellerRating = seller.rating_avg ?? 0;
     detail.sellerTradeCount = seller.trade_count ?? 0;
+    detail.sellerAvatar = seller.avatar_url ?? undefined;
     detail.sellerStats = `거래 ${seller.trade_count ?? 0}회`;
   }
   // sort_order 오름차순으로 정렬해 캐러셀 슬라이드 순서 보장
@@ -604,7 +658,26 @@ export async function fetchBook(id: string): Promise<BookDetail | null> {
   return detail;
 }
 
-// 도서 등록(/register 화면에서 호출)
+// 조회수 +1 — 도서 상세 진입 시 호출.
+// 본인 매물은 카운트하지 않음 (0022 RPC 내부에서도 가드 — auth.uid() == seller_id 면 noop).
+// mock 모드/비로그인은 mock store 의 viewCount 만 +1.
+// 실 DB 는 books UPDATE RLS(0009) 가 본인 매물에만 허용해서 일반 사용자 client UPDATE 가 막힘 →
+// SECURITY DEFINER RPC(0022) 호출로 우회.
+export async function incrementBookView(id: string): Promise<void> {
+  if (!isUuid(id)) {
+    const b = mockGetBook(id);
+    if (b) b.viewCount = (b.viewCount ?? 0) + 1;
+    return;
+  }
+  const supabase = await tryClient();
+  if (!supabase) {
+    const b = mockGetBook(id);
+    if (b) b.viewCount = (b.viewCount ?? 0) + 1;
+    return;
+  }
+  const { error } = await supabase.rpc("increment_book_view", { p_book_id: id });
+  if (error) console.warn("[incrementBookView] rpc failed", error);
+}
 // - 비로그인 또는 Supabase 미설정이면 mock 저장소로 저장
 // - DB insert 실패해도 화면 흐름이 끊기지 않도록 mock 으로 폴백
 // - 사진 업로드는 호출자가 createBook 성공 후 uploadBookImages(id, files) 로 별도 호출

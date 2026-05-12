@@ -67,8 +67,9 @@ export function ScrollBody({
   );
 }
 
-// 결제/등록/거래확정 등 한 줄짜리 액션 버튼이 들어가는 하단 고정 바
-// safe-bottom 클래스: iOS 홈바 영역(safe area) 만큼 padding 확보
+// 결제/등록/거래확정 등 한 줄짜리 액션 버튼이 들어가는 하단 고정 바.
+// iOS 홈 인디케이터 영역(safe area)에 버튼이 침범하지 않도록 pb 에 env() 직접 합산.
+// (이전엔 className=".safe-bottom" 로 했는데 sx 의 p shorthand 가 specificity 로 덮어써서 미적용 → 모바일에서 버튼 살짝 잘림)
 export function FixedFooter({
   children,
   bordered = true,
@@ -78,9 +79,11 @@ export function FixedFooter({
 }) {
   return (
     <Box
-      className="safe-bottom"
       sx={{
-        p: "14px 16px",
+        px: "16px",
+        pt: "14px",
+        // safe-area-inset-bottom 이 0 인 환경(웹/안드로이드 다수) 에선 그냥 14px, iOS 노치 기기에선 자동 추가.
+        pb: "calc(14px + env(safe-area-inset-bottom))",
         borderTop: bordered ? `1px solid ${palette.lineSoft}` : "none",
         // 스크롤 영역과 분리감 — 살짝 글래시 + 그림자
         background: `linear-gradient(180deg, ${palette.surface}F2 0%, ${palette.surface} 100%)`,

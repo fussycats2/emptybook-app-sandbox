@@ -184,9 +184,10 @@ function CompleteInner({ bookId }: { bookId: string }) {
 
       <Box sx={{ flex: 1 }} />
       <Box
-        className="safe-bottom"
         sx={{
-          p: 2,
+          px: 2,
+          pt: 2,
+          pb: "calc(16px + env(safe-area-inset-bottom))",
           borderTop: `1px solid ${palette.line}`,
           background: palette.surface,
           flexShrink: 0,

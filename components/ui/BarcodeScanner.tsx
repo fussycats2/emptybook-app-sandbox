@@ -415,12 +415,13 @@ export default function BarcodeScanner({ open, onClose, onDetected }: Props) {
       {/* 하단 — 수동 입력 패널 (직접 입력 모드 또는 에러 시 노출) */}
       {showManual && (
         <Box
-          className="safe-bottom"
           sx={{
             background: "rgba(10, 23, 20, 0.92)",
             backdropFilter: "blur(8px)",
             borderTop: "1px solid rgba(255,255,255,0.10)",
-            p: 2,
+            px: 2,
+            pt: 2,
+            pb: "calc(16px + env(safe-area-inset-bottom))",
           }}
         >
           <Typography sx={{ fontSize: 12.5, fontWeight: 700, mb: 1, opacity: 0.9 }}>

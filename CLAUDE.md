@@ -122,6 +122,7 @@ Realtime: `messages`, `chat_rooms`, `notifications` · Storage 버킷: `book-ima
 | 0019 | reviews UNIQUE 변경 — `(transaction_id)` 단독 → `(transaction_id, reviewer_id)`. 한 거래에 buyer/seller 가 각각 1개씩 후기 작성 가능. fetchReviewContext 의 alreadyReviewed 판정도 reviewer 단위로 좁힘 |
 | 0020 | `profiles.trade_count` source 변경 — 받은 후기 개수 → transactions(COMPLETED) 양당사자 합산. UI 라벨 "거래 N회" 의미와 일치. `recalc_profile_rating()` 가 단일 함수로 rating_avg + trade_count 둘 다 책임. transactions 의 status COMPLETED 전이 시 신규 트리거가 양쪽 재계산 |
 | 0021 | 쿠폰 시드 보강 — 5종 추가 (WELCOME_PLUS / EVERY3000 / BIGSALE7000 / PERCENT20 / FREESHIP2500) + 모든 active 템플릿을 모든 기존 사용자에게 일괄 백필. ON CONFLICT 로 중복 발급 방지. 베타 시연용 |
+| 0022 | `increment_book_view(p_book_id)` SECURITY DEFINER RPC — `books.view_count` 는 0001 부터 있던 컬럼이지만 0009 의 books UPDATE RLS 가 본인 매물에만 허용해서 다른 사용자가 들어와도 카운트가 안 늘던 문제 해소. 본인 매물(`auth.uid() = seller_id`)은 RPC 내부에서 noop. authenticated + anon 둘 다 EXECUTE 허용. `repo.incrementBookView` + `useIncrementBookView` 가 도서 상세 진입 시 한 번 호출. UI 즉시 반영은 `lib/store/viewsStore.ts` (likesStore 패턴) 로 낙관적 +1 |
 
 ---
 

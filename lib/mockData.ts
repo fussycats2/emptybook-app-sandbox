@@ -34,6 +34,9 @@ export type MockBook = BookSummary & {
   // 판매자 카드 보강 (v9.7) — profiles 의 rating_avg / trade_count 직접 노출
   sellerRating?: number; // 0~5 (소수 한 자리)
   sellerTradeCount?: number;
+  sellerAvatar?: string; // 판매자 프로필 사진 URL (profiles.avatar_url join)
+  // 조회수 — 도서 상세 진입 시 +1. 카드/상세 노출. 0001 의 books.view_count 컬럼.
+  viewCount?: number;
   registeredAt?: string;
   tradeMethod?: string;
   category?: string;

@@ -261,8 +261,11 @@ export default function SplashPage() {
         {/* CTA */}
         <Stack
           gap={0.5}
-          className="safe-bottom splash-rise"
-          sx={{ animationDelay: "440ms" }}
+          className="splash-rise"
+          sx={{
+            animationDelay: "440ms",
+            pb: "env(safe-area-inset-bottom)",
+          }}
         >
           <Button
             fullWidth
