@@ -17,6 +17,8 @@ import {
 } from "@mui/material";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import KeyboardRoundedIcon from "@mui/icons-material/KeyboardRounded";
+import FlashOnRoundedIcon from "@mui/icons-material/FlashOnRounded";
+import FlashOffRoundedIcon from "@mui/icons-material/FlashOffRounded";
 import { useEffect, useRef, useState } from "react";
 import { palette, radius, shadow } from "@/lib/theme";
 import { normalizeIsbn } from "@/lib/isbn";
@@ -32,12 +34,19 @@ type Phase = "idle" | "starting" | "scanning" | "denied" | "unsupported" | "manu
 export default function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   // zxing IScannerControls — 마운트 사이클 외부에서 돌고 있어 ref 로 보관해 정리 시 호출
-  const controlsRef = useRef<{ stop: () => void } | null>(null);
+  const controlsRef = useRef<{
+    stop: () => void;
+    switchTorch?: (on: boolean) => Promise<void>;
+  } | null>(null);
+  // 활성 MediaStream track — torch / 줌 등 런타임 제약을 직접 적용하기 위해 보관
+  const trackRef = useRef<MediaStreamTrack | null>(null);
   // 인식 직후부터 컴포넌트 close 까지 callback 중복 발사 방지
   const detectedRef = useRef(false);
   const [phase, setPhase] = useState<Phase>("idle");
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [manualInput, setManualInput] = useState("");
+  const [torchOn, setTorchOn] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
 
   // open 상태 토글에 맞춰 카메라 시작/정리
   useEffect(() => {
@@ -68,11 +77,21 @@ export default function BarcodeScanner({ open, onClose, onDetected }: Props) {
           BarcodeFormat.EAN_13,
           BarcodeFormat.EAN_8,
         ]);
+        // 더 공격적으로 디코딩 — CPU 좀 더 쓰지만 흔들림/저조도/먼 거리에 강해짐
+        hints.set(DecodeHintType.TRY_HARDER, true);
         const reader = new BrowserMultiFormatReader(hints);
 
+        // 모바일 핸드폰 카메라 기준 — 고해상도 + 후면 + 연속 AF 가 인식률에 결정적
+        // 일부 기기는 advanced focusMode 를 지원 안 하지만, 지원 안 해도 무시되므로 안전
         const constraints: MediaStreamConstraints = {
           audio: false,
-          video: { facingMode: { ideal: "environment" } },
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            // @ts-expect-error — 표준 타입엔 없지만 Chrome Android 등이 지원
+            advanced: [{ focusMode: "continuous" }],
+          },
         };
 
         const controls = await reader.decodeFromConstraints(
@@ -102,6 +121,15 @@ export default function BarcodeScanner({ open, onClose, onDetected }: Props) {
           return;
         }
         controlsRef.current = controls;
+        // 비디오 트랙에서 torch capability 감지 — Chrome Android 가 주로 지원, iOS Safari 미지원
+        const stream = (videoRef.current?.srcObject ?? null) as MediaStream | null;
+        const track = stream?.getVideoTracks?.()[0] ?? null;
+        trackRef.current = track;
+        if (track) {
+          const caps =
+            (track.getCapabilities?.() as { torch?: boolean } | undefined) ?? {};
+          setTorchSupported(Boolean(caps.torch));
+        }
         setPhase("scanning");
         cleanup = () => controls.stop();
       } catch (e: unknown) {
@@ -128,8 +156,28 @@ export default function BarcodeScanner({ open, onClose, onDetected }: Props) {
         controlsRef.current.stop();
         controlsRef.current = null;
       }
+      trackRef.current = null;
+      setTorchOn(false);
+      setTorchSupported(false);
     };
   }, [open, onDetected]);
+
+  // 토치 토글 — capability 가 true 인 기기에서만 노출. applyConstraints 로 실제 on/off.
+  const toggleTorch = async () => {
+    const track = trackRef.current;
+    if (!track) return;
+    const next = !torchOn;
+    try {
+      await track.applyConstraints({
+        // @ts-expect-error — 비표준 advanced.torch (Chrome Android)
+        advanced: [{ torch: next }],
+      });
+      setTorchOn(next);
+    } catch {
+      // 적용 실패 — 일부 기기는 capability 신고하면서도 거부. 사용자에게 노이즈 줄이려 silent.
+      setTorchSupported(false);
+    }
+  };
 
   const submitManual = () => {
     const normalized = normalizeIsbn(manualInput);
@@ -312,9 +360,36 @@ export default function BarcodeScanner({ open, onClose, onDetected }: Props) {
               <Typography
                 sx={{ fontSize: 11.5, opacity: 0.7, mt: 0.5 }}
               >
-                ISBN-13 (978/979로 시작) 자동 인식
+                흔들림 없이 15~20cm · 어두우면 손전등 켜기
               </Typography>
             </Box>
+
+            {/* 토치 — capability 있을 때만 노출 */}
+            {torchSupported && phase === "scanning" && (
+              <IconButton
+                onClick={toggleTorch}
+                aria-label={torchOn ? "손전등 끄기" : "손전등 켜기"}
+                sx={{
+                  position: "absolute",
+                  right: 16,
+                  bottom: 72,
+                  width: 52,
+                  height: 52,
+                  color: torchOn ? "#0A1714" : "#fff",
+                  background: torchOn
+                    ? "rgba(255, 235, 150, 0.95)"
+                    : "rgba(255,255,255,0.14)",
+                  backdropFilter: "blur(8px)",
+                  "&:hover": {
+                    background: torchOn
+                      ? "rgba(255, 235, 150, 1)"
+                      : "rgba(255,255,255,0.22)",
+                  },
+                }}
+              >
+                {torchOn ? <FlashOnRoundedIcon /> : <FlashOffRoundedIcon />}
+              </IconButton>
+            )}
           </>
         )}
 
