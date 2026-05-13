@@ -346,7 +346,7 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
               borderRadius: `${radius.md}px`,
               border: `1px solid ${palette.lineSoft}`,
               background: palette.surfaceAlt,
-              p: 1.5,
+              p: "14px 16px",
               transition: "border-color 160ms ease, background 160ms ease",
               "&:hover": { borderColor: palette.line, background: palette.surface },
             }}
@@ -552,14 +552,18 @@ export default function BookDetailPage({ params }: { params: { id: string } }) {
                     sx={{ flexShrink: 0, width: 110, cursor: "pointer" }}
                   >
                     {/* coverUrl 이 있으면 (네이버 도서 API 등록 시 자동 저장된 표지) 그걸 사용,
-                        없으면 BookImage 가 seed 기반 placeholder 로 폴백 */}
-                    <BookImage
-                      seed={b.id}
-                      src={b.coverUrl}
-                      width={110}
-                      height={140}
-                      radius={10}
-                    />
+                        없으면 BookImage 가 seed 기반 placeholder 로 폴백.
+                        autoWidth — letterbox/backdrop 없이 원본 비율로 표시. 카드 너비보다
+                        이미지가 좁을 수 있어 카드 안에서 가운데 정렬. */}
+                    <Box sx={{ display: "flex", justifyContent: "center" }}>
+                      <BookImage
+                        seed={b.id}
+                        src={b.coverUrl}
+                        autoWidth
+                        height={140}
+                        radius={10}
+                      />
+                    </Box>
                     <Typography
                       sx={{
                         fontSize: 12,
@@ -955,13 +959,13 @@ function SellerCard({
 
   return (
     <>
-      <Stack direction="row" gap={1.25} alignItems="center">
+      <Stack direction="row" gap={1.5} alignItems="center">
         {/* 판매자 아바타 — profiles.avatar_url 이 있으면 실사진, 없으면 BookImage seed placeholder */}
         {sellerAvatar ? (
           <Box
             sx={{
-              width: 44,
-              height: 44,
+              width: 46,
+              height: 46,
               borderRadius: "50%",
               overflow: "hidden",
               flexShrink: 0,
@@ -983,8 +987,8 @@ function SellerCard({
         ) : (
           <BookImage
             seed={sellerName}
-            width={44}
-            height={44}
+            width={46}
+            height={46}
             radius={999}
             theaterBackdrop={false}
           />
@@ -992,7 +996,7 @@ function SellerCard({
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
             sx={{
-              fontSize: 14,
+              fontSize: 14.5,
               fontWeight: 800,
               letterSpacing: "-0.02em",
               whiteSpace: "nowrap",
@@ -1002,25 +1006,47 @@ function SellerCard({
           >
             {sellerName}
           </Typography>
+          {/* 메타 라인: 위치 · 거래수 · 별점. 구분자는 점(dot) 으로 일관되게. */}
           <Stack
             direction="row"
             alignItems="center"
-            gap={0.25}
-            sx={{ color: palette.inkSubtle, fontSize: 11.5, mt: 0.25 }}
+            gap={0.6}
+            sx={{ color: palette.inkSubtle, fontSize: 11.5, mt: 0.4 }}
           >
-            <LocationOnRoundedIcon sx={{ fontSize: 13 }} />
-            <span>{loc}</span>
+            <Stack direction="row" alignItems="center" gap={0.25}>
+              <LocationOnRoundedIcon sx={{ fontSize: 13 }} />
+              <span>{loc}</span>
+            </Stack>
             {sellerTradeCount != null && (
               <>
-                <span style={{ margin: "0 4px" }}>·</span>
+                <Box
+                  sx={{
+                    width: 2,
+                    height: 2,
+                    borderRadius: "50%",
+                    bgcolor: palette.inkSubtle,
+                    opacity: 0.6,
+                  }}
+                />
                 <span>거래 {sellerTradeCount}회</span>
               </>
             )}
             {sellerRating != null && sellerRating > 0 && (
-              <Stack direction="row" gap={0.15} alignItems="center" sx={{ ml: 0.25 }}>
-                <StarRoundedIcon sx={{ fontSize: 13, color: "#FFC53D" }} />
-                <span>{sellerRating.toFixed(1)}</span>
-              </Stack>
+              <>
+                <Box
+                  sx={{
+                    width: 2,
+                    height: 2,
+                    borderRadius: "50%",
+                    bgcolor: palette.inkSubtle,
+                    opacity: 0.6,
+                  }}
+                />
+                <Stack direction="row" gap={0.2} alignItems="center">
+                  <StarRoundedIcon sx={{ fontSize: 13, color: "#FFC53D" }} />
+                  <span>{sellerRating.toFixed(1)}</span>
+                </Stack>
+              </>
             )}
           </Stack>
         </Box>

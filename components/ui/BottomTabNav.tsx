@@ -15,7 +15,7 @@ import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import PersonOutlineRoundedIcon from "@mui/icons-material/PersonOutlineRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import { usePathname, useRouter } from "next/navigation";
-import { palette, shadow } from "@/lib/theme";
+import { palette } from "@/lib/theme";
 
 // 탭 정의: 활성 시(on) / 비활성 시(off) 아이콘을 분리해 시각적 강조 차이를 둔다
 // primary: true 는 가운데 강조 등록 버튼 표시용 플래그
@@ -70,6 +70,8 @@ export default function BottomTabNav() {
         const Icon = active ? tab.on : tab.off;
         const color = active ? palette.primary : palette.inkSubtle;
         if (tab.primary) {
+          // v10.1: 톤 다운 — 가운데 + 버튼이 너무 튀어 보여 사이즈/lift/그림자 한 단계씩 차분하게.
+          // 그라데이션 → 단색 primary, lift -14 → -8, pop shadow → card shadow.
           return (
             <Box
               key={tab.path}
@@ -84,25 +86,26 @@ export default function BottomTabNav() {
             >
               <Box
                 sx={{
-                  width: 56,
-                  height: 56,
+                  width: 50,
+                  height: 50,
                   borderRadius: "50%",
-                  background: `linear-gradient(155deg, ${palette.primary} 0%, ${palette.primaryDark} 100%)`,
+                  background: palette.primary,
                   color: "#fff",
                   display: "grid",
                   placeItems: "center",
-                  boxShadow: shadow.pop,
-                  transform: "translateY(-14px)",
-                  border: `4px solid ${palette.bg}`,
-                  transition: "transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms ease",
+                  boxShadow: `0 2px 6px rgba(45, 95, 74, 0.16), 0 8px 18px rgba(45, 95, 74, 0.18)`,
+                  transform: "translateY(-8px)",
+                  border: `3px solid ${palette.bg}`,
+                  transition: "transform 160ms cubic-bezier(0.22, 1, 0.36, 1), background 160ms ease, box-shadow 160ms ease",
                   "&:hover": {
-                    transform: "translateY(-16px)",
-                    boxShadow: `0 6px 16px rgba(45, 95, 74, 0.22), 0 16px 36px rgba(45, 95, 74, 0.30)`,
+                    transform: "translateY(-10px)",
+                    background: palette.primaryDark,
+                    boxShadow: `0 4px 10px rgba(45, 95, 74, 0.20), 0 12px 24px rgba(45, 95, 74, 0.22)`,
                   },
-                  "&:active": { transform: "translateY(-14px) scale(0.94)" },
+                  "&:active": { transform: "translateY(-8px) scale(0.94)" },
                 }}
               >
-                <AddRoundedIcon sx={{ fontSize: 28 }} />
+                <AddRoundedIcon sx={{ fontSize: 24 }} />
               </Box>
             </Box>
           );

@@ -116,7 +116,16 @@ export default function ShelfAddPage() {
 
       <ScrollBody>
         <Box sx={{ p: 2 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
+          <Typography
+            sx={{
+              fontSize: 11.5,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              color: palette.inkSubtle,
+              mb: 1,
+            }}
+          >
             책 찾기
           </Typography>
 
@@ -142,33 +151,40 @@ export default function ShelfAddPage() {
             바코드로 찾기
           </Button>
 
-          <OutlinedInput
-            fullWidth
-            placeholder="ISBN 또는 책 제목으로 검색"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              if (picked) setPicked(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
-              e.preventDefault();
-              runSearch();
-            }}
-            startAdornment={
-              <SearchRoundedIcon sx={{ color: palette.inkSubtle, mr: 1 }} />
-            }
-            endAdornment={
-              <Button
-                size="small"
-                onClick={() => runSearch()}
-                disabled={searching}
-                sx={{ minWidth: 60 }}
-              >
-                {searching ? "검색 중…" : "검색"}
-              </Button>
-            }
-          />
+          {/* 입력 + 검색 버튼 분리 — endAdornment 에 박으면 좁은 화면에서 결과 입력 영역이 가려짐.
+              /register 와 동일 패턴. */}
+          <Stack direction="row" gap={1} alignItems="stretch">
+            <OutlinedInput
+              fullWidth
+              placeholder="ISBN 또는 책 제목으로 검색"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                if (picked) setPicked(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                runSearch();
+              }}
+              startAdornment={
+                <SearchRoundedIcon sx={{ color: palette.inkSubtle, mr: 1 }} />
+              }
+              sx={{ flex: 1, height: 48 }}
+            />
+            <Button
+              onClick={() => runSearch()}
+              disabled={searching}
+              sx={{
+                flexShrink: 0,
+                minWidth: 88,
+                px: 2,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {searching ? "검색 중…" : "검색"}
+            </Button>
+          </Stack>
 
           {/* 단건 결과 / 사용자가 고른 항목 — 큰 카드로 강조 */}
           {picked && (
@@ -178,10 +194,11 @@ export default function ShelfAddPage() {
                 border: `1px solid ${palette.primary}`,
                 background: palette.primarySoft,
                 borderRadius: `${radius.md}px`,
-                p: 1.5,
+                p: 1.75,
                 display: "flex",
                 gap: 1.5,
                 alignItems: "center",
+                boxShadow: `0 0 0 4px ${palette.primaryGlow}`,
               }}
             >
               <BookImage
@@ -299,7 +316,16 @@ export default function ShelfAddPage() {
         </Box>
 
         <Box sx={{ p: 2, pt: 0 }}>
-          <Typography sx={{ fontSize: 13, fontWeight: 700, mb: 1 }}>
+          <Typography
+            sx={{
+              fontSize: 11.5,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              color: palette.inkSubtle,
+              mb: 1,
+            }}
+          >
             어떤 상태로 추가할까요?
           </Typography>
           <Box
@@ -316,17 +342,20 @@ export default function ShelfAddPage() {
                   key={s}
                   onClick={() => setStatus(s)}
                   sx={{
-                    p: "12px 14px",
+                    p: "14px 16px",
                     borderRadius: `${radius.sm}px`,
                     border: `1.5px solid ${on ? palette.primary : palette.lineSoft}`,
                     background: on ? palette.primaryTint : palette.surface,
                     color: on ? palette.primary : palette.ink,
-                    fontWeight: 700,
-                    fontSize: 13.5,
+                    fontWeight: on ? 800 : 700,
+                    fontSize: 14,
                     cursor: "pointer",
                     textAlign: "center",
                     transition: "all 140ms ease",
                     boxShadow: on ? `0 0 0 4px ${palette.primaryGlow}` : "none",
+                    "&:hover": on
+                      ? undefined
+                      : { borderColor: palette.line, background: palette.surfaceAlt },
                     "&:active": { transform: "scale(0.98)" },
                   }}
                 >
