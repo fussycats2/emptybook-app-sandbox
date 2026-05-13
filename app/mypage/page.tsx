@@ -182,6 +182,9 @@ export default function MyPage() {
         <Box
           sx={{
             mx: 2,
+            // ScrollBody 가 overflowY:auto 라 좌상단(0,0) 에 바로 붙은 자식의 위 boxShadow 는
+            // 스크롤 영역 바깥으로 잘림 — 카드 위가 살짝 짤려 보이던 회귀. 약간의 mt 로 여유.
+            mt: 1.25,
             background: `linear-gradient(155deg, ${palette.surface} 0%, ${palette.surfaceAlt} 100%)`,
             borderRadius: "20px",
             p: 2.5,
