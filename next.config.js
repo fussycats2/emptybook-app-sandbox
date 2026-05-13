@@ -33,6 +33,16 @@ const nextConfig = {
         ? { exclude: ["warn", "error"] }
         : false,
   },
+
+  // webpack persistent cache 의 "big strings (215kiB) impacts deserialization" 경고 억제.
+  // 큰 청크(MUI + 페이지 다수) 가 캐시에 string 으로 직렬화되며 뜨던 경고로, gzip 압축을 켜면
+  // Buffer 기반 저장으로 전환되어 경고가 사라지고 디스크 사용량도 감소. dev/prod 양쪽 적용.
+  webpack: (config) => {
+    if (config.cache && typeof config.cache === "object") {
+      config.cache = { ...config.cache, compression: "gzip" };
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;

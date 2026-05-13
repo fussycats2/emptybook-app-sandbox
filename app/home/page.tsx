@@ -153,17 +153,24 @@ export default function HomePage() {
           }}
         >
           {/* 1) 신규가입 쿠폰 — 클릭 시 쿠폰함 (/mypage/coupons).
-              perf: Link 로 변경 — 배너가 viewport 에 들어오는 시점에 /mypage/coupons 청크 prefetch.
-              자식 Typography 에 color: inherit 강제 — globals.css 의 `a { color: inherit }` 와
-              MUI Typography 의 기본 색 (text.primary = 검정) 이 만나 흰 배경에 검정 글씨로
-              떨어지던 회귀 (Link 화 이후) 를 잡는다. */}
-          <Box
-            component={Link}
+              perf: Link 로 prefetch — 다만 `<Box component={Link}>` 패턴은
+              globals.css 의 `a { color: inherit }` 와 cascade 충돌해서 자식 Typography 가
+              검정으로 떨어지는 회귀가 반복 발생 (2026-05-13 두 차례). 그래서 Link 는 외부
+              래퍼로만 쓰고 색은 안쪽 `<Box>`(div) 가 들고 가는 패턴으로 정착. 자식들은
+              div 의 #fff 를 inherit 하므로 a 태그 cascade 트랩을 우회. */}
+          <Link
             href="/mypage/coupons"
-            className="card-lift"
-            sx={{
+            style={{
               flex: "0 0 86%",
               scrollSnapAlign: "start",
+              textDecoration: "none",
+              display: "block",
+            }}
+            prefetch
+          >
+          <Box
+            className="card-lift"
+            sx={{
               borderRadius: `${radius.lg}px`,
               background: `linear-gradient(135deg, ${palette.accent} 0%, ${palette.accentDark} 70%, #8C3F33 100%)`,
               color: "#fff",
@@ -173,9 +180,6 @@ export default function HomePage() {
               cursor: "pointer",
               boxShadow: shadow.pop,
               minHeight: 140,
-              textDecoration: "none",
-              display: "block",
-              "& .MuiTypography-root": { color: "inherit" },
             }}
           >
             {/* 우측 추상 데코 — 쿠폰 티켓 느낌의 큰 라운드 + 점선 원형 */}
@@ -230,12 +234,13 @@ export default function HomePage() {
                     py: 0.4,
                   }}
                 >
-                  <CardGiftcardRoundedIcon sx={{ fontSize: 13 }} />
+                  <CardGiftcardRoundedIcon sx={{ fontSize: 13, color: "#fff" }} />
                   <Typography
                     sx={{
                       fontSize: 10.5,
                       fontWeight: 800,
                       letterSpacing: "0.18em",
+                      color: "#fff",
                     }}
                   >
                     WELCOME
@@ -248,6 +253,7 @@ export default function HomePage() {
                   fontWeight: 800,
                   lineHeight: 1.4,
                   letterSpacing: "-0.025em",
+                  color: "#fff",
                 }}
               >
                 신규가입 환영 쿠폰
@@ -258,13 +264,20 @@ export default function HomePage() {
                 direction="row"
                 gap={0.5}
                 alignItems="center"
-                sx={{ mt: 1.5, fontSize: 12.5, opacity: 0.95, fontWeight: 700 }}
+                sx={{
+                  mt: 1.5,
+                  fontSize: 12.5,
+                  opacity: 0.95,
+                  fontWeight: 700,
+                  color: "#fff",
+                }}
               >
                 쿠폰함에서 확인
-                <ArrowForwardRoundedIcon sx={{ fontSize: 14 }} />
+                <ArrowForwardRoundedIcon sx={{ fontSize: 14, color: "#fff" }} />
               </Stack>
             </Box>
           </Box>
+          </Link>
 
           {/* 2) 스타벅스 쿠폰 추첨 — 준비 중 토스트 (기존 그대로) */}
           <Box

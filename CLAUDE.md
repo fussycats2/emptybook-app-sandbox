@@ -45,6 +45,7 @@
 - **인증 가드**: `middleware.ts` — 액션 라우트(`/register`, `/checkout`, `/orders`, `/chat`, `/mypage`, `/notifications`)만 보호. `/home`, `/search`, `/books`는 게스트 허용.
 - **아이디 찾기**: `/find-account?tab=email` — phone 입력 → `POST /api/auth/find-email` 이 service_role 로 매칭, 마스킹된 email 반환. **enumeration 방지를 위해 모든 실패 케이스가 동일하게 `{ found: false }`** — 실패 분기를 다양화하지 말 것.
 - **비밀번호 찾기**: `/find-account?tab=password` → `resetPasswordForEmail` → 메일 → `/auth/callback?next=/reset-password` → recovery 세션에서 `updateUser({ password })`.
+- **OAuth 후 BookLoader landing**: 네이버/구글 callback 의 성공 redirect 는 `/home` 직진이 아니라 `/auth/landing?next=...` 를 거친다 — server component(`page.tsx`) wrapper + client (`LandingClient.tsx`) Suspense 패턴. BookLoader 가 뜨고 `useAuth.user` hydrate 완료 시 `router.replace(next)`. **`/reset-password` 만 landing 우회** (recovery 흐름은 곧장 폼). 콜백 후 빈 셸이 보이던 체감 지연을 브랜드 로딩 화면으로 대체. 이메일 로그인은 영향 없음.
 
 ---
 
@@ -157,6 +158,12 @@ Realtime: `messages`, `chat_rooms`, `notifications` · Storage 버킷: `book-ima
 - **가로 스크롤 인디케이터는 클릭 가능해야**: 데스크톱에서 스와이프 가 안 되므로 점(dot) 형태 인디케이터는 `pointerEvents: none` 금지. 각 점이 `onClick` 으로 해당 슬라이드까지 `scrollTo({ left, behavior: "smooth" })` 하도록 구현. 활성 점은 알약 모양(width 18) 으로 폭 변화 transition. 홈 이벤트 배너 / 도서 상세 ImageCarousel 이 같은 패턴.
 - **`ImageCarousel` 슬라이드 구성**: 첫 슬라이드는 항상 `coverUrl` (네이버/알라딘 표지 또는 첫 업로드 자동 승격) — 사용자가 책 인지를 즉시 할 수 있게. 그 뒤에 `imageUrls` 를 dedup(같은 URL 제거) 해 붙임. 둘 다 없으면 placeholder. 실사진은 `<img object-fit: contain>` 으로 letterbox 처리 — `cover` 로 잘라내면 표지(세로) 가 과도하게 확대되어 보임. 배경은 `palette.surfaceAlt` 로 letterbox 영역이 자연스러움.
 - **상세 체크 적용 vs 항목 체크**: `/register` 에서 등록 가능 여부는 `conditionApplied OR hasAnyChecked(detail)` 로 판단. 사용자가 시트에서 아무 항목도 체크 안 하고 "상태 적용 (최상)" 을 눌러도 명시 확인으로 인정해야 함. `hasAnyChecked` 단독으로 게이팅하면 결함 없는 책의 등록을 막아버림.
+- **`BottomSheet` onClose 는 변경 사항 폐기**: 스크림/swipe/Esc 로 시트가 닫힐 때는 저장하지 않는다 — 명시 버튼(예: "저장하고 닫기")만 저장 의도로 인정. /mypage/shelf 시트가 reference. onClose 안에서 mutate 호출하면 사용자가 실수로 입력하다 외부 클릭 한 번에 의도치 않은 저장이 발생.
+- **`BottomSheet` swipe-to-close**: 컴포넌트 자체에 grabber + title 영역 드래그로 닫기가 내장. 본문 children 은 자체 스크롤 영역이라 swipe 핸들러를 본문에 부착하면 스크롤이 막힘 — 헤더 영역에만 부착. 임계값은 시트 높이 25% 또는 100px 중 작은 값.
+- **`<Box component={Link}>` + sx color 는 금지**: 자식 Typography 가 검정으로 떨어지는 cascade 트랩. globals.css 의 `a { color: inherit }` 와 emotion sx 의 컴파일 결과가 충돌해서, `"& .MuiTypography-root": { color: "inherit" }` 추가도 / 자식별 `color: "#fff"` 명시도 회귀를 못 막음 (2026-05-13 세 번 재현). 안전 패턴: **`<Link>` 외부 래퍼 + 안쪽 `<Box sx={{ color: "#fff" }}>` (div) 가 색 보유**. Link 의 layout 속성(flex/scrollSnapAlign)은 `style` prop, prefetch 는 `<Link prefetch>` 로 유지. 홈 신규가입 쿠폰 배너가 reference. (부모가 색 없는 카드 링크 — BottomTabNav, 카테고리 칩 등 — 는 cascade 충돌 없음, 그대로 OK.)
+- **`ScrollBody` 첫 자식의 box-shadow 클리핑**: `overflowY:auto` 라 좌상단(0,0) 에 바로 붙은 자식의 위 box-shadow 는 클리핑됨. boxShadow 가 있는 카드를 ScrollBody 첫 자식으로 둘 때는 `mt: 1 ~ 1.5` 정도 buffer 를 줘서 그림자 펴질 여유 확보. /home 이벤트 배너 / /mypage 내 정보 카드가 같은 패턴.
+- **핫 패스는 `next/link` prefetch 활용**: 자주 진입하는 정적 경로(BottomTabNav 5탭, 홈의 쿠폰 배너/내 책장 바로가기/카테고리 칩)는 `router.push` 대신 Link 로 작성 — viewport 진입 시 청크 자동 prefetch 라 클릭 → 화면 전환 지연 감소. 색 들고 가는 배너 류는 `<Link><Box>` 래퍼 패턴(위 항목), 색 안 들고 가는 단순 칩은 `Box component={Link}` 그대로. 책 카드 리스트는 다수 카드가 viewport 스크롤 시 prefetch 폭발 비용이 커서 제외.
+- **새 순수 함수/컴포넌트는 `__tests__/` 에 회귀 테스트**: `lib/` 의 pure helper 와 stateless `components/ui/` 는 jest + RTL 로 가볍게 (`npm test`). 13 suites · 92 tests 가 기준선. App Router page 의 전체 흐름은 RSC + 훅 의존이 많아 통합/e2e 가 더 적합 — phase 3 는 보류.
 - **세션 마감 git 작업**: 사용자가 직접 처리. 명시적 요청 있을 때만 commit/PR.
 
 ---
@@ -167,5 +174,6 @@ Realtime: `messages`, `chat_rooms`, `notifications` · Storage 버킷: `book-ima
 npm install
 cp .env.local.example .env.local  # Supabase 키 선택 입력 (없으면 mock 으로 동작)
 npm run dev                         # http://localhost:3000
+npm test                            # jest — 순수 함수 + 컴포넌트 회귀 (13 suites · 92 tests)
 npm run wireframe                   # 와이어프레임 HTML (http://127.0.0.1:4173)
 ```
