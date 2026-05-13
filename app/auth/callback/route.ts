@@ -28,5 +28,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/login?error=oauth", request.url));
   }
 
-  return NextResponse.redirect(new URL(safeNext, request.url));
+  // /home 으로 곧장 보내면 데이터 페치 동안 빈 셸이 보여 체감이 느림.
+  // /auth/landing 을 거쳐 BookLoader 로 채운 뒤 user hydrate 가 끝나면 next 로 replace.
+  // 예외: /reset-password 는 recovery 세션 흐름이라 곧바로 폼 화면으로 간다.
+  const target = safeNext.startsWith("/reset-password")
+    ? safeNext
+    : `/auth/landing?next=${encodeURIComponent(safeNext)}`;
+  return NextResponse.redirect(new URL(target, request.url));
 }

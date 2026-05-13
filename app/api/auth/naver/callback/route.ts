@@ -183,7 +183,10 @@ export async function GET(request: NextRequest) {
 
   // 6) 서버에서 직접 verifyOtp → 세션 쿠키를 NextResponse 에 직접 심는다.
   //    (createServerClient 의 setAll 콜백에서 response.cookies.set 호출)
-  let response = NextResponse.redirect(new URL(safeNext, request.url));
+  // OAuth 직후 /home 으로 곧장 보내면 데이터 페치 동안 빈 셸이 보여 체감이 느림.
+  // /auth/landing 을 거쳐 BookLoader 로 채운 뒤 user hydrate 가 끝나면 next 로 replace.
+  const landingTarget = `/auth/landing?next=${encodeURIComponent(safeNext)}`;
+  let response = NextResponse.redirect(new URL(landingTarget, request.url));
   response.cookies.delete(STATE_COOKIE);
   response.cookies.delete(NEXT_COOKIE);
 
@@ -194,7 +197,7 @@ export async function GET(request: NextRequest) {
       },
       setAll(list: { name: string; value: string; options?: CookieOptions }[]) {
         // 새 response 를 만들어 redirect 정보(Location)와 갱신된 쿠키를 같이 내려보낸다
-        const fresh = NextResponse.redirect(new URL(safeNext, request.url));
+        const fresh = NextResponse.redirect(new URL(landingTarget, request.url));
         // STATE/NEXT 쿠키는 이미 사용 끝 — 다시 정리
         fresh.cookies.delete(STATE_COOKIE);
         fresh.cookies.delete(NEXT_COOKIE);
