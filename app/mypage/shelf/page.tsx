@@ -304,8 +304,12 @@ export default function ShelfPage() {
       <BottomSheet
         open={!!selected}
         onClose={() => {
-          // 닫을 때 변경된 메모/별점 자동 저장 (의도한 작업 그대로 보존)
-          void persistDraft().finally(() => closeSheet());
+          // 스크림/드래그로 닫을 때는 저장하지 않고 변경 사항을 버린다.
+          // "저장하고 닫기" 버튼만이 명시적 저장 의도 — 자동 저장하면 그 버튼이 무의미하고,
+          // 사용자가 실수로 수정했다가 외부 클릭으로 빠져나가도 그대로 저장되어 버린다.
+          // 상태 변경(changeStatus) / 판매 등록(handleSell) / 매물 보기(handleViewListing) /
+          // 삭제(handleDelete) 는 각자의 핸들러에서 이미 명시적으로 저장/이동을 처리.
+          closeSheet();
         }}
         title={selected?.title}
         footer={

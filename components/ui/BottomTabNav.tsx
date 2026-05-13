@@ -14,7 +14,8 @@ import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineR
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import PersonOutlineRoundedIcon from "@mui/icons-material/PersonOutlineRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { palette } from "@/lib/theme";
 
 // 탭 정의: 활성 시(on) / 비활성 시(off) 아이콘을 분리해 시각적 강조 차이를 둔다
@@ -44,7 +45,6 @@ const TABS = [
 
 export default function BottomTabNav() {
   const pathname = usePathname();
-  const router = useRouter();
 
   return (
     <Box
@@ -72,16 +72,20 @@ export default function BottomTabNav() {
         if (tab.primary) {
           // v10.1: 톤 다운 — 가운데 + 버튼이 너무 튀어 보여 사이즈/lift/그림자 한 단계씩 차분하게.
           // 그라데이션 → 단색 primary, lift -14 → -8, pop shadow → card shadow.
+          // perf: <Link> 로 변경 — viewport 진입 시 자동 prefetch 라 클릭 지연 감소.
           return (
             <Box
               key={tab.path}
-              onClick={() => router.push(tab.path)}
+              component={Link}
+              href={tab.path}
               sx={{
                 flex: 1,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
+                textDecoration: "none",
+                color: "inherit",
               }}
             >
               <Box
@@ -113,7 +117,8 @@ export default function BottomTabNav() {
         return (
           <Box
             key={tab.path}
-            onClick={() => router.push(tab.path)}
+            component={Link}
+            href={tab.path}
             sx={{
               flex: 1,
               display: "flex",
@@ -125,6 +130,7 @@ export default function BottomTabNav() {
               color,
               position: "relative",
               transition: "color 160ms ease",
+              textDecoration: "none",
             }}
           >
             {/* 활성 탭 상단의 작은 dot 인디케이터 — 모던한 강조 */}

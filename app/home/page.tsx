@@ -19,6 +19,7 @@ import LocalFireDepartmentRoundedIcon from "@mui/icons-material/LocalFireDepartm
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import AutoStoriesRoundedIcon from "@mui/icons-material/AutoStoriesRounded";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useRef, useState } from "react";
 import BottomTabNav from "@/components/ui/BottomTabNav";
 import LocationChip from "@/components/ui/LocationChip";
@@ -151,9 +152,11 @@ export default function HomePage() {
             scrollPaddingRight: 16,
           }}
         >
-          {/* 1) 신규가입 쿠폰 — 클릭 시 쿠폰함 (/mypage/coupons) */}
+          {/* 1) 신규가입 쿠폰 — 클릭 시 쿠폰함 (/mypage/coupons).
+              perf: Link 로 변경 — 배너가 viewport 에 들어오는 시점에 /mypage/coupons 청크 prefetch. */}
           <Box
-            onClick={() => router.push("/mypage/coupons")}
+            component={Link}
+            href="/mypage/coupons"
             className="card-lift"
             sx={{
               flex: "0 0 86%",
@@ -167,6 +170,8 @@ export default function HomePage() {
               cursor: "pointer",
               boxShadow: shadow.pop,
               minHeight: 140,
+              textDecoration: "none",
+              display: "block",
             }}
           >
             {/* 우측 추상 데코 — 쿠폰 티켓 느낌의 큰 라운드 + 점선 원형 */}
@@ -393,9 +398,11 @@ export default function HomePage() {
           })}
         </Stack>
 
-        {/* 내 책장 바로가기 — 이벤트 배너 바로 아래, 카테고리 위에 배치 */}
+        {/* 내 책장 바로가기 — 이벤트 배너 바로 아래, 카테고리 위에 배치.
+            perf: Link 화로 viewport 진입 시 /mypage/shelf 청크 prefetch. */}
         <Box
-          onClick={() => router.push("/mypage/shelf")}
+          component={Link}
+          href="/mypage/shelf"
           className="card-lift"
           sx={{
             mx: 2,
@@ -411,6 +418,8 @@ export default function HomePage() {
             position: "relative",
             overflow: "hidden",
             boxShadow: shadow.card,
+            textDecoration: "none",
+            color: "inherit",
             "&:hover": {
               borderColor: palette.line,
               boxShadow: shadow.cardHover,
@@ -540,11 +549,11 @@ export default function HomePage() {
             }}
           >
             {CATEGORIES.map((c) => (
+              // perf: Link — 카테고리 8개가 viewport 에 들어오면 /search 청크 1회 prefetch.
               <Box
                 key={c.name}
-                onClick={() =>
-                  router.push(`/search?category=${encodeURIComponent(c.name)}`)
-                }
+                component={Link}
+                href={`/search?category=${encodeURIComponent(c.name)}`}
                 sx={{
                   flexShrink: 0,
                   display: "flex",
@@ -553,6 +562,8 @@ export default function HomePage() {
                   gap: 0.5,
                   width: 54,
                   cursor: "pointer",
+                  textDecoration: "none",
+                  color: "inherit",
                 }}
               >
                 <Box
