@@ -153,7 +153,10 @@ export default function HomePage() {
           }}
         >
           {/* 1) 신규가입 쿠폰 — 클릭 시 쿠폰함 (/mypage/coupons).
-              perf: Link 로 변경 — 배너가 viewport 에 들어오는 시점에 /mypage/coupons 청크 prefetch. */}
+              perf: Link 로 변경 — 배너가 viewport 에 들어오는 시점에 /mypage/coupons 청크 prefetch.
+              자식 Typography 에 color: inherit 강제 — globals.css 의 `a { color: inherit }` 와
+              MUI Typography 의 기본 색 (text.primary = 검정) 이 만나 흰 배경에 검정 글씨로
+              떨어지던 회귀 (Link 화 이후) 를 잡는다. */}
           <Box
             component={Link}
             href="/mypage/coupons"
@@ -172,6 +175,7 @@ export default function HomePage() {
               minHeight: 140,
               textDecoration: "none",
               display: "block",
+              "& .MuiTypography-root": { color: "inherit" },
             }}
           >
             {/* 우측 추상 데코 — 쿠폰 티켓 느낌의 큰 라운드 + 점선 원형 */}
