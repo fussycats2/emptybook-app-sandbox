@@ -34,6 +34,11 @@
 - **0010 FSM**: `transactions` 상태 전이는 PAID → COMPLETED, **buyer 만**. CANCELED 직행/seller 의 거래확정/종결 상태 변경은 트리거가 RAISE EXCEPTION. `completeOrder` 호출자는 try/catch.
 - **rating_avg / trade_count 캐시 파급**: `rating_avg` 는 0003 트리거(reviews 변경) 가 갱신하고, `trade_count` 는 0020 트리거(transactions COMPLETED 전이) 가 갱신. 두 값 모두 `book.detail` / `chat.list` / `chat.detail` / `profile.me` 에 join 으로 노출되는데 React Query 가 알아서 못 비우므로 `useCreateReview.onSuccess` + `useCompleteOrder.onSuccess` 가 이 4 도메인을 invalidate 한다. 새 mutation 이 reviews 또는 transactions.status 를 건드린다면 같은 invalidate 묶음 필수.
 - **매너온도 단일 출처**: `calcMannerTemperature(tradeCount, rating)` 헬퍼(`components/ui/MannerTemperature.tsx`)가 유일한 공식 — `36.5 + min(t,50)*0.15 + max(0, r-3)*1.0`. SellerCard / 마이페이지 본인 카드가 같은 헬퍼를 쓴다. 새 화면에 매너온도 띄울 때 직접 식 박지 말고 헬퍼 import.
+- **read 함수 mock 폴백은 `!supabase` 한정**: `getMyProfile` / `listChats` / `listOrders` / `listMyBooks` / `listNotifications` 류는 두 분기를 분리한다 — ① `!supabase` (환경변수 미설정 = 의도된 mock 모드) → mock 반환 ② `!uid` (설정됐는데 auth hydrate 대기 중) → 빈 결과(`[]` 또는 `null`). 이전에 두 분기를 같이 묶어서 둘 다 mock 으로 떨어뜨렸더니, Supabase 로그인 사용자도 첫 프레임에 시드 데이터(게스트/mock 알림 3건/c-1~c-3 채팅) 가 잠깐 노출되는 잔상 회귀. 새 도메인 함수 만들 때 이 두 분기를 헷갈리지 말 것.
+- **chat 아바타 두 갈래**: 채팅 **목록** 의 카드 아바타는 거래 도서 **표지**(`BookImage seed={bookId} src={bookCover}`) — 당근/번개 마켓플레이스 패턴. 채팅 **상세** 의 헤더(36px)·말풍선 옆(28px) 아바타는 상대방 **프로필 사진**(`<UserAvatar src={chat?.partnerAvatarUrl} seed={params.id} name={chat?.user}>`). 책 미니 카드(44×56) 는 그대로 `BookImage`. `listChats` / `fetchChat` 가 `partner.avatar_url` 도 join 으로 가져와 `ChatRow.partnerAvatarUrl` 에 노출. 둘을 섞지 말 것 — "목록은 책으로 도서 인지, 상세는 사람으로 거래 상대 인지" 가 명확히 갈림.
+- **사용자 프로필 아바타 단일 출처**: `components/ui/UserAvatar.tsx` — 원형 + 이름 이니셜(없으면 person 아이콘) + seed 해시 색. `src` 우선, 없으면 placeholder. BookImage 의 책 아이콘 placeholder 를 사람 아바타 자리에 쓰면 "프로필 사진 안 나옴" 회귀가 됨. 새 화면에 "상대방/판매자 아바타" 띄울 때 BookImage 가 아니라 UserAvatar 를 쓸 것.
+- **profiles.region vs regionStore**: 두 region 이 별개다. ① `profiles.region` (0024 추가) — 사용자의 **거주 자치구**. /mypage 카드 라벨 + 향후 추천 가중치. /mypage/settings 에서 `RegionPickerSheet` + `onPick={handlePickRegion}` 로 직접 저장. ② `regionStore` (Zustand + localStorage) — 사용자가 지금 **보고 있는 동네**. 홈 헤더 LocationChip / 홈 섹션 헤더가 구독. 거주지 ≠ 보고 있는 동네 가 가능하니(타지에서 마포구 책 검색) 같은 store 로 묶지 말 것.
+- **Supabase Auth 영문 메시지 한글화**: `lib/auth/authErrors.ts` 의 `translateAuthError(err, fallback)` 가 단일 출처. 로그인/회원가입/비밀번호 재설정/아이디 찾기 4 화면이 모두 이 헬퍼 통과. 새 인증 화면 추가 시 `error.message` 를 직접 토스트에 박지 말고 `toast?.show(translateAuthError(error, "fallback"), "error")` 형태로.
 
 ---
 
@@ -71,13 +76,19 @@ lib/
   geo.ts                          # Geolocation API + Haversine — 좌표→자치구 매핑 (lib/seoulCentroids 참조)
   seoulCentroids.ts               # 서울 25개 자치구청 좌표 테이블 (reverse geocoding 대체)
   auth/AuthProvider.tsx
+  auth/authErrors.ts              # Supabase Auth 영문 메시지 → 한글 매핑 (translateAuthError)
   realtime/                       # useRealtimeChat / useRealtimeChatList / useRealtimeNotifications
   supabase/                       # client / server / admin(service_role) / middleware / types
   store/                          # Zustand: shelfStore, regionStore, recentlyViewedStore, likesStore, notificationsStore
   query/                          # React Query 훅 (shelfHooks, couponHooks, …)
 
+components/ui/
+  BookImage.tsx                   # 책 표지/책 placeholder (책 아이콘 + seed 색)
+  UserAvatar.tsx                  # 사용자 프로필 아바타 (이니셜/person 아이콘 + seed 색)
+  RegionPickerSheet.tsx           # 자치구 선택 BottomSheet — onPick override 로 store/profile 분리 가능
+
 middleware.ts                     # 보호 라우트 가드
-supabase/migrations/0001~0021     # 아래 "마이그레이션 핵심" 표 참조
+supabase/migrations/0001~0024     # 아래 "마이그레이션 핵심" 표 참조
 ```
 
 ---
@@ -86,7 +97,7 @@ supabase/migrations/0001~0021     # 아래 "마이그레이션 핵심" 표 참�
 
 | 테이블 | 핵심 컬럼 |
 |--------|----------|
-| `profiles` | `id(=auth.uid)`, `display_name`, `rating_avg`, `trade_count`, `app_prefs(jsonb)`, `preferred_genres(text[])` |
+| `profiles` | `id(=auth.uid)`, `display_name`, `avatar_url`, `rating_avg`, `trade_count`, `app_prefs(jsonb)`, `preferred_genres(text[])`, `region`(0024 추가) |
 | `books` | `seller_id`, `title`, `state(A_PLUS/A/B/C)`, `price`, `original_price`, `status(SELLING/RESERVED/SOLD/HIDDEN)`, `trade_method`, `description`, `synopsis`, `pub_date`, `source_url`, `cover_url`, `condition_detail(jsonb)` |
 | `book_images` | `book_id`, `storage_path`, `sort_order` |
 | `likes` | `(user_id, book_id)` PK |
@@ -124,6 +135,8 @@ Realtime: `messages`, `chat_rooms`, `notifications` · Storage 버킷: `book-ima
 | 0020 | `profiles.trade_count` source 변경 — 받은 후기 개수 → transactions(COMPLETED) 양당사자 합산. UI 라벨 "거래 N회" 의미와 일치. `recalc_profile_rating()` 가 단일 함수로 rating_avg + trade_count 둘 다 책임. transactions 의 status COMPLETED 전이 시 신규 트리거가 양쪽 재계산 |
 | 0021 | 쿠폰 시드 보강 — 5종 추가 (WELCOME_PLUS / EVERY3000 / BIGSALE7000 / PERCENT20 / FREESHIP2500) + 모든 active 템플릿을 모든 기존 사용자에게 일괄 백필. ON CONFLICT 로 중복 발급 방지. 베타 시연용 |
 | 0022 | `increment_book_view(p_book_id)` SECURITY DEFINER RPC — `books.view_count` 는 0001 부터 있던 컬럼이지만 0009 의 books UPDATE RLS 가 본인 매물에만 허용해서 다른 사용자가 들어와도 카운트가 안 늘던 문제 해소. 본인 매물(`auth.uid() = seller_id`)은 RPC 내부에서 noop. authenticated + anon 둘 다 EXECUTE 허용. `repo.incrementBookView` + `useIncrementBookView` 가 도서 상세 진입 시 한 번 호출. UI 즉시 반영은 `lib/store/viewsStore.ts` (likesStore 패턴) 로 낙관적 +1 |
+| 0023 | chat_rooms.last_message_at 자동 갱신 — 0001 이 chat_rooms 에 SELECT/INSERT RLS 만 만들고 UPDATE 정책을 안 만들어서, sendMessage 의 `update({ last_message_at })` 가 silent 0-row update 로 무시되던 회귀. ① `chat_rooms_update_party` UPDATE RLS 추가(참여자만) ② `bump_chat_room_on_message()` 트리거 — messages INSERT 시 SECURITY DEFINER 로 last_message + last_message_at 자동 갱신. 다른 클라이언트가 보낸 메시지에도 동작 ③ 백필 — 기존 방의 last_message_at 을 max(messages.created_at) / 없으면 created_at 으로 채워서 정렬 결정성 보장. `listChats` 의 `nullsFirst:false` 는 마이그 적용 전 호환용으로 유지 |
+| 0024 | profiles.region 컬럼 추가 — 0001 의 `region text` 는 books 테이블 컬럼이라 profiles 에는 없었음. /mypage/settings 동네 저장 시 PATCH 가 unknown column 으로 400 Bad Request, "저장에 실패했어요" 토스트 나던 픽스. RLS 는 0009 의 profiles_update_own (auth.uid()=id) 이 모든 컬럼에 적용되므로 추가 정책 불필요 |
 
 ---
 
