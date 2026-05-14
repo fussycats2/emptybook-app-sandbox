@@ -24,6 +24,7 @@ import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/repo";
+import { translateAuthError } from "@/lib/auth/authErrors";
 import { INPUT_SX, PRIMARY_BUTTON_SX } from "@/lib/ui/formStyle";
 
 type TabKey = "email" | "password";
@@ -309,7 +310,7 @@ function ResetPasswordForm() {
     if (error) {
       // 보안: 존재 여부를 노출하지 않으려면 항상 sent 상태로 두는 편이 안전.
       // 여기서는 사용자 디버깅 편의를 위해 에러는 토스트로만 안내하고 sent 표시는 띄운다.
-      toast?.show(error.message);
+      toast?.show(translateAuthError(error, "메일 발송 중 문제가 생겼어요"), "error");
     }
     setSent(true);
   };

@@ -23,6 +23,7 @@ import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { translateAuthError } from "@/lib/auth/authErrors";
 import { isSupabaseConfigured } from "@/lib/repo";
 import { INPUT_SX, PRIMARY_BUTTON_SX } from "@/lib/ui/formStyle";
 
@@ -53,7 +54,7 @@ export default function ResetPasswordPage() {
     const { error } = await supabaseBrowser().auth.updateUser({ password: pw });
     setSubmitting(false);
     if (error) {
-      toast?.show(error.message || "비밀번호 변경에 실패했어요");
+      toast?.show(translateAuthError(error, "비밀번호 변경에 실패했어요"), "error");
       return;
     }
     toast?.show("비밀번호가 변경되었어요");

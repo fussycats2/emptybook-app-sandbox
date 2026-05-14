@@ -136,7 +136,15 @@ export default function ChatListPage() {
             }}
           >
             <Box sx={{ position: "relative" }}>
-              <BookImage seed={c.user} width={48} height={48} radius={999} />
+              {/* 마켓플레이스 패턴(당근/번개) — 채팅 목록 아바타는 거래 도서 표지.
+                  cover_url 이 없으면 BookImage 가 bookId 시드로 placeholder 표시. */}
+              <BookImage
+                seed={c.bookId || c.id}
+                src={c.bookCover}
+                width={48}
+                height={48}
+                radius={999}
+              />
               <Box
                 sx={{
                   position: "absolute",

@@ -31,6 +31,7 @@ export interface Profile {
   trade_count: number; // 누적 거래 횟수
   preferred_genres: string[]; // 선호 장르 (회원가입 시 선택)
   app_prefs: AppPrefs; // 알림/개인정보 토글 등 환경설정 묶음
+  region: string | null; // 거주 자치구(서울 25개) — 마이페이지 카드 라벨 + 향후 추천 가중치
 }
 
 // 사용자 환경설정 — profiles.app_prefs(jsonb) 의 형상

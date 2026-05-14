@@ -21,6 +21,7 @@ import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useRef, useState } from "react";
 import BookImage from "@/components/ui/BookImage";
+import UserAvatar from "@/components/ui/UserAvatar";
 import StatusBadge from "@/components/ui/StatusBadge";
 import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -147,7 +148,14 @@ export default function ChatDetailPage({
         <IconButton onClick={() => router.back()}>
           <ArrowBackIosNewRoundedIcon fontSize="small" />
         </IconButton>
-        <BookImage seed={chat?.user ?? book?.seller ?? "seller"} width={36} height={36} radius={999} />
+        {/* 상대방 프로필 아바타 — profiles.avatar_url 우선, 없으면 이니셜 + seed 색.
+            책 표지는 아래 미니 카드에 따로 노출 (헤더와 시각적 분리). */}
+        <UserAvatar
+          name={chat?.user ?? book?.seller}
+          seed={params.id}
+          src={chat?.partnerAvatarUrl}
+          size={36}
+        />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography sx={{ fontSize: 14.5, fontWeight: 800, letterSpacing: "-0.02em" }}>
             {chat?.user ?? book?.seller ?? "판매자"}
@@ -196,7 +204,13 @@ export default function ChatDetailPage({
           flexShrink: 0,
         }}
       >
-        <BookImage seed={book?.id ?? params.id} width={44} height={56} radius={8} />
+        <BookImage
+          seed={book?.id ?? params.id}
+          src={book?.coverUrl ?? chat?.bookCover}
+          width={44}
+          height={56}
+          radius={8}
+        />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Stack direction="row" alignItems="center" gap={0.5}>
             <StatusBadge status={bookStatus} size="sm" />
@@ -326,11 +340,11 @@ export default function ChatDetailPage({
                   alignItems="flex-end"
                   sx={{ pr: 6 }}
                 >
-                  <BookImage
-                    seed={chat?.user ?? book?.seller ?? "seller"}
-                    width={28}
-                    height={28}
-                    radius={999}
+                  <UserAvatar
+                    name={chat?.user ?? book?.seller}
+                    seed={params.id}
+                    src={chat?.partnerAvatarUrl}
+                    size={28}
                   />
                   <Stack
                     sx={{

@@ -87,14 +87,14 @@ const SECTIONS: { title: string; items: MenuItem[] }[] = [
 export default function MyPage() {
   const router = useRouter();
   const toast = useToast();
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading: authLoading } = useAuth();
 
   // React Query — 마이페이지 STATS / 프로필 모두 캐시 공유
   // - books / orders / profile 은 다른 화면에서도 같은 캐시 사용
   // - 찜 카운트는 Zustand likesStore 에서 즉시 구독 (다른 곳 토글 시 자동 반영)
   const { data: myBooks } = useMyBooks();
   const { data: orders } = useOrders();
-  const { data: profile } = useMyProfile();
+  const { data: profile, isLoading: profileLoading } = useMyProfile();
   // 프로필 사진 업로드 — 아바타 클릭 시 파일 선택, 선택 즉시 mutate 후 캐시 invalidate.
   const avatarFileRef = useRef<HTMLInputElement | null>(null);
   const uploadAvatarMut = useUploadAvatar();
@@ -150,10 +150,22 @@ export default function MyPage() {
 
   // 표시 이름/핸들 결정 우선순위:
   // 1) profiles.display_name → 2) 이메일 앞부분 → 3) "게스트"
-  const displayName =
-    profile?.display_name ||
-    (user?.email ? user.email.split("@")[0] : "게스트");
-  const handle = profile?.username
+  //
+  // 게스트 잔상 방지:
+  //  - 로그인 직후 useAuth.user 는 빠르게 들어오지만 useMyProfile 은 네트워크 1-RTT 가 더 걸린다.
+  //    그 사이 "게스트" 가 짧게 노출되던 회귀를 막기 위해, "프로필 로딩 중 + 로그인 상태" 면
+  //    이름/핸들에 빈 자리(점선 자리표) 를 띄워 깜빡임을 흡수.
+  //  - 로그인 자체가 아직 안 끝났거나 비로그인이면 폴백 그대로.
+  // (a) authLoading: 토큰 hydrate 전 useAuth.user 가 null → 이전엔 "게스트" 잔상.
+  // (b) 인증됐는데 profile fetch 진행 중 → useMyProfile 캐시 비어있음.
+  const pending = authLoading || (!!user && (profileLoading || !profile));
+  const displayName = pending
+    ? " " // 비파괴 공백 — 글자 높이만큼 자리 유지
+    : profile?.display_name ||
+      (user?.email ? user.email.split("@")[0] : "게스트");
+  const handle = pending
+    ? " "
+    : profile?.username
     ? `@${profile.username}`
     : user?.email
     ? `@${user.email.split("@")[0]}`
@@ -306,7 +318,8 @@ export default function MyPage() {
                 {displayName}
               </Typography>
               <Typography sx={{ fontSize: 12, color: palette.inkSubtle, mt: 0.25 }}>
-                {handle} · 마포구
+                {handle}
+                {profile?.region ? ` · ${profile.region}` : ""}
               </Typography>
               <Typography
                 onClick={() => router.push("/mypage/settings")}

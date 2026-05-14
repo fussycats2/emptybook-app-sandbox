@@ -33,6 +33,7 @@ export function useUpdateMyProfile() {
       phone?: string | null;
       preferred_genres?: string[] | null;
       avatar_url?: string | null;
+      region?: string | null;
     }) => updateMyProfile(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.profile.me() });

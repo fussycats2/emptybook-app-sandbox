@@ -67,9 +67,14 @@ export default function RegionPickerSheet({
     setLocating(false);
     switch (result.kind) {
       case "ok":
-        if (onPick) onPick(result.region);
-        else setRegionAuto(result.region);
-        toast?.show(`현재 위치로 ${result.region}을(를) 설정했어요`);
+        // onPick 가 있으면 호출자(예: /mypage/settings)가 저장 결과에 맞게 직접 토스트를 띄운다.
+        // 시트가 미리 "설정했어요" 를 띄우면 백엔드 저장 실패 시 "성공/실패" 토스트가 동시에 보이는 모순이 생김.
+        if (onPick) {
+          onPick(result.region);
+        } else {
+          setRegionAuto(result.region);
+          toast?.show(`현재 위치로 ${result.region}을(를) 설정했어요`);
+        }
         setQ("");
         onClose();
         break;

@@ -25,6 +25,7 @@ import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/repo";
+import { translateAuthError } from "@/lib/auth/authErrors";
 import { FIELD_HEIGHT, INPUT_SX, PRIMARY_BUTTON_SX } from "@/lib/ui/formStyle";
 
 // Supabase 내장 OAuth Provider 키 (Apple/Google/Kakao 등 — Naver 는 미포함이라 별도 처리)
@@ -75,7 +76,8 @@ function LoginPageInner() {
     });
     setSubmitting(false);
     if (error) {
-      toast?.show(error.message || "로그인에 실패했어요");
+      // Supabase 가 던지는 영문 메시지("Invalid login credentials", "Email not confirmed" 등) 한글화
+      toast?.show(translateAuthError(error, "로그인에 실패했어요"), "error");
       return;
     }
     // replace: 뒤로가기로 로그인 화면으로 다시 돌아오지 않도록 히스토리 교체
@@ -125,7 +127,8 @@ function LoginPageInner() {
     if (error) {
       // 가장 흔한 케이스: Supabase Dashboard 에서 해당 provider 가 비활성
       toast?.show(
-        error.message || `${displayName} 로그인을 시작하지 못했어요`
+        translateAuthError(error, `${displayName} 로그인을 시작하지 못했어요`),
+        "error"
       );
     }
   };

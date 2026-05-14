@@ -146,18 +146,40 @@ function CompleteInner({ bookId }: { bookId: string }) {
             direction="row"
             justifyContent="space-between"
             alignItems="center"
+            gap={1}
             sx={{ py: 0.6 }}
           >
-            <Typography sx={{ fontSize: 12.5, color: palette.inkSubtle }}>
+            <Typography
+              sx={{ fontSize: 12.5, color: palette.inkSubtle, flexShrink: 0 }}
+            >
               {it.l}
             </Typography>
-            <Stack direction="row" gap={0.5} alignItems="center">
-              <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+            {/* 주문번호는 UUID 라 22자 이상 — 라벨/복사버튼과 같은 줄에서 wrap 이 발생.
+                값 영역에 minWidth:0 + ellipsis 로 잘라내고 복사로 전체값 활용. */}
+            <Stack
+              direction="row"
+              gap={0.5}
+              alignItems="center"
+              sx={{ minWidth: 0, flex: 1, justifyContent: "flex-end" }}
+            >
+              <Typography
+                sx={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  minWidth: 0,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  textAlign: "right",
+                }}
+                title={it.v}
+              >
                 {it.v}
               </Typography>
               {it.copy && (
                 <IconButton
                   size="small"
+                  sx={{ flexShrink: 0 }}
                   onClick={() => {
                     navigator.clipboard?.writeText(it.v);
                     toast?.show("주문번호를 복사했어요");

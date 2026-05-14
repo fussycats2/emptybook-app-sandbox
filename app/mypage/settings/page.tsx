@@ -21,6 +21,8 @@ import { useEffect, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import RegionPickerSheet from "@/components/ui/RegionPickerSheet";
+import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
 import { palette, radius } from "@/lib/theme";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -86,6 +88,9 @@ export default function SettingsPage() {
   // 관심 장르 — 회원가입 시 받은 preferred_genres 가 가입 이후엔 수정처가 없었어서 v9.9 에서 추가.
   // 홈 카테고리 추천 섹션이 첫 번째 장르를 추천 카테고리로 쓰므로, 사용자가 자기 취향을 바꾸면 즉시 반영.
   const [genres, setGenres] = useState<string[]>([]);
+  // 거주 자치구 — 마이페이지 카드 라벨 + 향후 추천 가중치. RegionPickerSheet 로 선택, 즉시 저장.
+  const [region, setRegion] = useState<string | null>(null);
+  const [regionOpen, setRegionOpen] = useState(false);
   const [original, setOriginal] = useState({
     displayName: "",
     username: "",
@@ -106,11 +111,39 @@ export default function SettingsPage() {
     setUsername(un);
     setPhone(ph);
     setGenres(gn);
+    setRegion(profile.region ?? null);
     setOriginal({ displayName: dn, username: un, phone: ph, genres: gn });
     const prefs = withDefaultPrefs(profile.app_prefs);
     setPush(prefs.push);
     setPrivacy(prefs.privacy);
   }, [profile]);
+
+  // 자치구 선택 시 즉시 저장 (Sheet 내부 클릭 즉시 닫힘 — 별도 "저장" 버튼 없이도 자연스럽게)
+  // GPS 자동 매핑 / 자치구 리스트 클릭 둘 다 같은 핸들러로 통일.
+  // RegionPickerSheet 가 onPick 가 있을 때는 자기 토스트를 띄우지 않으므로 메시지는 여기서 단일 출처.
+  const handlePickRegion = async (next: string) => {
+    if (!next || next === region) {
+      // 같은 값이면 저장 대신 가벼운 안내만 — "GPS 가 동작 안 한다" 는 오해 방지
+      if (next && next === region) toast?.show(`이미 ${next} 로 설정돼 있어요`);
+      return;
+    }
+    const before = region;
+    setRegion(next); // 낙관적 — onSuccess invalidate 가 정정
+    try {
+      const res = await updateProfile.mutateAsync({ region: next });
+      if (res.ok) {
+        toast?.show(`동네를 ${next} 로 변경했어요`);
+      } else {
+        setRegion(before); // 롤백
+        toast?.show("저장에 실패했어요. 잠시 후 다시 시도해주세요.", "error");
+      }
+    } catch (err) {
+      // mutateAsync 가 rejection 으로 빠지는 경우 (네트워크 단절 등). UI 는 롤백 + 콘솔에 단서 남김.
+      setRegion(before);
+      console.error("[settings] region update failed", err);
+      toast?.show("저장 중 오류가 발생했어요", "error");
+    }
+  };
 
   // 변경된 항목이 하나라도 있을 때만 저장 버튼 활성화 (텍스트 필드만 — 장르는 별도 저장 버튼)
   const profileDirty =
@@ -195,6 +228,45 @@ export default function SettingsPage() {
                 value={phone}
                 onChange={setPhone}
               />
+              {/* 동네(자치구) — 텍스트 입력 대신 RegionPickerSheet 로 선택. 클릭 즉시 저장. */}
+              <Box>
+                <Typography
+                  sx={{ fontSize: 12, fontWeight: 700, color: palette.inkMute, mb: 0.5 }}
+                >
+                  동네
+                </Typography>
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  gap={1}
+                  onClick={() => setRegionOpen(true)}
+                  sx={{
+                    px: 1.5,
+                    py: 1.25,
+                    borderRadius: `${radius.md}px`,
+                    border: `1px solid ${palette.line}`,
+                    background: palette.surface,
+                    cursor: "pointer",
+                    transition: "border-color 140ms ease, background 140ms ease",
+                    "&:hover": { borderColor: palette.primary, background: palette.primaryTint },
+                  }}
+                >
+                  <LocationOnRoundedIcon sx={{ fontSize: 18, color: palette.primary }} />
+                  <Typography
+                    sx={{
+                      flex: 1,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: region ? palette.ink : palette.inkSubtle,
+                    }}
+                  >
+                    {region ?? "자치구를 선택해주세요"}
+                  </Typography>
+                  <KeyboardArrowRightRoundedIcon
+                    sx={{ fontSize: 18, color: palette.inkSubtle }}
+                  />
+                </Stack>
+              </Box>
               <Button
                 onClick={handleSaveProfile}
                 disabled={!profileDirty || savingProfile}
@@ -379,6 +451,14 @@ export default function SettingsPage() {
         description="탈퇴하면 거래 내역과 후기를 모두 잃게 돼요. 신중히 결정해 주세요."
         confirmLabel="탈퇴하기"
         destructive
+      />
+      {/* onPick override 로 store(regionStore — 홈 피드용) 와 분리.
+          여기서 고른 자치구는 profiles.region 에 저장 → 마이페이지 카드/추천에 반영. */}
+      <RegionPickerSheet
+        open={regionOpen}
+        onClose={() => setRegionOpen(false)}
+        value={region ?? ""}
+        onPick={handlePickRegion}
       />
     </>
   );

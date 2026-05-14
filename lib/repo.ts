@@ -251,11 +251,17 @@ export function withDefaultPrefs(prefs?: AppPrefs | null): {
 
 // 내 프로필 조회 — Supabase 모드에선 profiles 테이블에서 1건 가져옴
 // 비로그인/Supabase 미설정이면 mock 저장소의 프로필을 반환
+//
+// 게스트 잔상 방지:
+//  - Supabase 가 설정된 환경에서 auth.getUser() 가 잠깐 null 을 반환하는 구간이 있다
+//    (토큰 hydrate 직전). 이때 mock 프로필("게스트") 을 반환하면 마이페이지에 시드 데이터가
+//    잠깐 보였다가 실프로필로 갱신되는 잔상이 생긴다.
+//  - 설정된 환경에선 null 만 반환해 호출자(useMyProfile + 마이페이지) 가 loading/없음 분기로 처리.
 export async function getMyProfile(): Promise<Profile | null> {
   const supabase = await tryClient();
   if (!supabase) return mockGetProfile();
   const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user) return mockGetProfile();
+  if (!auth.user) return null;
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
@@ -276,6 +282,8 @@ export async function updateMyProfile(input: {
   phone?: string | null;
   preferred_genres?: string[] | null;
   avatar_url?: string | null;
+  // 거주 자치구(서울 25개 중 하나). 마이페이지 사용자 카드의 동네 라벨 + 향후 추천 가중치에 사용.
+  region?: string | null;
 }): Promise<{ ok: boolean; uniqueViolation?: boolean }> {
   // mock 의 Profile 타입은 preferred_genres 가 string[] (null 미허용) 이라 폴백 시 정규화.
   const mockInput = {
@@ -304,6 +312,8 @@ export async function updateMyProfile(input: {
   if (input.preferred_genres !== undefined)
     payload.preferred_genres = input.preferred_genres ?? [];
   if (input.avatar_url !== undefined) payload.avatar_url = input.avatar_url;
+  if (input.region !== undefined)
+    payload.region = input.region?.trim() || null;
 
   const { error } = await supabase
     .from("profiles")
@@ -755,7 +765,8 @@ export async function listMyBooks(): Promise<BookSummary[]> {
   if (!supabase) return mockListBooks().filter((b) => b.seller === "나");
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
-  if (!uid) return mockListBooks().filter((b) => b.seller === "나");
+  // 잔상 방지 (auth hydrate 전 mock 매물 노출 회귀)
+  if (!uid) return [];
   const { data } = await supabase
     .from("books")
     .select("*")
@@ -923,7 +934,8 @@ export async function listOrders(): Promise<OrderRow[]> {
   if (!supabase) return mockListOrders();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
-  if (!uid) return mockListOrders();
+  // 잔상 방지: Supabase 설정된 환경에서 인증 대기 중 mock 주문이 잠깐 보였음
+  if (!uid) return [];
   // join 문법: transactions + books + 양쪽 프로필(판매자/구매자)
   // - 구매측 행은 판매자 이름, 판매측 행은 구매자 이름을 보여줘야 하므로 둘 다 가져온다
   const { data } = await supabase
@@ -1115,16 +1127,20 @@ export async function listChats(): Promise<ChatRow[]> {
   }
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
-  if (!uid) {
-    const list = mockListChats();
-    const map = mockUnreadByRoom();
-    return list.map((c) => ({ ...c, unread: map[c.id] ?? 0 }));
-  }
+  // 잔상 방지: Supabase 설정된 환경에서 인증 대기 동안 mock 채팅(c-1, c-2, c-3) 이 잠깐 떴음.
+  if (!uid) return [];
   const { data } = await supabase
     .from("chat_rooms")
-    .select("*, books(title, status)")
+    .select(
+      `*, books(title, status, cover_url),
+        buyer:profiles!chat_rooms_buyer_id_fkey(display_name, avatar_url),
+        seller:profiles!chat_rooms_seller_id_fkey(display_name, avatar_url)`
+    )
     .or(`buyer_id.eq.${uid},seller_id.eq.${uid}`)
-    .order("last_message_at", { ascending: false });
+    // 카카오톡 패턴: 최신 활동(last_message_at) 내림차순. NULL(메시지 0개 방) 은 맨 뒤로.
+    // 0023 마이그레이션이 적용된 환경에선 last_message_at 이 항상 채워져 NULL 분기를 안 타지만
+    // 마이그 적용 전 클라이언트 호환을 위해 nullsFirst:false 유지.
+    .order("last_message_at", { ascending: false, nullsFirst: false });
   if (!data) return mockListChats();
 
   const rooms = data as any[];
@@ -1143,11 +1159,18 @@ export async function listChats(): Promise<ChatRow[]> {
     }
   }
 
-  return rooms.map((r): ChatRow => ({
+  return rooms.map((r): ChatRow => {
+    // 내가 buyer 면 상대는 seller. fetchChat 와 동일 규칙 + 동일 마스킹.
+    const isBuying = r.buyer_id === uid;
+    const partner = isBuying ? r.seller : r.buyer;
+    const partnerName = anonymizeName(partner?.display_name);
+    return {
     id: r.id,
-    user: "상대방",
+    user: partnerName,
     book: r.books?.title ?? "",
     bookId: r.book_id,
+    bookCover: r.books?.cover_url ?? undefined,
+    partnerAvatarUrl: partner?.avatar_url ?? undefined,
     msg: r.last_message ?? "",
     time: r.last_message_at
       ? new Date(r.last_message_at).toLocaleTimeString("ko-KR", {
@@ -1161,7 +1184,8 @@ export async function listChats(): Promise<ChatRow[]> {
     status: r.books?.status
       ? bookStatusToUI(r.books.status as BookStatus)
       : "selling",
-  }));
+    };
+  });
 }
 
 // 채팅방 단건 조회
@@ -1178,9 +1202,9 @@ export async function fetchChat(id: string): Promise<ChatRow | null> {
   const { data } = await supabase
     .from("chat_rooms")
     .select(
-      `*, books(title, status),
-        buyer:profiles!chat_rooms_buyer_id_fkey(display_name, rating_avg, trade_count),
-        seller:profiles!chat_rooms_seller_id_fkey(display_name, rating_avg, trade_count)`
+      `*, books(title, status, cover_url),
+        buyer:profiles!chat_rooms_buyer_id_fkey(display_name, rating_avg, trade_count, avatar_url),
+        seller:profiles!chat_rooms_seller_id_fkey(display_name, rating_avg, trade_count, avatar_url)`
     )
     .eq("id", id)
     .maybeSingle();
@@ -1196,6 +1220,8 @@ export async function fetchChat(id: string): Promise<ChatRow | null> {
     user: counterpartName,
     book: r.books?.title ?? "",
     bookId: r.book_id ?? "",
+    bookCover: r.books?.cover_url ?? undefined,
+    partnerAvatarUrl: partner?.avatar_url ?? undefined,
     msg: r.last_message ?? "",
     time: r.last_message_at
       ? new Date(r.last_message_at).toLocaleTimeString("ko-KR", {
@@ -1403,12 +1429,16 @@ function dbMsgToUI(
 // ---------- Notifications (알림) ----------
 
 // 내 알림 목록. 최신 50개까지만
+//
+// 잔상 방지: Supabase 설정된 환경에서 auth 가 hydrate 되기 전 잠깐 uid 가 null 인 구간엔
+// mock 시드 알림 3건이 잠깐 노출됐다. 설정된 환경에선 빈 배열만 반환 — 호출자(useNotifications)
+// 가 isLoading 으로 처리.
 export async function listNotifications(): Promise<NotificationRow[]> {
   const supabase = await tryClient();
   if (!supabase) return mockListNotifications();
   const { data: auth } = await supabase.auth.getUser();
   const uid = auth.user?.id;
-  if (!uid) return mockListNotifications();
+  if (!uid) return [];
   const { data } = await supabase
     .from("notifications")
     .select("*")

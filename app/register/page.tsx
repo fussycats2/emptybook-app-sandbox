@@ -37,7 +37,7 @@ import ConditionDetailSheet from "@/components/ui/ConditionDetailSheet";
 import RegionPickerSheet from "@/components/ui/RegionPickerSheet";
 import LocationOnRoundedIcon from "@mui/icons-material/LocationOnRounded";
 import KeyboardArrowRightRoundedIcon from "@mui/icons-material/KeyboardArrowRightRounded";
-import { palette } from "@/lib/theme";
+import { palette, radius } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { meta, uploadBookImages } from "@/lib/repo";
 import { useBook, useCreateBook, useUpdateBook } from "@/lib/query/bookHooks";
@@ -760,7 +760,8 @@ function RegisterPageInner() {
                 maxHeight: 320,
                 overflowY: "auto",
                 border: `1px solid ${palette.line}`,
-                borderRadius: 3,
+                // shelf/add 와 동일한 radius.md(18px). 이전 3(=24px) 은 과한 라운드.
+                borderRadius: `${radius.md}px`,
                 p: 1,
               }}
             >

@@ -67,6 +67,9 @@ export type MockChat = {
   user: string;
   book: string;
   bookId: string;
+  // 거래 도서 표지 — 채팅 목록 아바타 / 채팅 상세 미니 카드에 노출.
+  // 상대방 프로필 사진은 DB 에 없어 placeholder 만 가능하므로 marketplace 패턴(당근/번개) 처럼 책 표지로 대체.
+  bookCover?: string;
   msg: string;
   time: string;
   unread: number;
@@ -75,6 +78,9 @@ export type MockChat = {
   // 상대방 프로필 — 채팅 헤더의 ★별점·거래수 노출용 (이전 38.6℃ 하드코딩 대체)
   partnerRating?: number;
   partnerTradeCount?: number;
+  // 상대방 프로필 이미지 URL — 채팅 상세 헤더 / 메시지 옆 아바타에 사용.
+  // profiles.avatar_url 에서 채워지며 없으면 이니셜 + seed 색 placeholder 로 폴백.
+  partnerAvatarUrl?: string;
 };
 
 export type MockNotification = {
@@ -677,6 +683,7 @@ const SEED_PROFILE: Profile = {
   trade_count: 0,
   preferred_genres: [],
   app_prefs: { ...DEFAULT_APP_PREFS },
+  region: null,
 };
 
 // globalThis 에 저장할 키. 페이지 이동 후에도 같은 데이터를 참조하기 위함
@@ -1106,11 +1113,12 @@ export function mockSendMessage(roomId: string, body: string): MockMessage {
     createdAt: new Date().toISOString(),
   };
   s.messages = [...s.messages, msg];
-  // 채팅 목록의 마지막 메시지/시간을 동기화 (없는 방이면 무시)
-  const room = s.chats.find((c) => c.id === roomId);
-  if (room) {
-    room.msg = body;
-    room.time = "방금";
+  // 채팅 목록의 마지막 메시지/시간을 동기화 + 카카오톡처럼 최신 방을 맨 위로 이동.
+  // (Supabase 모드는 last_message_at DESC 정렬이 처리, mock 모드는 여기서 직접 정렬)
+  const idx = s.chats.findIndex((c) => c.id === roomId);
+  if (idx >= 0) {
+    const room = { ...s.chats[idx], msg: body, time: "방금" };
+    s.chats = [room, ...s.chats.slice(0, idx), ...s.chats.slice(idx + 1)];
   }
   return msg;
 }
@@ -1197,6 +1205,7 @@ export function mockGetOrCreateChatRoomByBook(bookId: string): string {
       user: book?.seller ?? "판매자",
       book: book?.title ?? "도서",
       bookId,
+      bookCover: book?.coverUrl,
       msg: "",
       time: "",
       unread: 0,

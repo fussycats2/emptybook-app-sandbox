@@ -33,6 +33,7 @@ import { palette } from "@/lib/theme";
 import { useToast } from "@/components/ui/ToastProvider";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/repo";
+import { translateAuthError } from "@/lib/auth/authErrors";
 import { INPUT_SX, PRIMARY_BUTTON_SX } from "@/lib/ui/formStyle";
 
 const GENRES = ["소설", "에세이", "자기계발", "경제/경영", "역사", "과학", "아동", "만화"];
@@ -101,7 +102,7 @@ export default function SignupPage() {
     });
     if (error) {
       setSubmitting(false);
-      toast?.show(error.message || "가입에 실패했어요");
+      toast?.show(translateAuthError(error, "가입에 실패했어요"), "error");
       return;
     }
     setSubmitting(false);
