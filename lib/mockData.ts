@@ -57,6 +57,8 @@ export type MockOrder = {
   status: "거래중" | "배송중" | "거래완료" | "취소";
   date: string;
   bookId: string;
+  // 거래 도서 표지 — /mypage/orders 카드 좌측 썸네일에 노출 (없으면 seed 기반 placeholder)
+  bookCover?: string;
   buyerName?: string;
   // 내가 산 거래(buy)인지 판 거래(sell)인지 — orders 페이지 탭 필터에서 사용
   side: "buy" | "sell";
@@ -930,6 +932,7 @@ export function mockCreateOrder(input: {
     priceNumber: book?.priceNumber ?? 0,
     status: input.status ?? "배송중",
     date: new Date().toLocaleDateString("ko-KR"),
+    bookCover: book?.coverUrl,
     buyerName: "나",
     side: "buy",
   };

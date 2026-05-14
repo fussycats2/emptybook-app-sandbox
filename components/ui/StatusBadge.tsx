@@ -6,13 +6,16 @@
 import { Box } from "@mui/material";
 import { palette } from "@/lib/theme";
 
-// 화면에서 다루는 판매 상태(서버 enum 과 다른, UI 전용 값)
+// 화면에서 다루는 상태(서버 enum 과 다른, UI 전용 값)
+// - 책 판매 상태: selling/reserved/sold/free/canceled
+// - 주문 진행 상태: shipping (배송중) — /mypage/orders 우측 배지에서만 사용
 export type SaleStatus =
   | "selling"
   | "reserved"
   | "sold"
   | "free"
-  | "canceled";
+  | "canceled"
+  | "shipping";
 
 // 상태별 라벨 + 배경/전경 색상 매핑 — 모두 palette 토큰에서 파생
 const MAP: Record<
@@ -24,6 +27,7 @@ const MAP: Record<
   sold: { label: "거래완료", bg: palette.lineSoft, fg: palette.inkMute },
   free: { label: "무료나눔", bg: palette.accentSoft, fg: palette.accent, dot: palette.accent },
   canceled: { label: "취소", bg: palette.lineSoft, fg: palette.inkSubtle },
+  shipping: { label: "배송중", bg: palette.primarySoft, fg: palette.primary, dot: palette.primary },
 };
 
 export default function StatusBadge({

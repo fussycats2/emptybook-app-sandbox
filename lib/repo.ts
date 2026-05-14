@@ -941,7 +941,7 @@ export async function listOrders(): Promise<OrderRow[]> {
   const { data } = await supabase
     .from("transactions")
     .select(
-      `*, books(title,
+      `*, books(title, cover_url,
         seller:profiles!books_seller_id_fkey(display_name)),
         buyer:profiles!transactions_buyer_id_fkey(display_name)`
     )
@@ -971,6 +971,7 @@ export async function listOrders(): Promise<OrderRow[]> {
           : "거래중",
       date: new Date(t.created_at).toLocaleDateString("ko-KR"),
       bookId: t.book_id,
+      bookCover: t.books?.cover_url ?? undefined,
       side: isBuy ? "buy" : "sell",
     };
   });
@@ -985,7 +986,7 @@ export async function fetchOrder(id: string): Promise<OrderRow | null> {
   const { data } = await supabase
     .from("transactions")
     .select(
-      "*, books(title, seller:profiles!books_seller_id_fkey(display_name))"
+      "*, books(title, cover_url, seller:profiles!books_seller_id_fkey(display_name))"
     )
     .eq("id", id)
     .maybeSingle();
@@ -1010,6 +1011,7 @@ export async function fetchOrder(id: string): Promise<OrderRow | null> {
         : "거래중",
     date: new Date(t.created_at).toLocaleDateString("ko-KR"),
     bookId: t.book_id,
+    bookCover: t.books?.cover_url ?? undefined,
     side: isBuy ? "buy" : "sell",
   };
 }

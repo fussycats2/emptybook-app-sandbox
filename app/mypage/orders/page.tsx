@@ -1,10 +1,12 @@
 "use client";
 
-// 거래 내역 페이지 (/mypage/orders)
-// - 상단 탭(구매/판매) + 상태 필터 칩
-// - 상태별 액션 버튼 노출 ("거래완료" → 후기, "배송중" → 거래 확정 등)
+// 구매 내역 페이지 (/mypage/orders)
+// - 상태 필터 칩 (전체/거래중/배송중/거래완료/취소)
+// - 판매 내역(/mypage/selling) 의 BookListRow 와 동일한 행 레이아웃 사용
+// - 카드 탭 → /orders/[id] (배송정보·거래확정·후기·채팅 흐름 진입)
 
-import { Box, Button, Chip, Stack, Typography } from "@mui/material";
+import { Box, Chip, Stack, Typography } from "@mui/material";
+import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
@@ -15,19 +17,14 @@ import { ListSkeleton } from "@/components/ui/Skeleton";
 import StatusBadge, { type SaleStatus } from "@/components/ui/StatusBadge";
 import { type OrderRow } from "@/lib/repo";
 import { useOrders } from "@/lib/query/orderHooks";
-import { useGetOrCreateChatRoom } from "@/lib/query/chatHooks";
 import { palette } from "@/lib/theme";
-import { useToast } from "@/components/ui/ToastProvider";
 
-const TABS = [
-  { key: "buy", label: "구매" },
-  { key: "sell", label: "판매" },
-] as const;
 const STATUSES = ["전체", "거래중", "배송중", "거래완료", "취소"];
 
-// 주문 내역의 한글 상태(서버) → 카드 우상단에 띄울 배지 색상(UI)으로 매핑
+// 주문 내역의 한글 상태(서버) → 우측 배지(UI) 매핑
+// 책의 SOLD/SELLING 과 다른 도메인(주문 진행 상태) 이라 "배송중" 은 shipping 키 사용
 const STATUS_TO_BADGE: Record<OrderRow["status"], SaleStatus> = {
-  배송중: "selling",
+  배송중: "shipping",
   거래완료: "sold",
   취소: "canceled",
   거래중: "reserved",
@@ -35,73 +32,25 @@ const STATUS_TO_BADGE: Record<OrderRow["status"], SaleStatus> = {
 
 export default function OrdersPage() {
   const router = useRouter();
-  const toast = useToast();
-  const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("buy");
   const [status, setStatus] = useState("전체");
   const { data: orders, isLoading } = useOrders();
-  const chatRoom = useGetOrCreateChatRoom();
-  // 채팅 진입 중인 주문 id (버튼 비활성화용)
-  const [chatBusyId, setChatBusyId] = useState<string | null>(null);
 
-  // "채팅" 클릭 — order.id 가 아니라 order.bookId 로 chat_rooms 조회/생성
-  const handleStartChat = async (item: OrderRow) => {
-    if (chatBusyId) return;
-    setChatBusyId(item.id);
-    try {
-      const res = await chatRoom.mutateAsync(item.bookId);
-      if ("error" in res) {
-        toast?.show("채팅방을 만들 수 없어요", "error");
-        return;
-      }
-      router.push(`/chat/${res.id}`);
-    } finally {
-      setChatBusyId(null);
-    }
-  };
-
-  // 1) 탭(구매/판매)으로 side 필터 → 2) 상태 필터(전체 외) 적용
+  // 구매(buy) 측 거래만 노출. 판매 측은 /mypage/selling 에서 따로 관리.
   const list =
     orders
-      ?.filter((o) => (tab === "buy" ? o.side === "buy" : o.side === "sell"))
+      ?.filter((o) => o.side === "buy")
       .filter((o) => status === "전체" || o.status === status) ?? null;
 
   return (
     <>
-      <AppHeader title="거래 내역" left="back" />
+      <AppHeader title="구매 내역" left="back" />
       <Box
         sx={{
-          background: `linear-gradient(180deg, ${palette.surface} 0%, ${palette.surface}F2 100%)`,
-          backdropFilter: "saturate(160%) blur(8px)",
-          WebkitBackdropFilter: "saturate(160%) blur(8px)",
-          borderBottom: `1px solid ${palette.lineSoft}`,
+          background: palette.surface,
+          borderBottom: `1px solid ${palette.line}`,
           flexShrink: 0,
         }}
       >
-        <Stack direction="row">
-          {TABS.map((t) => {
-            const on = tab === t.key;
-            return (
-              <Box
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                sx={{
-                  flex: 1,
-                  textAlign: "center",
-                  py: 1.75,
-                  cursor: "pointer",
-                  fontWeight: 800,
-                  color: on ? palette.primary : palette.inkSubtle,
-                  borderBottom: `2.5px solid ${on ? palette.primary : "transparent"}`,
-                  fontSize: 14.5,
-                  letterSpacing: "-0.02em",
-                  transition: "color 160ms ease, border-color 160ms ease",
-                }}
-              >
-                {t.label}
-              </Box>
-            );
-          })}
-        </Stack>
         <Stack
           direction="row"
           gap={0.75}
@@ -131,138 +80,81 @@ export default function OrdersPage() {
         {isLoading && <ListSkeleton count={4} />}
         {list && list.length === 0 && (
           <EmptyState
-            icon="🧾"
-            title={tab === "buy" ? "구매 내역이 없어요" : "판매 내역이 없어요"}
-            description={
-              tab === "buy"
-                ? "마음에 드는 책을 찾아 첫 거래를 시작해보세요."
-                : "내 책장의 책을 등록해 첫 판매를 시작해보세요."
-            }
-            actionLabel={tab === "buy" ? "책 둘러보기" : "책 등록하기"}
-            onAction={() => router.push(tab === "buy" ? "/home" : "/register")}
+            icon={<ShoppingBagOutlinedIcon />}
+            title="구매 내역이 없어요"
+            description="마음에 드는 책을 찾아 첫 거래를 시작해보세요."
+            actionLabel="책 둘러보기"
+            onAction={() => router.push("/home")}
           />
         )}
-        {list?.map((item) => {
-          const badge = STATUS_TO_BADGE[item.status] ?? "selling";
-          return (
-            <Box
-              key={item.id}
-              sx={{
-                p: 2,
-                borderBottom: `1px solid ${palette.lineSoft}`,
-                background: palette.surface,
-                transition: "background 140ms ease",
-              }}
-            >
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                gap={1}
-                mb={1}
-                sx={{ minWidth: 0 }}
-              >
-                <Stack
-                  direction="row"
-                  gap={0.75}
-                  alignItems="center"
-                  sx={{ minWidth: 0 }}
-                >
-                  <StatusBadge status={badge} size="sm" />
-                  <Typography
-                    noWrap
-                    sx={{
-                      fontSize: 11.5,
-                      color: palette.inkSubtle,
-                      minWidth: 0,
-                    }}
-                  >
-                    {item.date}
-                  </Typography>
-                </Stack>
-                {/* 좌측 배지에 한글 상태가 이미 표기되므로 우측은 거래번호(끝 6자) 로 — 중복 제거 */}
-                <Typography
+        {list && list.length > 0 && (
+          <Box sx={{ background: palette.surface }}>
+            {list.map((item) => {
+              const badge = STATUS_TO_BADGE[item.status] ?? "selling";
+              return (
+                <Box
+                  key={item.id}
+                  onClick={() => router.push(`/orders/${item.id}`)}
                   sx={{
-                    fontSize: 11,
-                    color: palette.inkSubtle,
-                    fontFamily: "var(--font-geist-mono, ui-monospace, monospace)",
-                    flexShrink: 0,
-                    letterSpacing: "0.02em",
+                    display: "flex",
+                    gap: 1.5,
+                    p: "14px 16px",
+                    borderBottom: `1px solid ${palette.lineSoft}`,
+                    cursor: "pointer",
+                    transition: "background 160ms ease",
+                    "&:hover": { background: palette.surfaceAlt },
                   }}
                 >
-                  #{item.id.slice(-6).toUpperCase()}
-                </Typography>
-              </Stack>
-              <Stack
-                direction="row"
-                gap={1.5}
-                alignItems="center"
-                onClick={() => router.push(`/books/${item.bookId}`)}
-                sx={{ cursor: "pointer" }}
-              >
-                <BookImage seed={item.bookId} width={68} height={84} radius={10} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontSize: 14.5, fontWeight: 800 }}>
-                    {item.title}
-                  </Typography>
-                  <Typography sx={{ fontSize: 12, color: palette.inkSubtle, mt: 0.25 }}>
-                    {item.info}
-                  </Typography>
-                  <Typography sx={{ fontSize: 16, fontWeight: 800, mt: 0.5 }}>
-                    {item.price}
-                  </Typography>
+                  {/* BookListRow 와 동일 — autoWidth 로 표지 자연 비율 그대로 표시 */}
+                  <BookImage
+                    seed={item.bookId}
+                    src={item.bookCover}
+                    height={88}
+                    radius={0}
+                    autoWidth
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        letterSpacing: "-0.02em",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 1,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {item.title}
+                    </Typography>
+                    <Typography
+                      sx={{ fontSize: 11.5, color: palette.inkSubtle, mt: 0.25 }}
+                    >
+                      {item.info}
+                    </Typography>
+                    <Stack direction="row" gap={0.75} mt={0.85} alignItems="center">
+                      <Typography
+                        sx={{
+                          fontSize: 14.5,
+                          fontWeight: 800,
+                          letterSpacing: "-0.02em",
+                        }}
+                      >
+                        {item.price}
+                      </Typography>
+                    </Stack>
+                    <Typography sx={{ fontSize: 11, color: palette.inkSubtle, mt: 0.5 }}>
+                      {item.date}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ alignSelf: "flex-start" }}>
+                    <StatusBadge status={badge} size="sm" />
+                  </Box>
                 </Box>
-              </Stack>
-              <Stack direction="row" gap={0.75} mt={1.5}>
-                {item.status === "거래완료" && (
-                  <Button
-                    variant="outlined"
-                    sx={{ flex: 1 }}
-                    size="small"
-                    onClick={() => router.push(`/orders/${item.id}/review`)}
-                  >
-                    후기 작성
-                  </Button>
-                )}
-                {/* 배송중 — 두 버튼을 분리해 의도를 명확히.
-                    · 배송 정보: 운송장/배송 단계만 확인하러 가는 정보 진입 (양쪽 탭 공통)
-                    · 거래 확정: ?confirm=1 로 진입해 페이지가 자동으로 ConfirmDialog 띄움 (구매 탭만)
-                    이전엔 "거래 확정" 한 버튼이 페이지 이동 + 액션 의도를 같이 가져
-                    "배송정보만 보고싶은데 누르면 바로 확정될까" 라는 망설임이 있었음. */}
-                {item.status === "배송중" && (
-                  <Button
-                    variant="outlined"
-                    sx={{ flex: 1 }}
-                    size="small"
-                    onClick={() => router.push(`/orders/${item.id}`)}
-                  >
-                    배송 정보
-                  </Button>
-                )}
-                {item.status === "배송중" && tab === "buy" && (
-                  <Button
-                    sx={{ flex: 1.5 }}
-                    size="small"
-                    onClick={() =>
-                      router.push(`/orders/${item.id}?confirm=1`)
-                    }
-                  >
-                    거래 확정
-                  </Button>
-                )}
-                <Button
-                  variant="outlined"
-                  size="small"
-                  sx={{ flex: 1 }}
-                  onClick={() => handleStartChat(item)}
-                  disabled={chatBusyId === item.id}
-                >
-                  채팅
-                </Button>
-              </Stack>
-            </Box>
-          );
-        })}
+              );
+            })}
+          </Box>
+        )}
       </ScrollBody>
     </>
   );

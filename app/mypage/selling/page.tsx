@@ -2,17 +2,18 @@
 
 // 내가 등록한 책 목록 (/mypage/selling)
 // - 상태별(전체/판매중/예약중/판매완료) 칩 필터
-// - 비어있으면 EmptyState + "책 등록하기" 진입점
+// - 행 레이아웃은 /mypage/orders 와 동일 (BookImage autoWidth + 우측 StatusBadge)
 
-import { Box, Chip, Stack } from "@mui/material";
+import { Box, Chip, Stack, Typography } from "@mui/material";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import AppHeader from "@/components/ui/AppHeader";
 import { ScrollBody } from "@/components/ui/Section";
-import { BookListRow } from "@/components/ui/BookCard";
+import BookImage from "@/components/ui/BookImage";
 import EmptyState from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
+import StatusBadge, { type SaleStatus } from "@/components/ui/StatusBadge";
 import { useMyBooks } from "@/lib/query/bookHooks";
 import { palette } from "@/lib/theme";
 
@@ -90,9 +91,89 @@ export default function SellingPage() {
         )}
         {filtered && filtered.length > 0 && (
           <Box sx={{ background: palette.surface }}>
-            {filtered.map((b) => (
-              <BookListRow key={b.id} book={b} />
-            ))}
+            {filtered.map((b) => {
+              const badge: SaleStatus = b.status ?? (b.free ? "free" : "selling");
+              return (
+                <Box
+                  key={b.id}
+                  onClick={() => router.push(`/books/${b.id}`)}
+                  sx={{
+                    display: "flex",
+                    gap: 1.5,
+                    p: "14px 16px",
+                    borderBottom: `1px solid ${palette.lineSoft}`,
+                    cursor: "pointer",
+                    transition: "background 160ms ease",
+                    "&:hover": { background: palette.surfaceAlt },
+                  }}
+                >
+                  {/* /mypage/orders 와 동일 — autoWidth 로 표지 자연 비율 그대로 표시 */}
+                  <BookImage
+                    seed={b.id}
+                    src={b.coverUrl}
+                    height={88}
+                    radius={0}
+                    autoWidth
+                  />
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography
+                      sx={{
+                        fontSize: 14,
+                        fontWeight: 700,
+                        letterSpacing: "-0.02em",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 1,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {b.title}
+                    </Typography>
+                    <Typography
+                      sx={{ fontSize: 11.5, color: palette.inkSubtle, mt: 0.25 }}
+                    >
+                      {b.author}
+                      {b.publisher ? ` · ${b.publisher}` : ""}
+                    </Typography>
+                    <Stack direction="row" gap={0.75} mt={0.85} alignItems="center">
+                      <Typography
+                        sx={{
+                          fontSize: 14.5,
+                          fontWeight: 800,
+                          letterSpacing: "-0.02em",
+                        }}
+                      >
+                        {b.price}
+                      </Typography>
+                      <Box
+                        sx={{
+                          fontSize: 10.5,
+                          border: `1px solid ${palette.line}`,
+                          background: palette.lineSoft,
+                          px: 0.85,
+                          py: 0.25,
+                          borderRadius: 999,
+                          color: palette.inkMute,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {b.state}
+                      </Box>
+                    </Stack>
+                    {(b.loc || b.date) && (
+                      <Typography
+                        sx={{ fontSize: 11, color: palette.inkSubtle, mt: 0.5 }}
+                      >
+                        {[b.loc, b.date].filter(Boolean).join(" · ")}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Box sx={{ alignSelf: "flex-start" }}>
+                    <StatusBadge status={badge} size="sm" />
+                  </Box>
+                </Box>
+              );
+            })}
           </Box>
         )}
       </ScrollBody>
