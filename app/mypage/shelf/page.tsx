@@ -372,12 +372,14 @@ export default function ShelfPage() {
           <Stack gap={2} sx={{ pt: 1, pb: 1 }}>
             {/* 책 정보 헤더 — 상세 시트는 책장 진열대가 아니므로 표지 이미지 사용 */}
             <Stack direction="row" gap={1.5} alignItems="center">
+              {/* autoWidth — letterbox/backdrop 없이 표지의 실제 비율 그대로.
+                  height 96 고정, width 는 자연 비율(보통 ~64px). */}
               <BookImage
                 seed={selected.id}
                 src={selected.coverUrl}
-                width={72}
                 height={96}
                 radius={8}
+                autoWidth
               />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography

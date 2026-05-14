@@ -278,7 +278,9 @@ export function BookListRow({ book }: { book: BookSummary }) {
         "&:hover": { background: palette.surfaceAlt },
       }}
     >
-      <BookImage seed={book.id} src={book.coverUrl} width={68} height={88} radius={0} />
+      {/* autoWidth — letterbox/backdrop 없이 책 표지의 실제 비율 그대로 표시.
+          height 만 88 로 고정하고 width 는 표지 자연 비율(보통 2:3 → ~59px). */}
+      <BookImage seed={book.id} src={book.coverUrl} height={88} radius={0} autoWidth />
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography
           sx={{

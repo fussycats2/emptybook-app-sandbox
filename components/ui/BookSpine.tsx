@@ -88,12 +88,43 @@ const SERIF = '"Noto Serif KR", "Pretendard Variable", serif';
 const SANS = '"Pretendard Variable", "Noto Sans KR", sans-serif';
 
 const SPINE_HEIGHT = 156;
-// 한 글자가 inline-axis 에서 차지하는 길이 ≈ fontSize × (1 + letter-spacing-em + safety)
-// CJK 세로조판은 글자별 advance 가 정수 px 로 round-up 되어 추정치보다 살짝 큼.
-// 안전마진 충분히 잡아 1.12 — 짧은 제목이 단일컬럼에 안전하게 들어가게.
-const CHAR_INLINE_FACTOR = 1.12;
-// 컬럼 1개 가로폭 ≈ fontSize × line-height. line-height 1.25 사용.
-const COL_BLOCK_FACTOR = 1.25;
+// 한 글자의 inline-axis(세로) advance 는 글자 종류에 따라 크게 다르다.
+// - CJK(한글/한자/가나): vertical-rl 에서 정립 — advance ≈ fontSize × 1.0 (정사각형). 안전마진 포함 1.12.
+// - Latin/숫자: text-orientation: mixed 기본값이라 90° 회전되어 누워 들어감 — advance = 가로 폭 = ~0.5em 평균.
+//   (대문자 'M'≈1em, 소문자 'i'≈0.3em, 일반 단어 평균 ~0.55em)
+// - 공백: ~0.3em.
+// 이전엔 모든 글자에 1.12 를 곱해서 영문이 2배 가까이 과대평가됨 → 너무 일찍 잘리고 폰트도 과하게 축소.
+const CJK_FACTOR = 1.12;
+const LATIN_FACTOR = 0.6;
+// 공백은 보통 half-width(~0.5em). 0.5 + 약간 의 추가 안전.
+const SPACE_FACTOR = 0.55;
+// CSS letter-spacing/line-height/round-up 으로 실제 advance 가 추정치보다 살짝 큼 — 안전 마진.
+const FIT_SAFETY = 0.96;
+
+function isCJK(ch: string): boolean {
+  const c = ch.codePointAt(0) ?? 0;
+  return (
+    (c >= 0xac00 && c <= 0xd7a3) || // 한글 음절
+    (c >= 0x3040 && c <= 0x309f) || // 히라가나
+    (c >= 0x30a0 && c <= 0x30ff) || // 가타카나
+    (c >= 0x4e00 && c <= 0x9fff) || // CJK 통합
+    (c >= 0x3400 && c <= 0x4dbf) || // CJK 확장 A
+    (c >= 0xf900 && c <= 0xfaff) // CJK 호환
+  );
+}
+
+function charFactor(ch: string): number {
+  if (ch === " ") return SPACE_FACTOR;
+  if (isCJK(ch)) return CJK_FACTOR;
+  return LATIN_FACTOR;
+}
+
+// 텍스트 전체가 fontSize 에서 차지할 inline-axis(세로) 길이 추정.
+function estimateInline(text: string, fontSize: number): number {
+  let total = 0;
+  for (const ch of text) total += charFactor(ch) * fontSize;
+  return total;
+}
 
 // 제목 정리 — "(부제/시리즈)" 같은 괄호 이후는 떼어버린다. 책등은 좁아서 본 제목만 보여주는 게 자연.
 // "(" / "（"(전각) / "[" 모두 처리.
@@ -104,27 +135,38 @@ function stripParenthesis(text: string): string {
 // 제목 폰트 크기 — 한 컬럼(=한 줄) 안에 들어가도록 산출.
 // minFont 까지 줄여도 안 들어가면 호출자가 미리 자르므로 여기서는 단순히 fit 만.
 function pickTitleFont(
-  chars: number,
+  text: string,
   availableInline: number,
   maxFont: number,
   minFont = 9,
 ): number {
-  if (chars === 0) return maxFont;
-  const fitted = availableInline / (chars * CHAR_INLINE_FACTOR);
+  if (text.length === 0) return maxFont;
+  const unitAdvance = estimateInline(text, 1); // fontSize=1 일 때 inline 길이
+  if (unitAdvance === 0) return maxFont;
+  const fitted = (availableInline / unitAdvance) * FIT_SAFETY;
   return Math.max(minFont, Math.min(maxFont, fitted));
 }
 
-// 한 컬럼(=한 줄)에 들어갈 최대 글자수 = available / (minFont × factor).
-// 그 이상이면 잘라 "…"
+// 한 컬럼(=한 줄)에 들어갈 만큼만 남기고 나머지는 "…" 로 잘라낸다.
+// minFont 기준으로 fit 검사 — minFont 까지 줄여도 안 들어가면 잘라야 함.
 function clipTitleForSpine(
   text: string,
   availableInline: number,
   minFont = 9,
 ): string {
-  const arr = Array.from(text);
-  const maxChars = Math.floor(availableInline / (minFont * CHAR_INLINE_FACTOR));
-  if (arr.length <= maxChars) return text;
-  return arr.slice(0, Math.max(1, maxChars - 1)).join("") + "…";
+  if (estimateInline(text, minFont) <= availableInline) return text;
+  const chars = Array.from(text);
+  const ellipsisAdvance = LATIN_FACTOR * minFont; // "…" 는 Latin 1글자 폭 정도
+  const target = availableInline - ellipsisAdvance;
+  let acc = 0;
+  let cut = 0;
+  for (let i = 0; i < chars.length; i++) {
+    const w = charFactor(chars[i]) * minFont;
+    if (acc + w > target) break;
+    acc += w;
+    cut = i + 1;
+  }
+  return chars.slice(0, Math.max(1, cut)).join("") + "…";
 }
 
 export default function BookSpine({
@@ -139,14 +181,12 @@ export default function BookSpine({
   const { color, accent, width, font, theme } = spec;
   const fontFamily = font === "serif" ? SERIF : SANS;
 
-  const backgroundCss =
-    theme === "metallic"
-      ? `linear-gradient(95deg, ${color.bg} 0%, ${color.tint} 35%, ${color.bg} 55%, ${color.tint} 85%, ${color.bg} 100%)`
-      : theme === "vintage"
-      ? `linear-gradient(180deg, ${color.tint} 0%, ${color.bg} 12%, ${color.bg} 88%, ${color.tint} 100%)`
-      : theme === "hardcover"
-      ? `linear-gradient(90deg, ${color.bg} 0%, ${color.tint} 50%, ${color.bg} 100%)`
-      : color.bg; // paperback — flat
+  // 모든 테마 배경은 단색(`color.bg`).
+  // 이전엔 vintage 만 세로 그라디언트(tint→bg→bg→tint) 였는데, 다른 책들은 background-color 로 채워지고
+  // vintage 만 background-image 로 채워져서 톤이 다르게 보임("이 책만 처리가 다르다"는 사용자 보고).
+  // 가로 그라디언트는 이미 좌우 색 분리 환상 때문에 제거했고, 세로도 같은 이유로 제거 — 일관성 우선.
+  // 테마 구분은 장식 줄(hardcover/vintage), 가로 액센트 띠(metallic), 폰트(serif vs sans) 로 표현.
+  const backgroundCss = color.bg;
 
   // 위/아래 여백 — 하드커버·빈티지는 장식 줄(top:8/12, bottom:8/12)을 넣되 본문 영역은 살짝만 양보
   const decoTop = theme === "hardcover" || theme === "vintage" ? 14 : 8;
@@ -156,19 +196,15 @@ export default function BookSpine({
   const padTop = decoTop + sashSpace;
   // 저자 영역 (있을 때만) — 가로 텍스트, 하단 고정 ~20px
   const authorBoxH = author ? 20 : 0;
-  const padBot = (theme === "hardcover" || theme === "vintage" ? 14 : 8) + authorBoxH;
+  const padBot =
+    (theme === "hardcover" || theme === "vintage" ? 14 : 8) + authorBoxH;
 
   // 제목 가용 inline(세로) 길이 — 한 컬럼에 다 표시. 괄호 이후는 떼고, 그래도 길면 "…"
   const availableInline = SPINE_HEIGHT - padTop - padBot;
   const maxFont = theme === "paperback" ? 14 : 13.5;
   const cleanedTitle = stripParenthesis(title);
   const clippedTitle = clipTitleForSpine(cleanedTitle, availableInline, 9);
-  const titleFont = pickTitleFont(
-    Array.from(clippedTitle).length,
-    availableInline,
-    maxFont,
-    9,
-  );
+  const titleFont = pickTitleFont(clippedTitle, availableInline, maxFont, 9);
 
   return (
     <Box
@@ -191,15 +227,13 @@ export default function BookSpine({
         background: backgroundCss,
       }}
     >
-      {/* 좌우 가장자리 미세 음영 — 책등 입체감.
-          어두운 책색에 자연스럽게 묻히고, 밝은 색(cream/tan 등) 에서는 거친 띠로 도드라지지 않도록
-          alpha 와 falloff 를 부드럽게 조정 (0.22→0.14, 18%→32%) */}
+      {/* 좌우 가장자리 미세 음영 — 책등 입체감 (롤백: 사용자 요청으로 이전처럼 복구). */}
       <Box
         sx={{
           position: "absolute",
           inset: 0,
           background:
-            "linear-gradient(90deg, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0) 32%, rgba(0,0,0,0) 68%, rgba(0,0,0,0.14) 100%)",
+            "linear-gradient(90deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0) 38%, rgba(0,0,0,0) 62%, rgba(0,0,0,0.10) 100%)",
           pointerEvents: "none",
         }}
       />
