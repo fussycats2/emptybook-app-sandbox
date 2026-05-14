@@ -195,7 +195,7 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
           <Box
             sx={{
               border: `1px solid ${palette.line}`,
-              borderRadius: 3,
+              borderRadius: 1.5,
               p: 1.5,
             }}
           >
@@ -244,7 +244,7 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
                     border: `1.5px solid ${
                       on ? palette.primary : palette.lineSoft
                     }`,
-                    borderRadius: 3,
+                    borderRadius: 1.5,
                     p: 1.75,
                     display: "flex",
                     alignItems: "center",
@@ -394,7 +394,7 @@ export default function CheckoutPage({ params }: { params: { id: string } }) {
           <Box
             sx={{
               border: `1px solid ${palette.line}`,
-              borderRadius: 3,
+              borderRadius: 1.5,
               p: 1.5,
             }}
           >

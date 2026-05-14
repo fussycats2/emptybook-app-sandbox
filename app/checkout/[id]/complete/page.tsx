@@ -125,7 +125,7 @@ function CompleteInner({ bookId }: { bookId: string }) {
         sx={{
           mx: 2,
           background: palette.surface,
-          borderRadius: 3,
+          borderRadius: 1.5,
           border: `1px solid ${palette.line}`,
           p: 2,
         }}

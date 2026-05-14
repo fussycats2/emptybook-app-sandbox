@@ -876,7 +876,7 @@ function ConditionDetailRow({ detail }: { detail: ConditionDetail }) {
           sx={{
             mt: 0.75,
             p: 1.25,
-            borderRadius: 2,
+            borderRadius: 1,
             background: palette.surfaceAlt,
             border: `1px solid ${palette.lineSoft}`,
           }}

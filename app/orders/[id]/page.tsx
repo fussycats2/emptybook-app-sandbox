@@ -120,7 +120,7 @@ export default function OrderConfirmPage({
             mt: 2,
             background: palette.surface,
             border: `1px solid ${palette.line}`,
-            borderRadius: 3,
+            borderRadius: 1.5,
             p: 1.5,
           }}
         >
@@ -169,7 +169,7 @@ export default function OrderConfirmPage({
             sx={{
               background: palette.surface,
               border: `1px solid ${palette.line}`,
-              borderRadius: 3,
+              borderRadius: 1.5,
               p: 1.5,
             }}
           >
@@ -227,7 +227,7 @@ export default function OrderConfirmPage({
           <Box
             sx={{
               border: `1.5px dashed ${palette.line}`,
-              borderRadius: 3,
+              borderRadius: 1.5,
               background: palette.lineSoft,
               p: 3,
               display: "grid",
@@ -255,7 +255,7 @@ export default function OrderConfirmPage({
               mb: 2,
               background: `${palette.primary}10`,
               border: `1px solid ${palette.primary}33`,
-              borderRadius: 3,
+              borderRadius: 1.5,
               p: 1.75,
               color: palette.primary,
               fontSize: 12.5,
@@ -277,7 +277,7 @@ export default function OrderConfirmPage({
               mb: 2,
               background: palette.warnSoft,
               border: `1px solid ${palette.warn}33`,
-              borderRadius: 3,
+              borderRadius: 1.5,
               p: 1.75,
               color: "#7A5800",
               fontSize: 12.5,
